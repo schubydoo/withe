@@ -1,2 +1,5 @@
 # Local working docs — idea validation, PRDs, notes. Not tracked.
 /scratch/
+
+# Serena MCP project cache
+/.serena/
