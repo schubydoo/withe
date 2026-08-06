@@ -17,6 +17,7 @@ next-env.d.ts
 # Build output
 /dist/
 /build/
+tsconfig.tsbuildinfo
 
 # Environment
 .env
@@ -32,9 +33,6 @@ next-env.d.ts
 /coverage/
 /test-results/
 /playwright-report/
-
-# Generated CE client types
-/src/adapters/ce/generated/
 
 # OS
 .DS_Store
