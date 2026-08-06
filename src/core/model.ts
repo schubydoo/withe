@@ -42,7 +42,7 @@ export interface Repo {
 }
 
 /** The outcome of one run against one repository. */
-export type RunStatus = 'queued' | 'running' | 'success' | 'failure' | 'unknown';
+export type RunStatus = 'queued' | 'running' | 'success' | 'failed' | 'unknown';
 
 export interface RenovateRun {
   id: string;
