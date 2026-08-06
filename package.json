@@ -15,6 +15,7 @@
     "dev": "NEXT_TELEMETRY_DISABLED=1 next dev",
     "spec:fetch": "curl -fsSL https://raw.githubusercontent.com/mend/renovate-ce-ee/main/docs/openapi-community.yaml -o spec/openapi-community.yaml",
     "start": "next start",
+    "supervisor": "node src/supervisor/main.ts",
     "sync": "node src/worker/main.ts --once",
     "test": "node --test",
     "typecheck": "tsc --noEmit",
