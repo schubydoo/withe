@@ -3,6 +3,10 @@
 
 # Serena MCP project cache
 /.serena/
+
+# Local agent configuration and scratch state. CLAUDE.md and AGENTS.md are
+# tracked on purpose — next dev writes them and they carry real guidance.
+/.claude/
 CLAUDE.local.md
 
 # Node
