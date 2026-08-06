@@ -141,7 +141,9 @@ export class CeAdapter implements SourceAdapter {
       // this is before the operator starts debugging the wrong thing.
       problems.push({
         probe: 'orgs',
-        setting: 'WITHE_CE_ORGS',
+        // Either shape can set this, and naming only the environment variable
+        // would send a file-configured operator to the wrong place.
+        setting: 'WITHE_CE_ORGS or sources[].orgs',
         detail: `Organizations were named by configuration, not discovered: ${orgs.names.join(', ')}.`,
         fatal: false,
       });
@@ -199,7 +201,7 @@ export class CeAdapter implements SourceAdapter {
         // repositories. Verified against a live server, which returned `[]` for
         // a name that does not exist. This is the cost of naming them by hand.
         warnings.push(
-          `WITHE_CE_ORGS names '${name}', and the server returned no repositories for it. ` +
+          `Configured organization '${name}' returned no repositories from the server. ` +
             `Check the spelling: an unknown name and an empty organization look identical here.`,
         );
       }

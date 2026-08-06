@@ -5,10 +5,24 @@
  * children and the signals. Migrating here rather than in either child
  * guarantees a single migrator and removes the start-order race.
  */
+import { ConfigError, loadConfig } from '../config/load.ts';
 import { clearMigrationAttempts, migrateOnce, MigrationGaveUpError } from './migrate.ts';
 import { Supervisor, type ChildSpec } from './children.ts';
 
-const file = process.env.WITHE_DB_PATH ?? './withe.db';
+// Load configuration before migrating. A bad setting should be reported by
+// name rather than surfacing later as a child that will not start.
+let file: string;
+try {
+  const config = loadConfig();
+  file = config.dbPath;
+  for (const warning of config.warnings) console.warn(`configuration: ${warning}`);
+} catch (cause) {
+  if (cause instanceof ConfigError) {
+    console.error(`configuration: ${cause.message}`);
+    process.exit(2);
+  }
+  throw cause;
+}
 
 try {
   migrateOnce(file);

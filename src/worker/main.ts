@@ -1,86 +1,87 @@
 /**
  * The sync worker.
  *
- * Runs a cycle on a timer, or once and exits with `--once`. The supervised
- * two-process arrangement is Task 2.2; this is still started by hand.
+ * Runs a cycle on a timer, or once and exits with `--once`. Configuration is
+ * loaded once here rather than read from the environment where it is used, so
+ * a mistake is reported at startup with the field named.
  */
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import '../adapters/ce/adapter.ts';
 import { createAdapter } from '../adapters/registry.ts';
+import type { SourceAdapter } from '../adapters/types.ts';
+import { ConfigError, loadConfig } from '../config/load.ts';
 import { openDatabase } from '../db/client.ts';
 import { SyncLoop } from './sync.ts';
 
-const url = process.env.WITHE_CE_URL;
-const token = process.env.WITHE_CE_TOKEN;
-const id = process.env.WITHE_SOURCE_ID ?? 'ce';
-const file = process.env.WITHE_DB_PATH ?? './withe.db';
+const DAY_MS = 24 * 60 * 60 * 1000;
 const once = process.argv.includes('--once');
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const intervalSeconds = positive(process.env.WITHE_SYNC_INTERVAL_SECONDS, 300);
-const stalledAfterDays = positive(process.env.WITHE_STALLED_AFTER_DAYS, 7);
-
-/** Reject a setting that would busy-loop or disable a safeguard silently. */
-function positive(raw: string | undefined, fallback: number): number {
-  if (raw === undefined || raw.trim() === '') return fallback;
-  const value = Number(raw);
-  if (!Number.isFinite(value) || value <= 0) {
-    console.error(`'${raw}' is not a positive number.`);
-    process.exit(2);
+const config = (() => {
+  try {
+    return loadConfig();
+  } catch (cause) {
+    if (cause instanceof ConfigError) {
+      console.error(`configuration: ${cause.message}`);
+      process.exit(2);
+    }
+    throw cause;
   }
-  return value;
-}
+})();
 
-if (!url || !token) {
-  console.error('Set WITHE_CE_URL and WITHE_CE_TOKEN.');
+for (const warning of config.warnings) console.warn(`configuration: ${warning}`);
+
+if (config.sources.length === 0) {
+  console.error('No sources are configured. Set WITHE_CE_URL and WITHE_CE_TOKEN, or write a config file.');
   process.exit(2);
 }
 
-// TEMPORARY(org-discovery). See SourceConfig.orgs and tad.md Section 7.7.2.
-const orgs = process.env.WITHE_CE_ORGS?.split(',')
-  .map((name) => name.trim())
-  .filter((name) => name.length > 0);
-
-const { sqlite, db } = openDatabase(file);
+const { sqlite, db } = openDatabase(config.dbPath);
 migrate(db, { migrationsFolder: './drizzle' });
 
-const adapter = createAdapter({ id, kind: 'ce', url, token, orgs });
+const adapters: SourceAdapter[] = config.sources.map((source) => createAdapter(source));
 
-const preflight = await adapter.preflight();
-for (const problem of preflight.problems) {
-  const where = problem.setting ? ` (${problem.setting})` : '';
-  console.error(`preflight ${problem.probe}: ${problem.detail}${where}`);
+// Preflight every source, but let a working one run even when another is
+// broken. Refusing to start because the second of three servers is down would
+// hide the two that work.
+const usable: SourceAdapter[] = [];
+for (const adapter of adapters) {
+  const preflight = await adapter.preflight();
+  for (const problem of preflight.problems) {
+    const where = problem.setting ? ` (${problem.setting})` : '';
+    console.error(`preflight ${adapter.id}/${problem.probe}: ${problem.detail}${where}`);
+  }
+  if (preflight.reachableButEmpty) {
+    console.warn(`preflight ${adapter.id}: reachable, with no repositories onboarded.`);
+  }
+  if (preflight.ok) usable.push(adapter);
 }
-if (!preflight.ok) {
+
+if (usable.length === 0) {
   sqlite.close();
   process.exit(1);
 }
-if (preflight.reachableButEmpty) {
-  console.warn('The server is reachable and has no repositories onboarded.');
-}
 
-const loop = new SyncLoop(db, [adapter], {
-  intervalMs: intervalSeconds * 1000,
-  stalledAfterMs: stalledAfterDays * DAY_MS,
+const loop = new SyncLoop(db, usable, {
+  intervalMs: config.syncIntervalSeconds * 1000,
+  stalledAfterMs: config.stalledAfterDays * DAY_MS,
 });
 
-function report(prefix: string, outcomes: { sourceAdapterId: string; outcome: string; repos: number; runs: number; updates: number }[]) {
-  for (const o of outcomes) {
-    console.log(`${prefix} ${o.sourceAdapterId}: ${o.outcome} — ${o.repos} repositories, ${o.runs} runs, ${o.updates} updates`);
-  }
-}
-
 const first = await loop.runCycle();
-report('synced', first.sources);
+for (const outcome of first.sources) {
+  console.log(
+    `synced ${outcome.sourceAdapterId}: ${outcome.outcome} — ` +
+      `${outcome.repos} repositories, ${outcome.runs} runs, ${outcome.updates} updates`,
+  );
+}
 
 if (once) {
   sqlite.close();
 } else {
-  console.log(`watching ${file}, syncing every ${intervalSeconds}s. Ctrl-C to stop.`);
+  console.log(`watching ${config.dbPath}, syncing every ${config.syncIntervalSeconds}s. Ctrl-C to stop.`);
   loop.start();
 
-  // Without this the unref'd timer would let the process exit immediately.
+  // Without this the unref'd interval would let the process exit immediately.
   const keepAlive = setInterval(() => {}, 1 << 30);
 
   const shutdown = (signal: string) => {

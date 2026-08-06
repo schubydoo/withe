@@ -189,7 +189,7 @@ test('TEMPORARY(org-discovery): preflight says which mode it is in', async () =>
   }).preflight();
 
   assert.equal(result.ok, true, 'a named organization must not be a fatal problem');
-  const note = result.problems.find((p) => p.setting === 'WITHE_CE_ORGS');
+  const note = result.problems.find((p) => p.setting?.includes('orgs'));
   assert.ok(note, 'preflight must say the names were configured, not discovered');
   assert.match(note.detail, /named by configuration/);
 });
@@ -211,7 +211,7 @@ test('TEMPORARY(org-discovery): a misspelled name is visible, not silent', async
 
   assert.deepEqual(result.repos, []);
   assert.equal(result.warnings.length, 1);
-  assert.match(result.warnings[0] ?? '', /WITHE_CE_ORGS names 'typo'/);
+  assert.match(result.warnings[0] ?? '', /Configured organization 'typo'/);
   assert.match(result.warnings[0] ?? '', /Check the spelling/);
 });
 
