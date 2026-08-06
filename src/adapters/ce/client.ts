@@ -43,6 +43,36 @@ function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
+function authHeaders(token: string): HeadersInit {
+  return { Authorization: `Bearer ${token}` };
+}
+
+/**
+ * Resolve a pagination target against the configured server and refuse anything
+ * that leaves it.
+ *
+ * `new URL(target, base)` ignores the base whenever the target is absolute or
+ * protocol-relative, so a CE server that returned
+ * `Link: <https://elsewhere.example/x>; rel="next"` would otherwise be handed
+ * Withe's bearer token. That token is admin-scoped, because CE issues no
+ * read-only credential — see SECURITY.md.
+ */
+export function resolveSameOrigin(baseUrl: string, target: string): URL {
+  const base = new URL(stripTrailingSlash(baseUrl) + '/');
+  const resolved = new URL(target, base);
+  if (resolved.username !== '' || resolved.password !== '') {
+    // Credentials in the URL are not part of the CE contract, and how fetch
+    // treats them against our own Authorization header is not worth relying on.
+    throw new Error('Refusing a pagination link that carries embedded credentials');
+  }
+  if (resolved.origin !== base.origin) {
+    throw new Error(
+      `Refusing to follow a pagination link off the configured server: ${resolved.origin}`,
+    );
+  }
+  return resolved;
+}
+
 /**
  * Return the `next` target from an RFC 8288 `Link` header, or null.
  *
@@ -98,9 +128,15 @@ export async function* paginate<T>(
   let next: string | null = path;
 
   for (let page = 0; next !== null && page < maxPages; page += 1) {
-    const response: Response = await fetch(new URL(next, stripTrailingSlash(baseUrl) + '/'), {
-      headers: { Authorization: `Bearer ${token}` },
+    const response: Response = await fetch(resolveSameOrigin(baseUrl, next), {
+      headers: authHeaders(token),
+      // A redirect is not part of the CE contract. Following one silently is
+      // how the origin check above gets bypassed, so fail loudly instead.
+      redirect: 'manual',
     });
+    if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+      throw new Error(`CE redirected ${next}; Withe does not follow redirects`);
+    }
     if (!response.ok) {
       throw new Error(`CE responded ${response.status} for ${next}`);
     }
