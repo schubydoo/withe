@@ -168,3 +168,89 @@ export function repoInventory(db: Db): InventoryRow[] {
     lastRunAt: row.lastRunAt === null ? null : new Date(row.lastRunAt * 1000),
   }));
 }
+
+export interface RunRow {
+  externalJobId: string;
+  reason: string | null;
+  queuedAt: Date | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  status: string;
+  error: string | null;
+  artifactErrors: string[];
+  runnerVersion: string | null;
+}
+
+export const RUNS_PER_PAGE = 200;
+
+/**
+ * One repository's runs, newest first.
+ *
+ * Paginated because a repository accumulates roughly 190 runs per retention
+ * window at the source, and more once Withe keeps its own history: run metadata
+ * is kept indefinitely by default (PRD Section 6.3.1), so this list only grows.
+ */
+export function runsForRepo(
+  db: Db,
+  fullName: string,
+  page = 0,
+  perPage = RUNS_PER_PAGE,
+): { runs: RunRow[]; total: number } {
+  const [count] = db.all<{ total: number }>(sql`
+    select count(*) as total
+      from renovate_run rr join repo r on r.id = rr.repo_id
+     where r.full_name = ${fullName}
+  `);
+
+  const rows = db.all<{
+    externalJobId: string;
+    reason: string | null;
+    queuedAt: number | null;
+    startedAt: number | null;
+    completedAt: number | null;
+    status: string;
+    error: string | null;
+    artifactErrors: string | null;
+    runnerVersion: string | null;
+  }>(sql`
+    select rr.external_job_id as externalJobId, rr.reason,
+           rr.queued_at as queuedAt, rr.started_at as startedAt,
+           rr.completed_at as completedAt, rr.status, rr.error,
+           rr.artifact_errors as artifactErrors, rr.runner_version as runnerVersion
+      from renovate_run rr join repo r on r.id = rr.repo_id
+     where r.full_name = ${fullName}
+     order by coalesce(rr.completed_at, rr.started_at, rr.queued_at) desc, rr.id desc
+     limit ${perPage} offset ${page * perPage}
+  `);
+
+  return {
+    total: count?.total ?? 0,
+    runs: rows.map((row) => ({
+      externalJobId: row.externalJobId,
+      reason: row.reason,
+      queuedAt: seconds(row.queuedAt),
+      startedAt: seconds(row.startedAt),
+      completedAt: seconds(row.completedAt),
+      status: row.status,
+      error: row.error,
+      // Stored as a JSON column. A malformed value must not take the page down
+      // with it, so it degrades to no entries.
+      artifactErrors: parseList(row.artifactErrors),
+      runnerVersion: row.runnerVersion,
+    })),
+  };
+}
+
+function seconds(value: number | null): Date | null {
+  return value === null ? null : new Date(value * 1000);
+}
+
+function parseList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}

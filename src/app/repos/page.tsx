@@ -78,8 +78,13 @@ export default function Repos() {
             return (
               <tr key={`${row.sourceAdapterId}/${row.fullName}`} className="border-b border-neutral-200">
                 <td className="py-1.5 pr-4">
-                  <span className="text-neutral-500">{row.org}/</span>
-                  <span className="font-medium">{row.name}</span>
+                  <a
+                    className="underline decoration-neutral-300 hover:decoration-neutral-600"
+                    href={`/repos/${encodeURIComponent(row.org)}/${encodeURIComponent(row.name)}`}
+                  >
+                    <span className="text-neutral-500">{row.org}/</span>
+                    <span className="font-medium">{row.name}</span>
+                  </a>
                 </td>
                 <td className="py-1.5 pr-4">
                   <span className={`rounded px-1.5 py-0.5 text-xs ${tone}`}>{label}</span>

@@ -11,7 +11,7 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist } from './persist.ts';
-import { lastSync, lockFileRefreshes, pendingUpdates, repoHealth, repoInventory } from './queries.ts';
+import { lastSync, lockFileRefreshes, pendingUpdates, repoHealth, repoInventory, runsForRepo } from './queries.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -258,5 +258,93 @@ test('one source removing a repository does not touch another source', () => {
   const removed = repoInventory(db).filter((r) => r.removedAt);
   assert.equal(removed.length, 2);
   assert.ok(removed.every((r) => r.sourceAdapterId === SOURCE), 'sources must not remove each other');
+  sqlite.close();
+});
+
+test('50 runs come back newest first with what each needs to render', () => {
+  const { sqlite, db } = fresh();
+  const base = Date.parse('2026-08-06T00:00:00Z');
+  const runs = Array.from({ length: 50 }, (_, i) =>
+    makeRun('acme/widget', `j${i}`, 'success', new Date(base + i * 3_600_000).toISOString()),
+  );
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [] }, new Date());
+
+  const { runs: rows, total } = runsForRepo(db, 'acme/widget');
+  assert.equal(total, 50);
+  assert.equal(rows.length, 50);
+  assert.deepEqual(rows.map((r) => r.externalJobId).slice(0, 3), ['j49', 'j48', 'j47']);
+
+  for (const row of rows) {
+    assert.ok(row.completedAt instanceof Date);
+    assert.equal(row.status, 'success');
+    assert.equal(row.runnerVersion, '43.280.0');
+  }
+  sqlite.close();
+});
+
+test('a queued run has no duration to report, only a wait', () => {
+  const { sqlite, db } = fresh();
+  const queued: RenovateRun = {
+    ...makeRun('acme/widget', 'q1', 'queued', '2026-08-06T12:00:00Z'),
+    startedAt: null,
+    completedAt: null,
+  };
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [queued], updates: [], warnings: [] }, new Date());
+
+  const [row] = runsForRepo(db, 'acme/widget').runs;
+  assert.equal(row?.status, 'queued');
+  assert.equal(row?.startedAt, null);
+  assert.equal(row?.completedAt, null);
+  assert.ok(row?.queuedAt instanceof Date, 'the wait is measured from here');
+});
+
+test('artifact errors survive the round trip and stay separate from the run error', () => {
+  const { sqlite, db } = fresh();
+  const run: RenovateRun = {
+    ...makeRun('acme/widget', 'a1', 'success', '2026-08-06T12:00:00Z'),
+    // A run that succeeded and still failed to update a lock file. Folding
+    // these into `error` would make it look like the run failed.
+    error: null,
+    artifactErrors: ['package.json: npm ERR! code ERESOLVE', 'uv.lock'],
+  };
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [run], updates: [], warnings: [] }, new Date());
+
+  const [row] = runsForRepo(db, 'acme/widget').runs;
+  assert.equal(row?.status, 'success');
+  assert.equal(row?.error, null);
+  assert.deepEqual(row?.artifactErrors, ['package.json: npm ERR! code ERESOLVE', 'uv.lock']);
+  sqlite.close();
+});
+
+test('history pages beyond 200 rows', () => {
+  const { sqlite, db } = fresh();
+  const base = Date.parse('2026-08-01T00:00:00Z');
+  const runs = Array.from({ length: 205 }, (_, i) =>
+    makeRun('acme/widget', `j${i}`, 'success', new Date(base + i * 60_000).toISOString()),
+  );
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [] }, new Date());
+
+  const first = runsForRepo(db, 'acme/widget', 0);
+  assert.equal(first.total, 205);
+  assert.equal(first.runs.length, 200, 'a page is capped');
+  assert.equal(first.runs[0]?.externalJobId, 'j204');
+
+  const second = runsForRepo(db, 'acme/widget', 1);
+  assert.equal(second.runs.length, 5);
+  assert.equal(second.runs[0]?.externalJobId, 'j4');
+
+  // No row appears on both pages.
+  const ids = new Set([...first.runs, ...second.runs].map((r) => r.externalJobId));
+  assert.equal(ids.size, 205);
+  sqlite.close();
+});
+
+test('a malformed artifact-errors column does not take the page down', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [makeRun('acme/widget', 'j1', 'success', '2026-08-06T12:00:00Z')], updates: [], warnings: [] }, new Date());
+  sqlite.prepare("update renovate_run set artifact_errors = '{not json'").run();
+
+  const [row] = runsForRepo(db, 'acme/widget').runs;
+  assert.deepEqual(row?.artifactErrors, []);
   sqlite.close();
 });
