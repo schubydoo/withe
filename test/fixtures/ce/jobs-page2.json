@@ -1,0 +1,202 @@
+[
+  {
+    "jobId": "00000000-0000-0000-0000-000000000016",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T22:00:00.000Z",
+    "startedAt": "2026-08-05T22:00:52.000Z",
+    "completedAt": "2026-08-05T22:01:04.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_220052_00000000-0000-0000-0000-000000000016.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000017",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T21:00:00.000Z",
+    "startedAt": "2026-08-05T21:00:40.000Z",
+    "completedAt": "2026-08-05T21:00:51.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_210040_00000000-0000-0000-0000-000000000017.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000018",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T20:00:02.000Z",
+    "startedAt": "2026-08-05T20:00:48.000Z",
+    "completedAt": "2026-08-05T20:01:01.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_200049_00000000-0000-0000-0000-000000000018.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000019",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T19:00:00.000Z",
+    "startedAt": "2026-08-05T19:00:34.000Z",
+    "completedAt": "2026-08-05T19:00:46.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_190034_00000000-0000-0000-0000-000000000019.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-00000000001a",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T18:00:00.000Z",
+    "startedAt": "2026-08-05T18:00:43.000Z",
+    "completedAt": "2026-08-05T18:00:55.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_180043_00000000-0000-0000-0000-00000000001a.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-00000000001b",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T17:00:00.000Z",
+    "startedAt": "2026-08-05T17:00:48.000Z",
+    "completedAt": "2026-08-05T17:01:02.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_170048_00000000-0000-0000-0000-00000000001b.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-00000000001c",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T16:00:02.000Z",
+    "startedAt": "2026-08-05T16:00:57.000Z",
+    "completedAt": "2026-08-05T16:01:12.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_160057_00000000-0000-0000-0000-00000000001c.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-00000000001d",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T15:00:00.000Z",
+    "startedAt": "2026-08-05T15:00:38.000Z",
+    "completedAt": "2026-08-05T15:00:59.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_150038_00000000-0000-0000-0000-00000000001d.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-00000000001e",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T14:00:00.000Z",
+    "startedAt": "2026-08-05T14:00:49.000Z",
+    "completedAt": "2026-08-05T14:01:06.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_140049_00000000-0000-0000-0000-00000000001e.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-00000000001f",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T13:00:00.000Z",
+    "startedAt": "2026-08-05T13:00:35.000Z",
+    "completedAt": "2026-08-05T13:00:49.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_130035_00000000-0000-0000-0000-00000000001f.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000020",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T12:00:02.000Z",
+    "startedAt": "2026-08-05T12:00:49.000Z",
+    "completedAt": "2026-08-05T12:01:04.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_120049_00000000-0000-0000-0000-000000000020.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000021",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T11:00:00.000Z",
+    "startedAt": "2026-08-05T11:02:16.000Z",
+    "completedAt": "2026-08-05T11:02:31.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_110217_00000000-0000-0000-0000-000000000021.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000022",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T10:00:00.000Z",
+    "startedAt": "2026-08-05T10:00:42.000Z",
+    "completedAt": "2026-08-05T10:00:55.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_100042_00000000-0000-0000-0000-000000000022.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000023",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T09:00:00.000Z",
+    "startedAt": "2026-08-05T09:01:13.000Z",
+    "completedAt": "2026-08-05T09:01:27.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_090113_00000000-0000-0000-0000-000000000023.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000024",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T08:00:02.000Z",
+    "startedAt": "2026-08-05T08:01:10.000Z",
+    "completedAt": "2026-08-05T08:01:38.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_080110_00000000-0000-0000-0000-000000000024.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000025",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T07:00:00.000Z",
+    "startedAt": "2026-08-05T07:01:26.000Z",
+    "completedAt": "2026-08-05T07:01:51.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_070126_00000000-0000-0000-0000-000000000025.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000026",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T06:00:00.000Z",
+    "startedAt": "2026-08-05T06:00:50.000Z",
+    "completedAt": "2026-08-05T06:01:05.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_060051_00000000-0000-0000-0000-000000000026.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000027",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T05:00:00.000Z",
+    "startedAt": "2026-08-05T05:00:48.000Z",
+    "completedAt": "2026-08-05T05:01:03.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_050048_00000000-0000-0000-0000-000000000027.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000028",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T04:00:02.000Z",
+    "startedAt": "2026-08-05T04:00:51.000Z",
+    "completedAt": "2026-08-05T04:01:04.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_040051_00000000-0000-0000-0000-000000000028.log",
+    "queueName": "main",
+    "status": "success"
+  },
+  {
+    "jobId": "00000000-0000-0000-0000-000000000029",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-05T03:00:00.000Z",
+    "startedAt": "2026-08-05T03:00:33.000Z",
+    "completedAt": "2026-08-05T03:00:46.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260805_030033_00000000-0000-0000-0000-000000000029.log",
+    "queueName": "main",
+    "status": "success"
+  }
+]

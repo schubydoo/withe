@@ -1,0 +1,11 @@
+[
+  {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "name": "acme",
+    "enabled": true,
+    "suspended": false,
+    "queueName": "main",
+    "installationId": 100000000,
+    "installedAt": "2026-07-29T18:02:07.000Z"
+  }
+]

@@ -1,0 +1,66 @@
+[
+  {
+    "name": "lever",
+    "fullName": "acme/lever",
+    "enabled": true,
+    "queueName": "main",
+    "installedAt": "2026-07-29T18:02:07.000Z",
+    "status": "activated"
+  },
+  {
+    "name": "sprocket",
+    "fullName": "acme/sprocket",
+    "enabled": true,
+    "queueName": "main",
+    "installedAt": "2026-07-29T18:02:07.000Z",
+    "status": "activated"
+  },
+  {
+    "name": "cog",
+    "fullName": "acme/cog",
+    "enabled": true,
+    "queueName": "main",
+    "installedAt": "2026-07-29T18:02:07.000Z",
+    "status": "activated"
+  },
+  {
+    "name": "ratchet",
+    "fullName": "acme/ratchet",
+    "enabled": true,
+    "queueName": "main",
+    "installedAt": "2026-07-29T18:02:07.000Z",
+    "status": "activated"
+  },
+  {
+    "name": "pulley",
+    "fullName": "acme/pulley",
+    "enabled": true,
+    "queueName": "main",
+    "installedAt": "2026-07-29T18:02:07.000Z",
+    "status": "activated"
+  },
+  {
+    "name": "widget",
+    "fullName": "acme/widget",
+    "enabled": true,
+    "queueName": "main",
+    "installedAt": "2026-07-29T18:02:07.000Z",
+    "status": "activated"
+  },
+  {
+    "name": "config",
+    "fullName": "acme/config",
+    "enabled": true,
+    "queueName": "main",
+    "installedAt": "2026-07-29T18:02:07.000Z",
+    "status": "onboarded"
+  },
+  {
+    "name": "gadget",
+    "fullName": "acme/gadget",
+    "enabled": true,
+    "queueName": "main",
+    "installedAt": "2026-07-29T18:02:07.000Z",
+    "status": "activated"
+  }
+]

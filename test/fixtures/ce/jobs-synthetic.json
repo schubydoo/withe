@@ -1,0 +1,35 @@
+[
+  {
+    "_comment": "HAND-BUILT, not recorded. No job has ever failed on the author's install — 1528 of 1528 succeeded — so there is nothing to record. Every field below is taken from JobReport, ErrorObject and ArtifactErrors in docs/openapi-community.yaml. Re-check it against the specification if the mapping ever surprises you.",
+    "jobId": "00000000-0000-0000-0000-0000000000f1",
+    "reason": "schedule-all",
+    "addedAt": "2026-08-06T04:00:00.000Z",
+    "startedAt": "2026-08-06T04:00:11.000Z",
+    "completedAt": "2026-08-06T04:00:52.000Z",
+    "logLocation": "/tmp/renovate/logs/acme/widget/20260806_040011.log",
+    "queueName": "main",
+    "status": "error",
+    "error": {
+      "name": "ExternalHostError",
+      "message": "Host error for https://registry.example/api"
+    },
+    "artifactErrors": {
+      "npm": [
+        {
+          "fileName": "package.json",
+          "lockFile": "package-lock.json",
+          "stderr": "npm ERR! code ERESOLVE"
+        },
+        { "lockFile": "uv.lock" }
+      ]
+    }
+  },
+  {
+    "_comment": "HAND-BUILT. The queue is empty on the author's install, so a queued job cannot be recorded either. A queued job carries no startedAt or completedAt.",
+    "jobId": "00000000-0000-0000-0000-0000000000f2",
+    "reason": "manual",
+    "addedAt": "2026-08-06T05:00:00.000Z",
+    "queueName": "main",
+    "status": "pending"
+  }
+]
