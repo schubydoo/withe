@@ -9,8 +9,9 @@ import {
   lastSync,
   lockFileRefreshes,
   pendingUpdates,
-  repoHealth,
+  triage,
   type PendingUpdateRow,
+  type TriageRow,
 } from '../db/queries.ts';
 
 export const dynamic = 'force-dynamic';
@@ -30,12 +31,27 @@ function read() {
     return {
       updates: pendingUpdates(db),
       locks: lockFileRefreshes(db),
-      repos: repoHealth(db),
+      repos: triage(db),
       sync: lastSync(db),
+      intervalSeconds: config.syncIntervalSeconds,
+      stalledAfterDays: config.stalledAfterDays,
     };
   } finally {
     sqlite.close();
   }
+}
+
+function age(from: Date | null): string {
+  if (!from) return 'unknown';
+  const minutes = Math.round((Date.now() - from.getTime()) / 60_000);
+  if (minutes < 60) return `${minutes} minutes`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours} hours`;
+  return `${Math.round(hours / 24)} days`;
+}
+
+function link(row: { org: string; name: string }): string {
+  return `/repos/${encodeURIComponent(row.org)}/${encodeURIComponent(row.name)}`;
 }
 
 function Group({ title, rows, empty }: { title: string; rows: PendingUpdateRow[]; empty: string }) {
@@ -50,7 +66,10 @@ function Group({ title, rows, empty }: { title: string; rows: PendingUpdateRow[]
         <table className="mt-2 w-full text-sm">
           <tbody>
             {rows.map((row) => (
-              <tr key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`} className="border-t border-neutral-200">
+              <tr
+                key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
+                className="border-t border-neutral-200"
+              >
                 <td className="py-1 pr-4 text-neutral-500">{row.repoFullName}</td>
                 <td className="py-1 pr-4 font-medium">
                   {row.dependencyName}
@@ -74,33 +93,110 @@ function Group({ title, rows, empty }: { title: string; rows: PendingUpdateRow[]
   );
 }
 
+function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRow[] }) {
+  if (failing.length === 0 && stalled.length === 0) {
+    return (
+      <p className="mt-4 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+        Nothing is broken. Every repository&rsquo;s most recent run succeeded.
+      </p>
+    );
+  }
+
+  // The oldest failure, because that is the one that has been ignored longest.
+  const oldest = failing
+    .map((r) => r.failingSince)
+    .filter((d): d is Date => d !== null)
+    .sort((a, b) => a.getTime() - b.getTime())[0];
+
+  return (
+    <section className="mt-4 rounded border border-red-200 bg-red-50 p-4">
+      <h2 className="text-lg font-medium text-red-900">
+        {failing.length > 0 && (
+          <>
+            {failing.length} {failing.length === 1 ? 'repository is' : 'repositories are'} failing
+            {oldest && <>, the oldest for {age(oldest)}</>}
+          </>
+        )}
+        {failing.length > 0 && stalled.length > 0 && ' · '}
+        {stalled.length > 0 && (
+          <>
+            {stalled.length} {stalled.length === 1 ? 'is' : 'are'} stalled
+          </>
+        )}
+      </h2>
+
+      <ul className="mt-3 space-y-2 text-sm">
+        {[...failing, ...stalled.filter((s) => !failing.includes(s))].map((row) => (
+          <li key={row.fullName}>
+            <a className="font-medium underline" href={link(row)}>
+              {row.fullName}
+            </a>
+            <span className="ml-2 text-neutral-700">
+              {row.lastRunStatus !== null && row.lastRunStatus !== 'success'
+                ? `failing for ${age(row.failingSince)}`
+                : // A repository with no runs at all is a different problem
+                  // from one whose runs stopped, and saying "in unknown"
+                  // describes neither.
+                  row.lastRunAt === null
+                  ? 'no runs recorded at all'
+                  : `no successful run in ${age(row.lastRunAt)}`}
+            </span>
+            {row.lastError && (
+              <p className="mt-0.5 max-w-2xl text-xs text-red-800">{row.lastError}</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 export default function Home() {
-  const { updates, locks, repos, sync } = read();
+  const { updates, locks, repos, sync, intervalSeconds, stalledAfterDays } = read();
 
   if (repos.length === 0) redirect('/preflight');
 
-  const held = updates.filter((u) => isHeld({ updateType: u.updateType, currentVersion: u.currentVersion }));
+  const failing = repos.filter((r) => r.lastRunStatus !== null && r.lastRunStatus !== 'success');
+  // A repository can be stalled without any run having failed — nothing ran at
+  // all. That is the case F-04 singles out, and a failure list alone misses it.
+  const stalled = repos.filter((r) => r.stalled && !failing.includes(r));
+
+  const held = updates.filter((u) =>
+    isHeld({ updateType: u.updateType, currentVersion: u.currentVersion }),
+  );
   const heldKeys = new Set(held);
   const rest = updates.filter((u) => !heldKeys.has(u));
   const open = rest.filter((u) => u.prNumber !== null);
   const queued = rest.filter((u) => u.prNumber === null);
 
-  const failing = repos.filter((r) => r.status !== null && r.status !== 'success');
-  const idle = repos.filter((r) => r.pendingCount === 0);
+  // Two missed cycles is late enough to mean something and rare enough not to
+  // cry wolf during a slow sync.
+  const stale =
+    sync.lastSyncAt !== null && Date.now() - sync.lastSyncAt.getTime() > intervalSeconds * 2000;
 
   return (
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Withe</h1>
       <p className="mt-1 text-sm text-neutral-500">
         {repos.length} repositories · {updates.length + locks.total} pending updates ·{' '}
-        {sync.lastSyncAt ? `synced ${sync.lastSyncAt.toISOString()}` : 'never synced'}
+        <a className="underline" href="/repos">
+          all repositories
+        </a>
       </p>
 
-      <p className="mt-4 rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm">
-        {failing.length === 0
-          ? 'No failures. Every repository’s most recent run succeeded.'
-          : `Failing: ${failing.map((r) => `${r.fullName} (${r.status})`).join(', ')}`}
-      </p>
+      {(stale || sync.lastSyncAt === null) && (
+        <p className="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          {sync.lastSyncAt === null
+            ? 'Withe has never completed a sync. Everything below is empty rather than wrong.'
+            : `Last successful sync ${age(sync.lastSyncAt)} ago, against a ${intervalSeconds}-second interval. Everything below may be out of date.`}{' '}
+          <a className="underline" href="/preflight">
+            Check the connection
+          </a>
+          .
+        </p>
+      )}
+
+      <Trouble failing={failing} stalled={stalled} />
 
       <Group
         title="Held for your review"
@@ -116,9 +212,9 @@ export default function Home() {
             ? 'No lock-file refreshes pending.'
             : `${locks.total} lock-file refreshes pending across ${locks.repos} repositories, not listed individually.`}
         </p>
-        {idle.length > 0 && (
-          <p className="mt-1">Up to date: {idle.map((r) => r.fullName).join(', ')}</p>
-        )}
+        <p className="mt-1">
+          A repository counts as stalled after {stalledAfterDays} days with no successful run.
+        </p>
       </section>
     </main>
   );

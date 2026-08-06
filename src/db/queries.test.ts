@@ -10,8 +10,8 @@ import type { CollectResult } from '../adapters/types.ts';
 import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
-import { persist } from './persist.ts';
-import { lastSync, lockFileRefreshes, pendingUpdates, repoHealth, repoInventory, runsForRepo } from './queries.ts';
+import { persist, recomputeStalled } from './persist.ts';
+import { lastSync, lockFileRefreshes, pendingUpdates, repoHealth, repoInventory, runsForRepo, triage } from './queries.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -346,5 +346,90 @@ test('a malformed artifact-errors column does not take the page down', () => {
 
   const [row] = runsForRepo(db, 'acme/widget').runs;
   assert.deepEqual(row?.artifactErrors, []);
+  sqlite.close();
+});
+
+test('triage leads with the failing repositories and how long each has been failing', () => {
+  const { sqlite, db } = fresh();
+  const hour = 3_600_000;
+  const now = Date.parse('2026-08-06T18:00:00Z');
+
+  // widget broke three days ago and has failed hourly since. The age that
+  // matters is three days, not one hour.
+  const widgetRuns = [
+    makeRun('acme/widget', 'w-ok', 'success', new Date(now - 72 * hour).toISOString()),
+    ...Array.from({ length: 12 }, (_, i) =>
+      makeRun('acme/widget', `w-bad-${i}`, 'failed', new Date(now - (71 - i * 6) * hour).toISOString()),
+    ),
+  ];
+
+  persist(db, SOURCE, 'ce', {
+    repos: [makeRepo('acme/widget'), makeRepo('acme/quiet')],
+    runs: [...widgetRuns, makeRun('acme/quiet', 'q1', 'success', new Date(now - hour).toISOString())],
+    updates: [],
+    warnings: [],
+  }, new Date());
+
+  const rows = triage(db);
+  const widget = rows.find((r) => r.fullName === 'acme/widget');
+  assert.ok(widget);
+  assert.equal(widget.lastRunStatus, 'failed');
+  assert.ok(widget.lastError);
+
+  const failingForHours = (now - (widget.failingSince?.getTime() ?? now)) / hour;
+  assert.ok(
+    failingForHours > 60,
+    `expected the oldest failure in the run of failures, got ${failingForHours}h`,
+  );
+
+  const quiet = rows.find((r) => r.fullName === 'acme/quiet');
+  assert.equal(quiet?.failingSince, null, 'a healthy repository has no failing-since');
+  sqlite.close();
+});
+
+test('a repository with no successful run and no error still surfaces as stalled', () => {
+  const { sqlite, db } = fresh();
+  const now = Date.parse('2026-08-06T18:00:00Z');
+  const old = now - 30 * 24 * 3_600_000;
+
+  // Nothing failed. The last success is simply a month old, which a failure
+  // list alone would miss entirely — the case F-04 singles out.
+  persist(db, SOURCE, 'ce', {
+    repos: [makeRepo('acme/forgotten')],
+    runs: [makeRun('acme/forgotten', 'f1', 'success', new Date(old).toISOString())],
+    updates: [],
+    warnings: [],
+  }, new Date());
+  recomputeStalled(db, SOURCE, new Date(now - 7 * 24 * 3_600_000));
+
+  const [row] = triage(db);
+  assert.ok(row);
+  assert.equal(row.stalled, true);
+  assert.equal(row.lastRunStatus, 'success', 'no run reported an error');
+  assert.equal(row.lastError, null);
+  sqlite.close();
+});
+
+test('a repository that has never succeeded counts its failures from the first one', () => {
+  const { sqlite, db } = fresh();
+  const now = Date.parse('2026-08-06T18:00:00Z');
+  const runs = Array.from({ length: 5 }, (_, i) =>
+    makeRun('acme/broken', `b${i}`, 'failed', new Date(now - (5 - i) * 3_600_000).toISOString()),
+  );
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/broken')], runs, updates: [], warnings: [] }, new Date());
+
+  const [row] = triage(db);
+  assert.ok(row?.failingSince instanceof Date);
+  assert.equal(row.failingSince.toISOString(), new Date(now - 5 * 3_600_000).toISOString());
+  sqlite.close();
+});
+
+test('a removed repository does not appear in triage', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  persist(db, SOURCE, 'ce', { ...FLEET, repos: [FLEET.repos[0]!], runs: [], updates: [] }, new Date());
+
+  const names = triage(db).map((r) => r.fullName);
+  assert.deepEqual(names, ['acme/widget'], 'an uninstalled repository is not something to fix');
   sqlite.close();
 });

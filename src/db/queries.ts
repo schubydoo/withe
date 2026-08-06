@@ -288,3 +288,80 @@ export function runLocation(db: Db, id: number): RunLocation | null {
   `);
   return row ?? null;
 }
+
+export interface TriageRow {
+  fullName: string;
+  org: string;
+  name: string;
+  stalled: boolean;
+  lastRunStatus: string | null;
+  lastRunAt: Date | null;
+  lastError: string | null;
+  /** When the trouble started: the newest run after the last successful one. */
+  failingSince: Date | null;
+  pendingCount: number;
+}
+
+/**
+ * Repositories that need attention, worst first.
+ *
+ * `failingSince` is the age F-04 asks for. It is the oldest failure in the
+ * current run of failures, not the newest one — a repository that broke a week
+ * ago and has failed hourly since has been broken for a week, not an hour.
+ */
+export function triage(db: Db): TriageRow[] {
+  const rows = db.all<{
+    fullName: string;
+    org: string;
+    name: string;
+    stalled: number;
+    lastRunStatus: string | null;
+    lastRunAt: number | null;
+    lastError: string | null;
+    lastSuccessAt: number | null;
+    pendingCount: number;
+  }>(sql`
+    select r.full_name as fullName, r.org, r.name, r.stalled,
+           (select rr.status from renovate_run rr
+             where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastRunStatus,
+           (select rr.completed_at from renovate_run rr
+             where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastRunAt,
+           (select rr.error from renovate_run rr
+             where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastError,
+           (select max(rr.completed_at) from renovate_run rr
+             where rr.repo_id = r.id and rr.status = 'success') as lastSuccessAt,
+           (select count(*) from "update" u where u.repo_id = r.id) as pendingCount
+      from repo r
+     where r.removed_at is null
+     order by r.full_name
+  `);
+
+  const withFirstFailure = rows.map((row) => {
+    const failing = row.lastRunStatus !== null && row.lastRunStatus !== 'success';
+    if (!failing) {
+      return { ...row, failingSince: null as number | null };
+    }
+    // The first failure after the last success. With no success on record, the
+    // oldest run this repository has.
+    const [first] = db.all<{ at: number | null }>(sql`
+      select min(rr.completed_at) as at
+        from renovate_run rr join repo r on r.id = rr.repo_id
+       where r.full_name = ${row.fullName}
+         and rr.status != 'success'
+         and (${row.lastSuccessAt} is null or rr.completed_at > ${row.lastSuccessAt})
+    `);
+    return { ...row, failingSince: first?.at ?? null };
+  });
+
+  return withFirstFailure.map((row) => ({
+    fullName: row.fullName,
+    org: row.org,
+    name: row.name,
+    stalled: row.stalled === 1,
+    lastRunStatus: row.lastRunStatus,
+    lastRunAt: row.lastRunAt === null ? null : new Date(row.lastRunAt * 1000),
+    lastError: row.lastError,
+    failingSince: row.failingSince === null ? null : new Date(row.failingSince * 1000),
+    pendingCount: row.pendingCount,
+  }));
+}
