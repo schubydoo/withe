@@ -7,7 +7,7 @@ import type { SourceAdapter, SourceConfig, SourceKind } from './types.ts';
 const stub = (config: SourceConfig): SourceAdapter => ({
   id: config.id,
   kind: config.kind,
-  preflight: async () => ({ ok: true, problems: [], reachableButEmpty: false }),
+  preflight: async () => ({ ok: true, problems: [], reachableButEmpty: false, compose: '' }),
   collect: async () => ({ repos: [], runs: [], updates: [], warnings: [] }),
   fetchLog: async () => new ReadableStream<Uint8Array>(),
 });

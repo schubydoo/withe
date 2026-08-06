@@ -111,7 +111,9 @@ test('losing the org list returns empty with a warning naming the setting', asyn
   const result = await adapter().collect();
   assert.deepEqual(result.repos, []);
   assert.deepEqual(result.runs, []);
-  assert.match(result.warnings[0] ?? '', /MEND_RNV_API_ENABLED/);
+  // The inventory family is gated by both variables — the specification tags
+  // getOrgs `Reporting`, which tad.md 4.4 had wrong.
+  assert.match(result.warnings[0] ?? '', /MEND_RNV_API_ENABLED and MEND_RNV_API_ENABLE_REPORTING/);
 });
 
 test('preflight names the token when the server rejects it', async () => {

@@ -17,6 +17,7 @@ import type {
 import { createCeClient, paginate, type CeClientConfig } from './client.ts';
 import { mapWithLimit } from './limit.ts';
 import { mapRepo, mapRun } from './map.ts';
+import { classify, composeBlock, type Family } from './preflight.ts';
 import type { components } from './generated/ce.d.ts';
 
 type OrgMeta = components['schemas']['OrgMeta'];
@@ -25,58 +26,6 @@ type JobReport = components['schemas']['JobReport'];
 
 /** Section 4.3. Also a contractual limit, not only courtesy. */
 const CONCURRENCY = 4;
-
-/**
- * Which setting explains a family being unreachable.
- *
- * Metric M-5 wants the exact variable named, and a 404 on one family says
- * nothing about the others, so each is probed and reported separately.
- */
-const FAMILY_SETTINGS = {
-  system: 'MEND_RNV_API_ENABLED or MEND_RNV_API_ENABLE_SYSTEM',
-  orgs: 'MEND_RNV_API_ENABLED',
-  jobs: 'MEND_RNV_API_ENABLE_JOBS',
-} as const;
-
-/** Distinguish "you are not allowed" from "this family is switched off". */
-function classify(status: number, family: keyof typeof FAMILY_SETTINGS): PreflightProblem {
-  if (status === 401) {
-    return {
-      probe: family,
-      setting: null,
-      detail: 'The server rejected the token. Check WITHE_CE_TOKEN against MEND_RNV_API_SERVER_SECRET.',
-      fatal: true,
-    };
-  }
-  if (status === 403) {
-    return {
-      probe: family,
-      setting: null,
-      detail: 'The token is accepted but not permitted here. Check its scope.',
-      fatal: true,
-    };
-  }
-  if (status === 404 || status === 501) {
-    return {
-      probe: family,
-      setting: FAMILY_SETTINGS[family],
-      detail: `The ${family} API is not enabled on this server.`,
-      // Only the organization family is fatal, because it is the only one Withe
-      // cannot work without: it is the entry point to repositories and runs.
-      // Withe reads no system endpoint outside preflight, and a missing job
-      // family costs run history rather than the whole dashboard. Reporting
-      // either as fatal would tell an operator to fix something that is not
-      // stopping them.
-      fatal: family === 'orgs',
-    };
-  }
-  return {
-    probe: family,
-    setting: null,
-    detail: `The server answered ${status}.`,
-    fatal: true,
-  };
-}
 
 export class CeAdapter implements SourceAdapter {
   readonly id: string;
@@ -112,12 +61,15 @@ export class CeAdapter implements SourceAdapter {
 
     const response = await this.client.GET('/api/v1/orgs');
     if (response.error || !response.data) {
+      const problem = classify('inventory', response.response.status);
       return {
         names: [],
-        problem: classify(response.response.status, 'orgs'),
-        warning:
-          `Could not list organizations (${response.response.status}). ` +
-          `${FAMILY_SETTINGS.orgs} may be unset, or set WITHE_CE_ORGS to name them instead.`,
+        problem,
+        // The detail says what broke; the setting says what to change. A log
+        // line carrying only the first leaves the operator with nowhere to go.
+        warning: problem
+          ? `${problem.detail}${problem.setting ? ` Set ${problem.setting}.` : ''}`
+          : `Could not list organizations (${response.response.status}).`,
       };
     }
     return { names: (response.data as OrgMeta[]).map((org) => org.name), problem: null, warning: null };
@@ -125,51 +77,79 @@ export class CeAdapter implements SourceAdapter {
 
   async preflight(): Promise<PreflightResult> {
     const problems: PreflightProblem[] = [];
+    const add = (family: Family, status: number) => {
+      const problem = classify(family, status);
+      if (problem) problems.push(problem);
+      return problem === null;
+    };
 
+    // Every family is probed, even after one fails. An operator fixing three
+    // settings wants all three named in one pass, not one per restart.
     const status = await this.client.GET('/system/v1/status');
-    if (status.response.status >= 400) {
-      problems.push(classify(status.response.status, 'system'));
-    }
+    add('system', status.response.status);
+
+    const metrics = await this.rawGet('/metrics');
+    add('metrics', metrics);
 
     const orgs = await this.listOrgs();
     if (orgs.problem) {
       problems.push(orgs.problem);
-      return { ok: false, problems, reachableButEmpty: false };
+      return { ok: false, problems, reachableButEmpty: false, compose: composeBlock(problems) };
     }
     if (this.configuredOrgs) {
-      // A wrong name here looks exactly like an empty server, so say which mode
-      // this is before the operator starts debugging the wrong thing.
       problems.push({
-        probe: 'orgs',
+        probe: 'inventory',
         // Either shape can set this, and naming only the environment variable
         // would send a file-configured operator to the wrong place.
         setting: 'WITHE_CE_ORGS or sources[].orgs',
         detail: `Organizations were named by configuration, not discovered: ${orgs.names.join(', ')}.`,
         fatal: false,
+        remedies: [],
       });
     }
 
     let repoCount = 0;
+    let firstRepo: string | null = null;
     for (const name of orgs.names) {
       const repos = await this.client.GET('/api/v1/orgs/{org}/-/repos', {
         params: { path: { org: name } },
       });
-      if (repos.response.status >= 400) {
-        problems.push(classify(repos.response.status, 'orgs'));
-        continue;
-      }
-      repoCount += ((repos.data ?? []) as RepositoryInfo[]).length;
+      if (!add('inventory', repos.response.status)) continue;
+      const list = (repos.data ?? []) as RepositoryInfo[];
+      repoCount += list.length;
+      firstRepo ??= list[0]?.fullName ?? null;
     }
-    const orgCount = orgs.names.length;
 
-    // Probing jobs needs a repository, so a server with none cannot answer the
-    // question. That is reported below rather than guessed at.
+    // The run-history probe needs a repository to aim at, so a server with none
+    // cannot answer it. Reporting that as a failure would blame the operator
+    // for an empty fleet.
+    if (firstRepo) {
+      const jobs = await this.client.GET('/api/v1/repos/{orgRepo}/-/jobs', {
+        params: { path: { orgRepo: firstRepo } },
+      });
+      add('jobs', jobs.response.status);
+    }
+
     const ok = !problems.some((p) => p.fatal);
     return {
       ok,
       problems,
-      reachableButEmpty: ok && orgCount > 0 && repoCount === 0,
+      reachableButEmpty: ok && orgs.names.length > 0 && repoCount === 0,
+      compose: composeBlock(problems),
     };
+  }
+
+  /** A plain fetch for endpoints outside the generated specification. */
+  private async rawGet(path: string): Promise<number> {
+    try {
+      const response = await fetch(new URL(path.replace(/^\//, ''), this.config.baseUrl.replace(/\/$/, '') + '/'), {
+        headers: { Authorization: `Bearer ${this.config.token}` },
+        redirect: 'manual',
+      });
+      return response.status;
+    } catch {
+      return 0;
+    }
   }
 
   async collect(): Promise<CollectResult> {
@@ -190,7 +170,12 @@ export class CeAdapter implements SourceAdapter {
         params: { path: { org: name } },
       });
       if (result.error || !result.data) {
-        warnings.push(`Could not list repositories for ${name} (${result.response.status}).`);
+        const problem = classify('inventory', result.response.status);
+        warnings.push(
+          problem
+            ? `${name}: ${problem.detail}${problem.setting ? ` Set ${problem.setting}.` : ''}`
+            : `Could not list repositories for ${name} (${result.response.status}).`,
+        );
         continue;
       }
       const infos = result.data as RepositoryInfo[];

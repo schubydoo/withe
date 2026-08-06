@@ -64,7 +64,7 @@ function stub(id: string, behaviour: () => Promise<CollectResult>): SourceAdapte
   return {
     id,
     kind: 'ce',
-    preflight: async () => ({ ok: true, problems: [], reachableButEmpty: false }),
+    preflight: async () => ({ ok: true, problems: [], reachableButEmpty: false, compose: '' }),
     collect: behaviour,
     fetchLog: async () => new ReadableStream<Uint8Array>(),
   };

@@ -18,6 +18,14 @@ export type SourceKind = 'ce' | 'jsonlog' | 'forge';
  * missing setting, which is why `setting` exists and why `detail` is never the
  * only field carrying the answer.
  */
+/** One setting to change, on one of the two containers. */
+export interface PreflightRemedy {
+  variable: string;
+  value: string;
+  /** The Renovate server and its worker are separate containers. */
+  target: 'server' | 'worker';
+}
+
 export interface PreflightProblem {
   /** What was probed, in the source's terms. */
   probe: string;
@@ -29,6 +37,12 @@ export interface PreflightProblem {
   detail: string;
   /** Whether Withe can still show something useful without this. */
   fatal: boolean;
+  /**
+   * Machine-readable form of the fix, so the page can render a Compose block
+   * rather than asking the operator to translate prose into settings. Empty
+   * when no setting would help — a wrong token, for instance.
+   */
+  remedies: PreflightRemedy[];
 }
 
 export interface PreflightResult {
@@ -40,6 +54,12 @@ export interface PreflightResult {
    * says so rather than showing a generic empty state — PRD open question Q-6.
    */
   reachableButEmpty: boolean;
+  /**
+   * A Compose fragment fixing everything found, or an empty string. Built here
+   * rather than in the page, because the page should not have to know which
+   * container each setting belongs to.
+   */
+  compose: string;
 }
 
 /**
