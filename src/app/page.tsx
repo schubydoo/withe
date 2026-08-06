@@ -1,3 +1,8 @@
+import { existsSync } from 'node:fs';
+
+import { redirect } from 'next/navigation';
+
+import { loadConfig } from '../config/load.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from '../db/client.ts';
 import {
@@ -10,12 +15,17 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-const DB_PATH = process.env.WITHE_DB_PATH ?? './withe.db';
-
 function read() {
+  // An unconfigured or never-synced instance is sent to the setup check rather
+  // than shown an empty dashboard. An unexplained empty page is the failure
+  // that loses a first-time user, and it looks identical to a broken install.
+  const config = loadConfig();
+  if (config.sources.length === 0) redirect('/preflight');
+  if (!existsSync(config.dbPath)) redirect('/preflight');
+
   // Reads only. No source is called while a page renders, so an unreachable
   // server makes this stale rather than broken.
-  const { sqlite, db } = openDatabase(DB_PATH);
+  const { sqlite, db } = openDatabase(config.dbPath);
   try {
     return {
       updates: pendingUpdates(db),
@@ -66,6 +76,8 @@ function Group({ title, rows, empty }: { title: string; rows: PendingUpdateRow[]
 
 export default function Home() {
   const { updates, locks, repos, sync } = read();
+
+  if (repos.length === 0) redirect('/preflight');
 
   const held = updates.filter((u) => isHeld({ updateType: u.updateType, currentVersion: u.currentVersion }));
   const heldKeys = new Set(held);
