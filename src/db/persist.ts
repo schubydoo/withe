@@ -65,6 +65,21 @@ export function persist(
         .run();
     }
 
+    // A repository the source no longer lists has been uninstalled or made
+    // private. Deleting the row would take its run history with it and make the
+    // repository look like it never existed; marking it removed keeps the
+    // record and lets the inventory say what happened.
+    if (result.repos.length > 0) {
+      const present = result.repos.map((r) => r.fullName);
+      tx.run(sql`
+        update repo
+           set removed_at = ${Math.floor(finishedAt.getTime() / 1000)}
+         where source_adapter_id = ${sourceAdapterId}
+           and removed_at is null
+           and full_name not in (${sql.join(present.map((n) => sql`${n}`), sql`, `)})
+      `);
+    }
+
     // One read, then an in-memory map. Resolving each run's repository with its
     // own query would be one statement per row.
     const rowIds = new Map<string, number>();

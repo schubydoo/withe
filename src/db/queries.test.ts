@@ -11,7 +11,7 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist } from './persist.ts';
-import { lastSync, lockFileRefreshes, pendingUpdates, repoHealth } from './queries.ts';
+import { lastSync, lockFileRefreshes, pendingUpdates, repoHealth, repoInventory } from './queries.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -175,5 +175,88 @@ test('re-syncing the same runs does not duplicate rows', () => {
   const health = repoHealth(db);
   assert.equal(health.length, 3, 'repositories were inserted twice');
   assert.equal(pendingUpdates(db).length, 3);
+  sqlite.close();
+});
+
+test('the inventory carries 40 repositories across 3 organizations', () => {
+  const { sqlite, db } = fresh();
+  const orgs = ['acme', 'globex', 'initech'];
+  const repos = Array.from({ length: 40 }, (_, i) => makeRepo(`${orgs[i % 3]}/repo-${i}`));
+  const runs = repos.map((r, i) =>
+    makeRun(r.fullName, `j${i}`, i % 7 === 0 ? 'failed' : 'success', '2026-08-06T17:00:00Z'),
+  );
+
+  persist(db, SOURCE, 'ce', { repos, runs, updates: [], warnings: [] }, new Date());
+
+  const rows = repoInventory(db);
+  assert.equal(rows.length, 40);
+  assert.equal(new Set(rows.map((r) => r.org)).size, 3);
+
+  // Sorted by organization then name, so a long list stays scannable.
+  const sorted = [...rows].sort((a, b) =>
+    a.org === b.org ? (a.name < b.name ? -1 : 1) : a.org < b.org ? -1 : 1,
+  );
+  assert.deepEqual(rows.map((r) => r.fullName), sorted.map((r) => r.fullName));
+
+  for (const row of rows) {
+    assert.ok(row.lastRunAt instanceof Date, `${row.fullName} lost its run time`);
+    assert.ok(row.org.length > 0);
+    assert.equal(row.removedAt, null);
+  }
+  assert.equal(rows.filter((r) => r.lastRunStatus === 'failed').length, 6);
+  sqlite.close();
+});
+
+test('a repository the source stops listing is marked removed, not deleted', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  assert.equal(repoInventory(db).length, 3);
+
+  // The next sync no longer mentions acme/gadget.
+  const shrunk = {
+    ...FLEET,
+    repos: FLEET.repos.filter((r) => r.fullName !== 'acme/gadget'),
+    runs: FLEET.runs.filter((r) => !r.repoId.endsWith('acme/gadget')),
+    updates: [],
+  };
+  persist(db, SOURCE, 'ce', shrunk, new Date());
+
+  const rows = repoInventory(db);
+  assert.equal(rows.length, 3, 'the row must survive so its history survives');
+
+  const gone = rows.find((r) => r.fullName === 'acme/gadget');
+  assert.ok(gone?.removedAt instanceof Date);
+  assert.ok(rows.filter((r) => r.fullName !== 'acme/gadget').every((r) => r.removedAt === null));
+
+  // Its runs are still there, which is the reason for keeping the row.
+  assert.ok(gone.lastRunAt instanceof Date);
+  sqlite.close();
+});
+
+test('a repository that comes back is no longer marked removed', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  persist(db, SOURCE, 'ce', { ...FLEET, repos: [FLEET.repos[0]!], runs: [], updates: [] }, new Date());
+  assert.equal(repoInventory(db).filter((r) => r.removedAt).length, 2);
+
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  assert.equal(
+    repoInventory(db).filter((r) => r.removedAt).length,
+    0,
+    'reinstalling a repository must clear the mark',
+  );
+  sqlite.close();
+});
+
+test('one source removing a repository does not touch another source', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  persist(db, 'other', 'ce', FLEET, new Date());
+  assert.equal(repoInventory(db).length, 6);
+
+  persist(db, SOURCE, 'ce', { ...FLEET, repos: [FLEET.repos[0]!], runs: [], updates: [] }, new Date());
+  const removed = repoInventory(db).filter((r) => r.removedAt);
+  assert.equal(removed.length, 2);
+  assert.ok(removed.every((r) => r.sourceAdapterId === SOURCE), 'sources must not remove each other');
   sqlite.close();
 });

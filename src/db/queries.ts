@@ -109,3 +109,62 @@ export function lastSync(db: Db): SyncSummary {
     outcome: row?.outcome ?? null,
   };
 }
+
+export interface InventoryRow {
+  sourceAdapterId: string;
+  org: string;
+  name: string;
+  fullName: string;
+  enabled: boolean;
+  installStatus: string | null;
+  queueName: string | null;
+  removedAt: Date | null;
+  stalled: boolean;
+  lastRunAt: Date | null;
+  lastRunStatus: string | null;
+  pendingCount: number;
+}
+
+/**
+ * Every repository, including ones the source has stopped listing.
+ *
+ * Removed repositories stay visible. Dropping them would take their run history
+ * with them and make a repository that was uninstalled look like one that never
+ * existed, which is a worse answer to "where did it go".
+ */
+export function repoInventory(db: Db): InventoryRow[] {
+  const rows = db.all<{
+    sourceAdapterId: string;
+    org: string;
+    name: string;
+    fullName: string;
+    enabled: number;
+    installStatus: string | null;
+    queueName: string | null;
+    removedAt: number | null;
+    stalled: number;
+    lastRunAt: number | null;
+    lastRunStatus: string | null;
+    pendingCount: number;
+  }>(sql`
+    select r.source_adapter_id as sourceAdapterId,
+           r.org, r.name, r.full_name as fullName,
+           r.enabled, r.install_status as installStatus,
+           r.queue_name as queueName, r.removed_at as removedAt, r.stalled,
+           (select rr.completed_at from renovate_run rr
+             where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastRunAt,
+           (select rr.status from renovate_run rr
+             where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastRunStatus,
+           (select count(*) from "update" u where u.repo_id = r.id) as pendingCount
+      from repo r
+     order by r.org, r.name
+  `);
+
+  return rows.map((row) => ({
+    ...row,
+    enabled: row.enabled === 1,
+    stalled: row.stalled === 1,
+    removedAt: row.removedAt === null ? null : new Date(row.removedAt * 1000),
+    lastRunAt: row.lastRunAt === null ? null : new Date(row.lastRunAt * 1000),
+  }));
+}
