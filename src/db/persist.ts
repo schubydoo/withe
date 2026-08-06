@@ -166,20 +166,51 @@ export function persist(
   });
 }
 
-/** Mark repositories whose newest run is older than the threshold. */
-export function markStalled(db: Db, olderThan: Date): number {
-  const marked = db
-    .update(repo)
-    .set({ stalled: true })
-    .where(
-      sql`${repo.id} in (
-        select ${repo.id} from ${repo}
-        left join ${renovateRun} on ${renovateRun.repoId} = ${repo.id}
-        group by ${repo.id}
-        having max(${renovateRun.completedAt}) is null
-            or max(${renovateRun.completedAt}) < ${Math.floor(olderThan.getTime() / 1000)}
-      )`,
-    )
-    .run();
-  return marked.changes;
+/**
+ * Recompute the stalled flag for every repository of one source.
+ *
+ * Stalled means no **successful** run since the cutoff. A repository that has
+ * been failing for a week is not quietly healthy, and one that recovers must
+ * clear the flag, so this sets both true and false rather than only marking.
+ */
+export function recomputeStalled(db: Db, sourceAdapterId: string, cutoff: Date): number {
+  const seconds = Math.floor(cutoff.getTime() / 1000);
+  const result = db.run(sql`
+    update repo
+       set stalled = not exists (
+             select 1 from renovate_run rr
+              where rr.repo_id = repo.id
+                and rr.status = 'success'
+                and rr.completed_at >= ${seconds}
+           )
+     where repo.source_adapter_id = ${sourceAdapterId}
+  `);
+  return result.changes;
+}
+
+/** Record a source that failed before it produced anything to persist. */
+export function recordSyncFailure(
+  db: Db,
+  sourceAdapterId: string,
+  kind: 'ce' | 'jsonlog' | 'forge',
+  startedAt: Date,
+  error: string,
+): void {
+  db.transaction((tx) => {
+    tx.insert(source)
+      .values({ id: sourceAdapterId, kind, lastSyncOutcome: 'failed' })
+      .onConflictDoUpdate({ target: source.id, set: { lastSyncOutcome: 'failed' } })
+      .run();
+    tx.insert(syncStatus)
+      .values({
+        sourceAdapterId,
+        startedAt,
+        finishedAt: new Date(),
+        outcome: 'failed',
+        error,
+        repoCount: null,
+        runCount: null,
+      })
+      .run();
+  });
 }
