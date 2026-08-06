@@ -32,11 +32,25 @@ export function persist(
     const finishedAt = new Date();
     const outcome = result.warnings.length > 0 ? 'partial' : 'ok';
 
+    // A source that could not report its forge keeps whatever it last said,
+    // rather than blanking the links because one probe came back empty.
+    const meta = result.meta;
     tx.insert(source)
-      .values({ id: sourceAdapterId, kind, lastSyncAt: finishedAt, lastSyncOutcome: outcome })
+      .values({
+        id: sourceAdapterId,
+        kind,
+        lastSyncAt: finishedAt,
+        lastSyncOutcome: outcome,
+        platform: meta?.platform ?? null,
+        webBaseUrl: meta?.webBaseUrl ?? null,
+      })
       .onConflictDoUpdate({
         target: source.id,
-        set: { lastSyncAt: finishedAt, lastSyncOutcome: outcome },
+        set: {
+          lastSyncAt: finishedAt,
+          lastSyncOutcome: outcome,
+          ...(meta ? { platform: meta.platform, webBaseUrl: meta.webBaseUrl } : {}),
+        },
       })
       .run();
 
@@ -170,6 +184,8 @@ export function persist(
           currentVersion: row.currentVersion,
           targetVersion: row.targetVersion,
           updateType: row.updateType,
+          datasource: row.datasource,
+          packageName: row.packageName,
           state: row.state,
           prUrl: row.pullRequestUrl,
           prNumber: row.pullRequestNumber,

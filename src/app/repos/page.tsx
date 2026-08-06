@@ -3,18 +3,19 @@ import { existsSync } from 'node:fs';
 import { redirect } from 'next/navigation';
 
 import { loadConfig } from '../../config/load.ts';
+import { repoUrl } from '../../core/links.ts';
 import { openDatabase } from '../../db/client.ts';
-import { repoInventory, type InventoryRow } from '../../db/queries.ts';
+import { forges, repoInventory, type ForgeInfo, type InventoryRow } from '../../db/queries.ts';
 
 export const dynamic = 'force-dynamic';
 
-function read(): InventoryRow[] {
+function read(): { rows: InventoryRow[]; forge: Map<string, ForgeInfo> } {
   const config = loadConfig();
   if (config.sources.length === 0 || !existsSync(config.dbPath)) redirect('/preflight');
 
   const { sqlite, db } = openDatabase(config.dbPath);
   try {
-    return repoInventory(db);
+    return { rows: repoInventory(db), forge: forges(db) };
   } finally {
     sqlite.close();
   }
@@ -46,7 +47,7 @@ function ago(when: Date | null): string {
 }
 
 export default function Repos() {
-  const rows = read();
+  const { rows, forge } = read();
   const orgs = [...new Set(rows.map((r) => r.org))];
   const removed = rows.filter((r) => r.removedAt).length;
 
@@ -85,6 +86,26 @@ export default function Repos() {
                     <span className="text-neutral-500">{row.org}/</span>
                     <span className="font-medium">{row.name}</span>
                   </a>
+                  {(() => {
+                    // The name goes to Withe's own history; this goes to the
+                    // forge. Two destinations, so two targets rather than one
+                    // link the operator has to guess about.
+                    const href = repoUrl(
+                      forge.get(row.sourceAdapterId)?.webBaseUrl ?? null,
+                      row.fullName,
+                    );
+                    return href ? (
+                      <a
+                        className="ml-2 text-xs text-neutral-400 underline"
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        title="Open on the forge"
+                      >
+                        forge
+                      </a>
+                    ) : null;
+                  })()}
                 </td>
                 <td className="py-1.5 pr-4">
                   <span className={`rounded px-1.5 py-0.5 text-xs ${tone}`}>{label}</span>

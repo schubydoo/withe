@@ -15,6 +15,13 @@
       "when": 1786056751294,
       "tag": "0001_equal_texas_twister",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786059712440,
+      "tag": "0002_freezing_mother_askani",
+      "breakpoints": true
     }
   ]
 }

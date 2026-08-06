@@ -5,6 +5,7 @@
  * and this adapter reaches none of them (NFR-11).
  */
 import type { RenovateRun, Repo, Update } from '../../core/model.ts';
+import { webBaseFrom } from '../../core/links.ts';
 import { extractFromLog } from '../../core/renovate-log.ts';
 import { registerAdapter } from '../registry.ts';
 import type {
@@ -13,6 +14,7 @@ import type {
   PreflightResult,
   SourceAdapter,
   SourceConfig,
+  SourceMeta,
 } from '../types.ts';
 import { createCeClient, paginate, type CeClientConfig } from './client.ts';
 import { mapWithLimit } from './limit.ts';
@@ -220,7 +222,13 @@ export class CeAdapter implements SourceAdapter {
       }
     });
 
-    return { repos, runs: runsPerRepo.flat(), updates: updatesPerRepo.flat(), warnings };
+    return {
+      repos,
+      runs: runsPerRepo.flat(),
+      updates: updatesPerRepo.flat(),
+      warnings,
+      meta: await this.forge(),
+    };
   }
 
   private async collectRuns(repo: Repo): Promise<RenovateRun[]> {
@@ -235,6 +243,22 @@ export class CeAdapter implements SourceAdapter {
       }
     }
     return runs;
+  }
+
+  /**
+   * Which forge this server works against, and where a person can open it.
+   *
+   * The status endpoint reports an API endpoint, which is not browsable. A
+   * server with the system family switched off simply yields nothing, and the
+   * pages fall back to plain text.
+   */
+  private async forge(): Promise<SourceMeta | undefined> {
+    const status = await this.client.GET('/system/v1/status');
+    if (status.error || !status.data) return undefined;
+    const data = status.data as { platform?: string; endpoint?: string };
+    const platform = data.platform ?? null;
+    const webBaseUrl = webBaseFrom(platform, data.endpoint ?? null);
+    return webBaseUrl || platform ? { platform, webBaseUrl } : undefined;
   }
 
   private async collectUpdates(repo: Repo, run: RenovateRun): Promise<Update[]> {

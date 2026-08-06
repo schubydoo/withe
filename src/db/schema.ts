@@ -8,6 +8,10 @@ export const source = sqliteTable('source', {
   id: text('id').primaryKey(),
   kind: text('kind', { enum: ['ce', 'jsonlog', 'forge'] }).notNull(),
   label: text('label'),
+  /** The forge the source works against, as it reported it. */
+  platform: text('platform'),
+  /** Browsable base URL for that forge, derived from its API endpoint. */
+  webBaseUrl: text('web_base_url'),
   lastSyncAt: integer('last_sync_at', { mode: 'timestamp' }),
   lastSyncOutcome: text('last_sync_outcome', { enum: ['ok', 'partial', 'failed'] }),
 });
@@ -100,6 +104,8 @@ export const update = sqliteTable(
         'lock-file-maintenance',
       ],
     }),
+    datasource: text('datasource'),
+    packageName: text('package_name'),
     state: text('state', { enum: ['detected', 'pr-open', 'pr-merged', 'pr-closed'] }),
     prUrl: text('pr_url'),
     prNumber: integer('pr_number'),

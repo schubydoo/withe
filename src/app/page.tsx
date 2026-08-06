@@ -3,13 +3,16 @@ import { existsSync } from 'node:fs';
 import { redirect } from 'next/navigation';
 
 import { loadConfig } from '../config/load.ts';
+import { dependencyLink, pullRequestUrl, repoUrl } from '../core/links.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from '../db/client.ts';
 import {
+  forges,
   lastSync,
   lockFileRefreshes,
   pendingUpdates,
   triage,
+  type ForgeInfo,
   type PendingUpdateRow,
   type TriageRow,
 } from '../db/queries.ts';
@@ -32,6 +35,7 @@ function read() {
       updates: pendingUpdates(db),
       locks: lockFileRefreshes(db),
       repos: triage(db),
+      forge: forges(db),
       sync: lastSync(db),
       intervalSeconds: config.syncIntervalSeconds,
       stalledAfterDays: config.stalledAfterDays,
@@ -54,7 +58,33 @@ function link(row: { org: string; name: string }): string {
   return `/repos/${encodeURIComponent(row.org)}/${encodeURIComponent(row.name)}`;
 }
 
-function Group({ title, rows, empty }: { title: string; rows: PendingUpdateRow[]; empty: string }) {
+/** A link, or the same text unlinked when nothing can be addressed. */
+function Maybe({ href, children, title }: { href: string | null; children: React.ReactNode; title?: string }) {
+  if (!href) return <>{children}</>;
+  return (
+    <a
+      className="underline decoration-neutral-300 hover:decoration-neutral-600"
+      href={href}
+      title={title}
+      target="_blank"
+      rel="noreferrer noopener"
+    >
+      {children}
+    </a>
+  );
+}
+
+function Group({
+  title,
+  rows,
+  empty,
+  forge,
+}: {
+  title: string;
+  rows: PendingUpdateRow[];
+  empty: string;
+  forge: Map<string, ForgeInfo>;
+}) {
   return (
     <section className="mt-8">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
@@ -70,7 +100,11 @@ function Group({ title, rows, empty }: { title: string; rows: PendingUpdateRow[]
                 key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
                 className="border-t border-neutral-200"
               >
-                <td className="py-1 pr-4 text-neutral-500">{row.repoFullName}</td>
+                <td className="py-1 pr-4 text-neutral-500">
+                  <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
+                    {row.repoFullName}
+                  </Maybe>
+                </td>
                 <td className="py-1 pr-4 font-medium">
                   {row.dependencyName}
                   {row.packageFileCount > 1 && (
@@ -78,11 +112,35 @@ function Group({ title, rows, empty }: { title: string; rows: PendingUpdateRow[]
                   )}
                 </td>
                 <td className="py-1 pr-4 tabular-nums text-neutral-600">
-                  {row.currentVersion} → {row.targetVersion}
+                  <Maybe
+                    href={
+                      dependencyLink(row.datasource, row.packageName, row.currentVersion, row.targetVersion)
+                        ?.href ?? null
+                    }
+                    title={
+                      dependencyLink(row.datasource, row.packageName, row.currentVersion, row.targetVersion)
+                        ?.kind === 'compare'
+                        ? 'Compare these two versions upstream'
+                        : 'Open the package page'
+                    }
+                  >
+                    {row.currentVersion} → {row.targetVersion}
+                  </Maybe>
                 </td>
                 <td className="py-1 pr-4 text-neutral-500">{row.updateType}</td>
                 <td className="py-1 text-neutral-500">
-                  {row.prNumber === null ? '' : `PR #${row.prNumber}`}
+                  {row.prNumber === null ? '' : (
+                    <Maybe
+                      href={pullRequestUrl(
+                        info(forge, row).webBaseUrl,
+                        info(forge, row).platform,
+                        row.repoFullName,
+                        row.prNumber,
+                      )}
+                    >
+                      PR #{row.prNumber}
+                    </Maybe>
+                  )}
                 </td>
               </tr>
             ))}
@@ -91,6 +149,10 @@ function Group({ title, rows, empty }: { title: string; rows: PendingUpdateRow[]
       )}
     </section>
   );
+}
+
+function info(forge: Map<string, ForgeInfo>, row: { sourceAdapterId: string }): ForgeInfo {
+  return forge.get(row.sourceAdapterId) ?? { platform: null, webBaseUrl: null };
 }
 
 function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRow[] }) {
@@ -152,7 +214,7 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
 }
 
 export default function Home() {
-  const { updates, locks, repos, sync, intervalSeconds, stalledAfterDays } = read();
+  const { updates, locks, repos, forge, sync, intervalSeconds, stalledAfterDays } = read();
 
   if (repos.length === 0) redirect('/preflight');
 
@@ -201,10 +263,11 @@ export default function Home() {
       <Group
         title="Held for your review"
         rows={held}
+        forge={forge}
         empty="Nothing is waiting on a decision. Majors and 0.x minors appear here."
       />
-      <Group title="Open pull requests" rows={open} empty="No update has an open pull request." />
-      <Group title="Queued, no pull request yet" rows={queued} empty="Nothing is queued." />
+      <Group title="Open pull requests" rows={open} forge={forge} empty="No update has an open pull request." />
+      <Group title="Queued, no pull request yet" rows={queued} forge={forge} empty="Nothing is queued." />
 
       <section className="mt-8 text-sm text-neutral-500">
         <p>

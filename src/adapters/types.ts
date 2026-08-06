@@ -69,11 +69,24 @@ export interface PreflightResult {
  * returns partial data and a warning; it does not throw. A silent empty page is
  * the failure mode this field exists to prevent.
  */
+/** What a source knows about the forge it works against. */
+export interface SourceMeta {
+  platform: string | null;
+  /** Browsable base URL, not the API endpoint. Null when it cannot be derived. */
+  webBaseUrl: string | null;
+}
+
 export interface CollectResult {
   repos: Repo[];
   runs: RenovateRun[];
   updates: Update[];
   warnings: string[];
+  /**
+   * Absent when the source cannot say. The pages then render names as plain
+   * text rather than guessing at github.com, which is the wrong answer for the
+   * self-hosted forges Withe exists to support.
+   */
+  meta?: SourceMeta;
 }
 
 /**

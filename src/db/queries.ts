@@ -12,11 +12,14 @@ import type { openDatabase } from './client.ts';
 type Db = ReturnType<typeof openDatabase>['db'];
 
 export interface PendingUpdateRow {
+  sourceAdapterId: string;
   repoFullName: string;
   dependencyName: string;
   currentVersion: string | null;
   targetVersion: string | null;
   updateType: UpdateType;
+  datasource: string | null;
+  packageName: string | null;
   prNumber: number | null;
   packageFileCount: number;
 }
@@ -36,11 +39,14 @@ export interface RepoHealthRow {
  */
 export function pendingUpdates(db: Db): PendingUpdateRow[] {
   return db.all<PendingUpdateRow>(sql`
-    select r.full_name        as repoFullName,
+    select u.source_adapter_id as sourceAdapterId,
+           r.full_name        as repoFullName,
            u.dependency_name  as dependencyName,
            u.current_version  as currentVersion,
            u.target_version   as targetVersion,
            u.update_type      as updateType,
+           u.datasource,
+           u.package_name     as packageName,
            u.pr_number        as prNumber,
            u.package_file_count as packageFileCount
       from "update" u
@@ -364,4 +370,17 @@ export function triage(db: Db): TriageRow[] {
     failingSince: row.failingSince === null ? null : new Date(row.failingSince * 1000),
     pendingCount: row.pendingCount,
   }));
+}
+
+export interface ForgeInfo {
+  platform: string | null;
+  webBaseUrl: string | null;
+}
+
+/** What the sources reported about their forge, keyed by source id. */
+export function forges(db: Db): Map<string, ForgeInfo> {
+  const rows = db.all<{ id: string; platform: string | null; webBaseUrl: string | null }>(sql`
+    select id, platform, web_base_url as webBaseUrl from source
+  `);
+  return new Map(rows.map((r) => [r.id, { platform: r.platform, webBaseUrl: r.webBaseUrl }]));
 }

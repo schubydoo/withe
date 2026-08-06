@@ -111,6 +111,13 @@ export interface Update {
   /** The version the update moves to. Null for a lock-file refresh. */
   targetVersion: string | null;
   updateType: UpdateType;
+  /** Where the source looked the dependency up. Decides what a link can point at. */
+  datasource: string | null;
+  /**
+   * The name in the registry, which is not always the display name. Renovate
+   * shows `uv` and looks up `astral-sh/uv`.
+   */
+  packageName: string | null;
   state: UpdateState;
   pullRequestUrl: string | null;
   pullRequestNumber: number | null;

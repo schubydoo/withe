@@ -68,6 +68,8 @@ function makeUpdate(fullName: string, over: Partial<Update>): Update {
     currentVersion: '1.0.0',
     targetVersion: '1.0.1',
     updateType: 'patch',
+    datasource: 'npm',
+    packageName: 'left-pad',
     state: 'detected',
     pullRequestUrl: null,
     pullRequestNumber: null,
