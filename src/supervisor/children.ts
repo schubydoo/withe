@@ -12,6 +12,11 @@ export interface ChildSpec {
   command: string;
   args: string[];
   env?: Record<string, string>;
+  /**
+   * Working directory. Next's standalone server resolves its assets relative to
+   * where it is run, so `web` needs a different one from `worker`.
+   */
+  cwd?: string;
 }
 
 export interface SupervisorOptions {
@@ -86,6 +91,7 @@ export class Supervisor {
     const proc = this.options.spawn(child.spec.command, child.spec.args, {
       stdio: 'inherit',
       env: { ...process.env, ...child.spec.env },
+      ...(child.spec.cwd ? { cwd: child.spec.cwd } : {}),
     });
     child.process = proc;
     this.options.log(`supervisor: started ${child.spec.name} (pid ${proc.pid ?? '?'})`);

@@ -49,7 +49,13 @@ const workerCommand = (
 ).split(' ');
 
 const children: ChildSpec[] = [
-  { name: 'web', command: webCommand[0] as string, args: webCommand.slice(1) },
+  {
+    name: 'web',
+    command: webCommand[0] as string,
+    args: webCommand.slice(1),
+    // The standalone server resolves its assets relative to where it runs.
+    ...(process.env.WITHE_WEB_CWD ? { cwd: process.env.WITHE_WEB_CWD } : {}),
+  },
   { name: 'worker', command: workerCommand[0] as string, args: workerCommand.slice(1) },
 ];
 
