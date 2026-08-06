@@ -61,7 +61,13 @@ function classify(status: number, family: keyof typeof FAMILY_SETTINGS): Preflig
       probe: family,
       setting: FAMILY_SETTINGS[family],
       detail: `The ${family} API is not enabled on this server.`,
-      fatal: family !== 'jobs',
+      // Only the organization family is fatal, because it is the only one Withe
+      // cannot work without: it is the entry point to repositories and runs.
+      // Withe reads no system endpoint outside preflight, and a missing job
+      // family costs run history rather than the whole dashboard. Reporting
+      // either as fatal would tell an operator to fix something that is not
+      // stopping them.
+      fatal: family === 'orgs',
     };
   }
   return {
@@ -78,6 +84,8 @@ export class CeAdapter implements SourceAdapter {
 
   private readonly config: CeClientConfig;
   private readonly client: ReturnType<typeof createCeClient>;
+  /** TEMPORARY(org-discovery). See SourceConfig.orgs. */
+  private readonly configuredOrgs: string[] | null;
 
   constructor(config: SourceConfig) {
     if (!config.url) throw new Error(`Source '${config.id}' needs a url`);
@@ -85,6 +93,34 @@ export class CeAdapter implements SourceAdapter {
     this.id = config.id;
     this.config = { baseUrl: config.url, token: config.token };
     this.client = createCeClient(this.config);
+    this.configuredOrgs = config.orgs?.length ? [...config.orgs] : null;
+  }
+
+  /**
+   * TEMPORARY(org-discovery). Returns the organizations to enumerate.
+   *
+   * When names are configured, no request is made. That is the whole point of
+   * the workaround and the reason a test asserts on the request rather than on
+   * the result.
+   */
+  private async listOrgs(): Promise<
+    { names: string[]; problem: PreflightProblem | null; warning: string | null }
+  > {
+    if (this.configuredOrgs) {
+      return { names: this.configuredOrgs, problem: null, warning: null };
+    }
+
+    const response = await this.client.GET('/api/v1/orgs');
+    if (response.error || !response.data) {
+      return {
+        names: [],
+        problem: classify(response.response.status, 'orgs'),
+        warning:
+          `Could not list organizations (${response.response.status}). ` +
+          `${FAMILY_SETTINGS.orgs} may be unset, or set WITHE_CE_ORGS to name them instead.`,
+      };
+    }
+    return { names: (response.data as OrgMeta[]).map((org) => org.name), problem: null, warning: null };
   }
 
   async preflight(): Promise<PreflightResult> {
@@ -95,17 +131,26 @@ export class CeAdapter implements SourceAdapter {
       problems.push(classify(status.response.status, 'system'));
     }
 
-    const orgs = await this.client.GET('/api/v1/orgs');
-    if (orgs.response.status >= 400) {
-      problems.push(classify(orgs.response.status, 'orgs'));
+    const orgs = await this.listOrgs();
+    if (orgs.problem) {
+      problems.push(orgs.problem);
       return { ok: false, problems, reachableButEmpty: false };
     }
+    if (this.configuredOrgs) {
+      // A wrong name here looks exactly like an empty server, so say which mode
+      // this is before the operator starts debugging the wrong thing.
+      problems.push({
+        probe: 'orgs',
+        setting: 'WITHE_CE_ORGS',
+        detail: `Organizations were named by configuration, not discovered: ${orgs.names.join(', ')}.`,
+        fatal: false,
+      });
+    }
 
-    const orgList = (orgs.data ?? []) as OrgMeta[];
     let repoCount = 0;
-    for (const org of orgList) {
+    for (const name of orgs.names) {
       const repos = await this.client.GET('/api/v1/orgs/{org}/-/repos', {
-        params: { path: { org: org.name } },
+        params: { path: { org: name } },
       });
       if (repos.response.status >= 400) {
         problems.push(classify(repos.response.status, 'orgs'));
@@ -113,6 +158,7 @@ export class CeAdapter implements SourceAdapter {
       }
       repoCount += ((repos.data ?? []) as RepositoryInfo[]).length;
     }
+    const orgCount = orgs.names.length;
 
     // Probing jobs needs a repository, so a server with none cannot answer the
     // question. That is reported below rather than guessed at.
@@ -120,7 +166,7 @@ export class CeAdapter implements SourceAdapter {
     return {
       ok,
       problems,
-      reachableButEmpty: ok && orgList.length > 0 && repoCount === 0,
+      reachableButEmpty: ok && orgCount > 0 && repoCount === 0,
     };
   }
 
@@ -128,27 +174,37 @@ export class CeAdapter implements SourceAdapter {
     const warnings: string[] = [];
     const repos: Repo[] = [];
 
-    const orgs = await this.client.GET('/api/v1/orgs');
-    if (orgs.error || !orgs.data) {
+    const orgs = await this.listOrgs();
+    if (orgs.warning) {
       // Without the org list there is nothing to enumerate. This is the one
       // failure the adapter cannot degrade past, so it says so and returns
       // empty rather than throwing into the worker's face.
-      warnings.push(
-        `Could not list organizations (${orgs.response.status}). ${FAMILY_SETTINGS.orgs} may be unset.`,
-      );
+      warnings.push(orgs.warning);
       return { repos: [], runs: [], updates: [], warnings };
     }
 
-    for (const org of orgs.data as OrgMeta[]) {
+    for (const name of orgs.names) {
       const result = await this.client.GET('/api/v1/orgs/{org}/-/repos', {
-        params: { path: { org: org.name } },
+        params: { path: { org: name } },
       });
       if (result.error || !result.data) {
-        warnings.push(`Could not list repositories for ${org.name} (${result.response.status}).`);
+        warnings.push(`Could not list repositories for ${name} (${result.response.status}).`);
         continue;
       }
-      for (const info of result.data as RepositoryInfo[]) {
-        repos.push(mapRepo(org.name, info, this.id));
+      const infos = result.data as RepositoryInfo[];
+      if (infos.length === 0 && this.configuredOrgs) {
+        // TEMPORARY(org-discovery). The server answers 200 with an empty list
+        // for an organization it has never heard of, so a typo in WITHE_CE_ORGS
+        // is otherwise indistinguishable from an organization with no
+        // repositories. Verified against a live server, which returned `[]` for
+        // a name that does not exist. This is the cost of naming them by hand.
+        warnings.push(
+          `WITHE_CE_ORGS names '${name}', and the server returned no repositories for it. ` +
+            `Check the spelling: an unknown name and an empty organization look identical here.`,
+        );
+      }
+      for (const info of infos) {
+        repos.push(mapRepo(name, info, this.id));
       }
     }
 

@@ -138,3 +138,100 @@ test('the constructor refuses a source with no credential', () => {
   assert.throws(() => new CeAdapter({ id: 'test', kind: 'ce', url: baseUrl }), /needs a token/);
   assert.throws(() => new CeAdapter({ id: 'test', kind: 'ce', token: 'x' }), /needs a url/);
 });
+
+test('TEMPORARY(org-discovery): configured names skip the request entirely', async () => {
+  routes = healthy();
+  // If anything asks, the answer is a failure. The point of the workaround is
+  // that the call is not made, so asserting on the result would prove nothing.
+  routes['/api/v1/orgs'] = { status: 500, body: { reason: 'must not be called' } };
+
+  const configured = new CeAdapter({
+    id: 'test',
+    kind: 'ce',
+    url: baseUrl,
+    token: 'secret',
+    orgs: ['acme'],
+  });
+
+  const result = await configured.collect();
+  assert.equal(result.repos.length, 1);
+  assert.equal(result.runs.length, 3);
+  assert.deepEqual(result.warnings, []);
+});
+
+test('TEMPORARY(org-discovery): unset behaves exactly as before', async () => {
+  routes = healthy();
+  const discovered = await adapter().collect();
+  const configured = await new CeAdapter({
+    id: 'test',
+    kind: 'ce',
+    url: baseUrl,
+    token: 'secret',
+    orgs: ['acme'],
+  }).collect();
+
+  assert.deepEqual(
+    configured.repos.map((r) => r.fullName),
+    discovered.repos.map((r) => r.fullName),
+  );
+});
+
+test('TEMPORARY(org-discovery): preflight says which mode it is in', async () => {
+  routes = healthy();
+  routes['/api/v1/orgs'] = { status: 500, body: { reason: 'must not be called' } };
+
+  const result = await new CeAdapter({
+    id: 'test',
+    kind: 'ce',
+    url: baseUrl,
+    token: 'secret',
+    orgs: ['acme'],
+  }).preflight();
+
+  assert.equal(result.ok, true, 'a named organization must not be a fatal problem');
+  const note = result.problems.find((p) => p.setting === 'WITHE_CE_ORGS');
+  assert.ok(note, 'preflight must say the names were configured, not discovered');
+  assert.match(note.detail, /named by configuration/);
+});
+
+test('TEMPORARY(org-discovery): a misspelled name is visible, not silent', async () => {
+  routes = healthy();
+  // A live server answers 200 with an empty list for an organization it has
+  // never heard of, so this is the shape a typo actually takes. Asserting on a
+  // 404 would have tested a case that never happens.
+  routes['/api/v1/orgs/typo/-/repos'] = { status: 200, body: [] };
+
+  const result = await new CeAdapter({
+    id: 'test',
+    kind: 'ce',
+    url: baseUrl,
+    token: 'secret',
+    orgs: ['typo'],
+  }).collect();
+
+  assert.deepEqual(result.repos, []);
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0] ?? '', /WITHE_CE_ORGS names 'typo'/);
+  assert.match(result.warnings[0] ?? '', /Check the spelling/);
+});
+
+test('an empty organization is not a warning when names were discovered', async () => {
+  routes = healthy();
+  routes['/api/v1/orgs/acme/-/repos'] = { status: 200, body: [] };
+
+  const result = await adapter().collect();
+  assert.deepEqual(result.repos, []);
+  assert.deepEqual(result.warnings, [], 'discovery cannot misspell a name it was given');
+});
+
+test('a disabled system API is reported but does not block the dashboard', async () => {
+  routes = healthy();
+  // healthy() defines no /system/v1/status, so the probe 404s.
+  const result = await adapter().preflight();
+
+  assert.equal(result.ok, true, 'Withe reads no system endpoint outside preflight');
+  const note = result.problems.find((p) => p.probe === 'system');
+  assert.ok(note);
+  assert.equal(note.fatal, false);
+  assert.match(note.setting ?? '', /MEND_RNV_API_ENABLE_SYSTEM/);
+});

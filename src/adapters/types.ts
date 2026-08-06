@@ -91,6 +91,21 @@ export interface SourceConfig {
   token?: string;
   /** Directory to watch, for the kinds that read files. */
   path?: string;
+  /**
+   * TEMPORARY(org-discovery). Organization names supplied by hand instead of
+   * discovered.
+   *
+   * This exists because `GET /api/v1/orgs` is the only way to learn what to
+   * enumerate, and it behaves badly for a fleet that lives under a personal
+   * account rather than a real organization. Asking the operator to type the
+   * name is a workaround, not a design: it can go stale, it can be wrong, and
+   * it pushes a question Withe should answer onto the person installing it.
+   *
+   * The underlying question is open and unresearched — see `tad.md` Section
+   * 7.7.2. Remove this field when it is answered. Do not build anything new on
+   * top of it.
+   */
+  orgs?: string[];
 }
 
 export type SourceAdapterFactory = (config: SourceConfig) => SourceAdapter;

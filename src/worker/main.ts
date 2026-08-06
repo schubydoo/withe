@@ -23,7 +23,12 @@ if (!url || !token) {
 const { sqlite, db } = openDatabase(file);
 migrate(db, { migrationsFolder: './drizzle' });
 
-const adapter = createAdapter({ id, kind: 'ce', url, token });
+// TEMPORARY(org-discovery). See SourceConfig.orgs and tad.md Section 7.7.2.
+const orgs = process.env.WITHE_CE_ORGS?.split(',')
+  .map((name) => name.trim())
+  .filter((name) => name.length > 0);
+
+const adapter = createAdapter({ id, kind: 'ce', url, token, orgs });
 const startedAt = new Date();
 
 const preflight = await adapter.preflight();
