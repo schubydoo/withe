@@ -124,9 +124,17 @@ export default async function RunHistory({ params, searchParams }: Props) {
                 </td>
                 <td className="py-1.5 text-neutral-600">
                   {run.reason ?? '—'}
-                  <a className="ml-3 text-xs underline" href={`/api/runs/${run.id}/log`}>
-                    log
-                  </a>
+                  {run.logAvailable ? (
+                    <a className="ml-3 text-xs underline" href={`/runs/${run.id}`}>
+                      log
+                    </a>
+                  ) : (
+                    // F-06: a purged log is marked, not offered. Letting the
+                    // operator click into a 404 is the failure this prevents.
+                    <span className="ml-3 text-xs text-neutral-400" title="No longer retained by the Renovate server">
+                      log gone
+                    </span>
+                  )}
                 </td>
               </tr>
             );

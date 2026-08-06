@@ -97,6 +97,20 @@ export function persist(
       return rowIds.get(fullName);
     };
 
+    // A run the source no longer lists has been purged there, and its log with
+    // it. Marking every touched repository's runs unavailable first, then
+    // setting the collected ones back, computes that in two statements instead
+    // of one request per run.
+    const repoIds = [...rowIds.values()];
+    if (repoIds.length > 0 && result.runs.length > 0) {
+      tx.run(sql`
+        update renovate_run
+           set log_available = 0
+         where source_adapter_id = ${sourceAdapterId}
+           and repo_id in (${sql.join(repoIds.map((n) => sql`${n}`), sql`, `)})
+      `);
+    }
+
     let runs = 0;
     for (const row of result.runs) {
       const repoRowId = idFor(row.repoId);
@@ -115,6 +129,7 @@ export function persist(
           artifactErrors: row.artifactErrors,
           logLocation: row.logLocation,
           runnerVersion: row.runnerVersion,
+          logAvailable: true,
         })
         .onConflictDoUpdate({
           target: [renovateRun.sourceAdapterId, renovateRun.externalJobId],
@@ -124,6 +139,7 @@ export function persist(
             error: row.error,
             artifactErrors: row.artifactErrors,
             runnerVersion: row.runnerVersion,
+            logAvailable: true,
           },
         })
         .run();

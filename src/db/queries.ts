@@ -181,6 +181,8 @@ export interface RunRow {
   error: string | null;
   artifactErrors: string[];
   runnerVersion: string | null;
+  /** False once the source has purged the run, and its log with it. */
+  logAvailable: boolean;
 }
 
 export const RUNS_PER_PAGE = 200;
@@ -215,11 +217,13 @@ export function runsForRepo(
     error: string | null;
     artifactErrors: string | null;
     runnerVersion: string | null;
+    logAvailable: number;
   }>(sql`
     select rr.id, rr.external_job_id as externalJobId, rr.reason,
            rr.queued_at as queuedAt, rr.started_at as startedAt,
            rr.completed_at as completedAt, rr.status, rr.error,
-           rr.artifact_errors as artifactErrors, rr.runner_version as runnerVersion
+           rr.artifact_errors as artifactErrors, rr.runner_version as runnerVersion,
+           rr.log_available as logAvailable
       from renovate_run rr join repo r on r.id = rr.repo_id
      where r.full_name = ${fullName}
      order by coalesce(rr.completed_at, rr.started_at, rr.queued_at) desc, rr.id desc
@@ -241,6 +245,7 @@ export function runsForRepo(
       // with it, so it degrades to no entries.
       artifactErrors: parseList(row.artifactErrors),
       runnerVersion: row.runnerVersion,
+      logAvailable: row.logAvailable === 1,
     })),
   };
 }

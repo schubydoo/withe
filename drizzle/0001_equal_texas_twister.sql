@@ -1,0 +1,1 @@
+ALTER TABLE `renovate_run` ADD `log_available` integer DEFAULT true NOT NULL;

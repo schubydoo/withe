@@ -59,6 +59,16 @@ export const renovateRun = sqliteTable(
      * mystery. Task 1.11 reads it from the log.
      */
     runnerVersion: text('runner_version'),
+    /**
+     * Whether the source still holds this run's log.
+     *
+     * Withe keeps run metadata indefinitely and the source does not, so within
+     * weeks the history lists runs whose logs are gone. A run that stops
+     * appearing in the source's job list has been purged there, which is how
+     * this is computed — no extra request per run. The viewer greys the link
+     * rather than opening a 404 (F-06).
+     */
+    logAvailable: integer('log_available', { mode: 'boolean' }).notNull().default(true),
   },
   (t) => [
     uniqueIndex('run_source_ext').on(t.sourceAdapterId, t.externalJobId),
