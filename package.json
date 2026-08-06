@@ -13,6 +13,7 @@
     "build:client": "npx --yes openapi-typescript@7.13.0 spec/openapi-community.yaml -o src/adapters/ce/generated/ce.d.ts",
     "db:generate": "drizzle-kit generate",
     "dev": "NEXT_TELEMETRY_DISABLED=1 next dev",
+    "lint": "node scripts/check-boundaries.ts",
     "spec:fetch": "curl -fsSL https://raw.githubusercontent.com/mend/renovate-ce-ee/main/docs/openapi-community.yaml -o spec/openapi-community.yaml",
     "start": "next start",
     "supervisor": "node src/supervisor/main.ts",

@@ -7,8 +7,7 @@
  */
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
-import '../adapters/ce/adapter.ts';
-import { createAdapter } from '../adapters/registry.ts';
+import { createAdapter } from '../adapters/register.ts';
 import type { SourceAdapter } from '../adapters/types.ts';
 import { ConfigError, loadConfig } from '../config/load.ts';
 import { openDatabase } from '../db/client.ts';

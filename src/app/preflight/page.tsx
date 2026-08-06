@@ -1,5 +1,4 @@
-import '../../adapters/ce/adapter.ts';
-import { createAdapter } from '../../adapters/registry.ts';
+import { createAdapter } from '../../adapters/register.ts';
 import type { PreflightResult } from '../../adapters/types.ts';
 import { ConfigError, loadConfig } from '../../config/load.ts';
 import { CopyButton } from './copy-button.tsx';

@@ -8,8 +8,7 @@
  */
 import { existsSync } from 'node:fs';
 
-import '../../../../../adapters/ce/adapter.ts';
-import { createAdapter } from '../../../../../adapters/registry.ts';
+import { createAdapter } from '../../../../../adapters/register.ts';
 import { loadConfig } from '../../../../../config/load.ts';
 import type { RenovateRun } from '../../../../../core/model.ts';
 import { openDatabase } from '../../../../../db/client.ts';
