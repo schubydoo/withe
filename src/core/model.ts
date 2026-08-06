@@ -97,14 +97,10 @@ export type UpdateType =
   | 'lock-file-maintenance';
 
 /** Where an update sits between detected and finished. */
-export type UpdateState =
-  | 'pending'
-  | 'open'
-  | 'merged'
-  | 'closed';
+export type UpdateState = 'detected' | 'pr-open' | 'pr-merged' | 'pr-closed';
 
 /** Why an update stopped being open. */
-export type UpdateCloseType = 'merged' | 'declined' | 'superseded';
+export type UpdateCloseType = 'merge' | 'close';
 
 export interface Update {
   id: string;
@@ -121,5 +117,11 @@ export interface Update {
   closedAt: Date | null;
   closeType: UpdateCloseType | null;
   detectedAt: Date;
+  /**
+   * How many package files carry this same dependency at this same version.
+   * The live probe found one dependency in seven workflow files of one
+   * repository; Task 1.8 shows one row and a count rather than seven rows.
+   */
+  packageFileCount: number;
   sourceAdapterId: SourceAdapterId;
 }

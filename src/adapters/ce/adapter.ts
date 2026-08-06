@@ -4,7 +4,8 @@
  * Every call here is a read. The specification contains four write operations
  * and this adapter reaches none of them (NFR-11).
  */
-import type { RenovateRun, Repo } from '../../core/model.ts';
+import type { RenovateRun, Repo, Update } from '../../core/model.ts';
+import { extractFromLog } from '../../core/renovate-log.ts';
 import { registerAdapter } from '../registry.ts';
 import type {
   CollectResult,
@@ -160,7 +161,23 @@ export class CeAdapter implements SourceAdapter {
       }
     });
 
-    return { repos, runs: runsPerRepo.flat(), updates: [], warnings };
+    // Pending updates come from the newest finished run's log, because the
+    // server's API reserves them for its paid tier while the log states them
+    // outright. Only the newest run is read: an older one describes a state
+    // that has already been superseded.
+    const updatesPerRepo = await mapWithLimit(runsPerRepo, CONCURRENCY, async (runs, index) => {
+      const repo = repos[index];
+      const newest = newestFinished(runs);
+      if (!repo || !newest) return [];
+      try {
+        return await this.collectUpdates(repo, newest);
+      } catch (cause) {
+        warnings.push(`Could not read updates for ${repo.fullName}: ${describe(cause)}`);
+        return [];
+      }
+    });
+
+    return { repos, runs: runsPerRepo.flat(), updates: updatesPerRepo.flat(), warnings };
   }
 
   private async collectRuns(repo: Repo): Promise<RenovateRun[]> {
@@ -175,6 +192,19 @@ export class CeAdapter implements SourceAdapter {
       }
     }
     return runs;
+  }
+
+  private async collectUpdates(repo: Repo, run: RenovateRun): Promise<Update[]> {
+    const stream = await this.fetchLog(run);
+    // Streamed and parsed as it arrives. A log is hundreds of kilobytes and is
+    // never stored — PRD Section 6.3.1.
+    const extract = await extractFromLog(stream as unknown as AsyncIterable<Uint8Array>, {
+      repoId: repo.id,
+      sourceAdapterId: this.id,
+      detectedAt: run.completedAt ?? run.startedAt ?? new Date(),
+    });
+    if (extract.runnerVersion) run.runnerVersion = extract.runnerVersion;
+    return extract.updates;
   }
 
   async fetchLog(run: RenovateRun): Promise<ReadableStream<Uint8Array>> {
@@ -195,6 +225,16 @@ export class CeAdapter implements SourceAdapter {
     }
     return response.body;
   }
+}
+
+/** The newest run that finished, so its log describes the current state. */
+function newestFinished(runs: readonly RenovateRun[]): RenovateRun | null {
+  let newest: RenovateRun | null = null;
+  for (const run of runs) {
+    if (!run.completedAt) continue;
+    if (!newest?.completedAt || run.completedAt > newest.completedAt) newest = run;
+  }
+  return newest;
 }
 
 function describe(cause: unknown): string {
