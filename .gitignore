@@ -3,3 +3,38 @@
 
 # Serena MCP project cache
 /.serena/
+CLAUDE.local.md
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+
+# Build output
+/dist/
+/build/
+
+# Environment
+.env
+.env.local
+!.env.example
+
+# Local database
+*.db
+*.db-shm
+*.db-wal
+
+# Test output
+/coverage/
+/test-results/
+/playwright-report/
+
+# Generated CE client types
+/src/adapters/ce/generated/
+
+# OS
+.DS_Store
