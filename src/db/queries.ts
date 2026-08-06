@@ -170,6 +170,8 @@ export function repoInventory(db: Db): InventoryRow[] {
 }
 
 export interface RunRow {
+  /** Database id, used to address the log without exposing upstream paths. */
+  id: number;
   externalJobId: string;
   reason: string | null;
   queuedAt: Date | null;
@@ -203,6 +205,7 @@ export function runsForRepo(
   `);
 
   const rows = db.all<{
+    id: number;
     externalJobId: string;
     reason: string | null;
     queuedAt: number | null;
@@ -213,7 +216,7 @@ export function runsForRepo(
     artifactErrors: string | null;
     runnerVersion: string | null;
   }>(sql`
-    select rr.external_job_id as externalJobId, rr.reason,
+    select rr.id, rr.external_job_id as externalJobId, rr.reason,
            rr.queued_at as queuedAt, rr.started_at as startedAt,
            rr.completed_at as completedAt, rr.status, rr.error,
            rr.artifact_errors as artifactErrors, rr.runner_version as runnerVersion
@@ -226,6 +229,7 @@ export function runsForRepo(
   return {
     total: count?.total ?? 0,
     runs: rows.map((row) => ({
+      id: row.id,
       externalJobId: row.externalJobId,
       reason: row.reason,
       queuedAt: seconds(row.queuedAt),
@@ -253,4 +257,29 @@ function parseList(raw: string | null): string[] {
   } catch {
     return [];
   }
+}
+
+export interface RunLocation {
+  sourceAdapterId: string;
+  repoFullName: string;
+  externalJobId: string;
+}
+
+/**
+ * Where a run's log lives, resolved from a row rather than from the URL.
+ *
+ * The log route takes a database id and looks the rest up here. Nothing the
+ * browser sends reaches the upstream path, so a crafted id cannot address an
+ * endpoint Withe was never meant to call.
+ */
+export function runLocation(db: Db, id: number): RunLocation | null {
+  const [row] = db.all<RunLocation>(sql`
+    select rr.source_adapter_id as sourceAdapterId,
+           r.full_name as repoFullName,
+           rr.external_job_id as externalJobId
+      from renovate_run rr join repo r on r.id = rr.repo_id
+     where rr.id = ${id}
+     limit 1
+  `);
+  return row ?? null;
 }

@@ -122,7 +122,12 @@ export default async function RunHistory({ params, searchParams }: Props) {
                   {label && <span className="text-neutral-400">{label} </span>}
                   {value}
                 </td>
-                <td className="py-1.5 text-neutral-600">{run.reason ?? '—'}</td>
+                <td className="py-1.5 text-neutral-600">
+                  {run.reason ?? '—'}
+                  <a className="ml-3 text-xs underline" href={`/api/runs/${run.id}/log`}>
+                    log
+                  </a>
+                </td>
               </tr>
             );
           })}
