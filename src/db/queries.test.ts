@@ -111,7 +111,7 @@ test('a sync writes every entity and records when it happened', () => {
   sqlite.close();
 });
 
-test('the page reads three groups and a lock-file count', () => {
+test('the page reads three groups and the lock-file refreshes', () => {
   const { sqlite, db } = fresh();
   persist(db, SOURCE, 'ce', FLEET, new Date());
 
@@ -126,8 +126,10 @@ test('the page reads three groups and a lock-file count', () => {
   assert.equal(open[0]?.packageFileCount, 7);
 
   const locks = lockFileRefreshes(db);
-  assert.equal(locks.total, 2);
-  assert.equal(locks.repos, 2);
+  assert.equal(locks.length, 2);
+  assert.deepEqual(locks.map((l) => l.repoFullName), ['acme/gadget', 'acme/widget']);
+  assert.deepEqual(locks.map((l) => l.branchName), ['package.json', 'uv.lock']);
+  assert.equal(new Set(locks.map((l) => l.repoFullName)).size, 2);
   sqlite.close();
 });
 
@@ -165,7 +167,7 @@ test('a second sync replaces pending updates rather than doubling them', () => {
 
   const updates = pendingUpdates(db);
   assert.deepEqual(updates.map((u) => u.dependencyName), ['next']);
-  assert.equal(lockFileRefreshes(db).total, 0, 'a merged lock-file refresh must disappear');
+  assert.equal(lockFileRefreshes(db).length, 0, 'a merged lock-file refresh must disappear');
   sqlite.close();
 });
 

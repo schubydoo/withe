@@ -13,6 +13,7 @@ import {
   pendingUpdates,
   triage,
   type ForgeInfo,
+  type LockFileRefreshRow,
   type PendingUpdateRow,
   type TriageRow,
 } from '../db/queries.ts';
@@ -155,6 +156,75 @@ function info(forge: Map<string, ForgeInfo>, row: { sourceAdapterId: string }): 
   return forge.get(row.sourceAdapterId) ?? { platform: null, webBaseUrl: null };
 }
 
+/**
+ * Pending lock-file refreshes, one row per branch.
+ *
+ * Kept out of the three groups above because a refresh names no dependency and
+ * no version pair, and because it is usually the largest group: it would bury
+ * every update that a person has to decide about. Listed here rather than only
+ * counted, so an operator can see which repositories are waiting.
+ */
+function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string, ForgeInfo> }) {
+  const repos = new Set(rows.map((r) => r.repoFullName)).size;
+  const manifests = rows.reduce((sum, r) => sum + r.packageFileCount, 0);
+
+  return (
+    <section className="mt-8">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+        Lock file refreshes <span className="font-normal">({rows.length})</span>
+      </h2>
+      {rows.length === 0 ? (
+        <p className="mt-2 text-sm text-neutral-500">No lock-file refreshes pending.</p>
+      ) : (
+        <>
+          <p className="mt-1 text-sm text-neutral-500">
+            Across {repos} {repos === 1 ? 'repository' : 'repositories'}, covering {manifests}{' '}
+            {manifests === 1 ? 'manifest' : 'manifests'}. Each refreshes every transitive pin on its
+            branch, so it names no dependency.
+          </p>
+          <table className="mt-2 w-full text-sm">
+            <thead>
+              <tr className="text-left text-xs uppercase tracking-wide text-neutral-500">
+                <th scope="col" className="py-1 pr-4 font-medium">Repository</th>
+                <th scope="col" className="py-1 pr-4 font-medium">Branch</th>
+                <th scope="col" className="py-1 pr-4 font-medium">Manifests</th>
+                <th scope="col" className="py-1 font-medium">Pull request</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.repoFullName}/${row.branchName}`} className="border-t border-neutral-200">
+                  <td className="py-1 pr-4 text-neutral-500">
+                    <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
+                      {row.repoFullName}
+                    </Maybe>
+                  </td>
+                  <td className="py-1 pr-4 font-medium">{row.branchName}</td>
+                  <td className="py-1 pr-4 tabular-nums text-neutral-600">{row.packageFileCount}</td>
+                  <td className="py-1 text-neutral-500">
+                    {row.prNumber === null ? '' : (
+                      <Maybe
+                        href={pullRequestUrl(
+                          info(forge, row).webBaseUrl,
+                          info(forge, row).platform,
+                          row.repoFullName,
+                          row.prNumber,
+                        )}
+                      >
+                        PR #{row.prNumber}
+                      </Maybe>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
+    </section>
+  );
+}
+
 function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRow[] }) {
   if (failing.length === 0 && stalled.length === 0) {
     return (
@@ -240,7 +310,7 @@ export default function Home() {
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Withe</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        {repos.length} repositories · {updates.length + locks.total} pending updates ·{' '}
+        {repos.length} repositories · {updates.length + locks.length} pending updates ·{' '}
         <a className="underline" href="/repos">
           all repositories
         </a>
@@ -269,15 +339,10 @@ export default function Home() {
       <Group title="Open pull requests" rows={open} forge={forge} empty="No update has an open pull request." />
       <Group title="Queued, no pull request yet" rows={queued} forge={forge} empty="Nothing is queued." />
 
+      <Locks rows={locks} forge={forge} />
+
       <section className="mt-8 text-sm text-neutral-500">
-        <p>
-          {locks.total === 0
-            ? 'No lock-file refreshes pending.'
-            : `${locks.total} lock-file refreshes pending across ${locks.repos} repositories, not listed individually.`}
-        </p>
-        <p className="mt-1">
-          A repository counts as stalled after {stalledAfterDays} days with no successful run.
-        </p>
+        <p>A repository counts as stalled after {stalledAfterDays} days with no successful run.</p>
       </section>
     </main>
   );

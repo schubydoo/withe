@@ -24,6 +24,16 @@ export interface PendingUpdateRow {
   packageFileCount: number;
 }
 
+export interface LockFileRefreshRow {
+  sourceAdapterId: string;
+  repoFullName: string;
+  /** The Renovate branch. One branch is one refresh, whatever it covers. */
+  branchName: string;
+  /** How many manifests the branch refreshes. A Cargo workspace has many. */
+  packageFileCount: number;
+  prNumber: number | null;
+}
+
 export interface RepoHealthRow {
   fullName: string;
   status: string | null;
@@ -56,14 +66,25 @@ export function pendingUpdates(db: Db): PendingUpdateRow[] {
   `);
 }
 
-/** How many lock-file refreshes are pending, and in how many repositories. */
-export function lockFileRefreshes(db: Db): { total: number; repos: number } {
-  const [row] = db.all<{ total: number; repos: number }>(sql`
-    select count(*) as total, count(distinct repo_id) as repos
-      from "update"
-     where update_type is 'lock-file-maintenance'
+/**
+ * Every pending lock-file refresh, one row per branch.
+ *
+ * These are listed apart from the named updates rather than mixed in. A
+ * refresh has no dependency and no version pair, so it would fill three of the
+ * five columns of the other groups with nothing.
+ */
+export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
+  return db.all<LockFileRefreshRow>(sql`
+    select u.source_adapter_id   as sourceAdapterId,
+           r.full_name           as repoFullName,
+           u.dependency_name     as branchName,
+           u.package_file_count  as packageFileCount,
+           u.pr_number           as prNumber
+      from "update" u
+      join repo r on r.id = u.repo_id
+     where u.update_type is 'lock-file-maintenance'
+     order by r.full_name, u.dependency_name
   `);
-  return row ?? { total: 0, repos: 0 };
 }
 
 /**
