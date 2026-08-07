@@ -9,8 +9,18 @@ import { LogViewer } from './log-viewer.tsx';
 
 export const dynamic = 'force-dynamic';
 
-export default async function RunDetail({ params }: { params: Promise<{ id: string }> }) {
+export default async function RunDetail({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
   const { id: raw } = await params;
+  // `?q=` prefills the log search. The dashboard uses it to point at the branch
+  // whose manifests the operator asked to see.
+  const { q } = await searchParams;
+  const search = Array.isArray(q) ? (q[0] ?? '') : (q ?? '');
   const id = Number(raw);
   if (!Number.isInteger(id) || id <= 0) notFound();
 
@@ -49,7 +59,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
       )}
 
       {run.logAvailable ? (
-        <LogViewer runId={id} />
+        <LogViewer runId={id} initialSearch={search} />
       ) : (
         <p className="mt-4 rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
           The Renovate server no longer holds this run&rsquo;s log. Withe keeps run history

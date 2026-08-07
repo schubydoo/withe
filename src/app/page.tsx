@@ -200,7 +200,25 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
                     </Maybe>
                   </td>
                   <td className="py-1 pr-4 font-medium">{row.branchName}</td>
-                  <td className="py-1 pr-4 tabular-nums text-neutral-600">{row.packageFileCount}</td>
+                  <td className="py-1 pr-4 tabular-nums text-neutral-600">
+                    {/* Withe stores the count, not the paths. The count opens
+                        the run log filtered to this branch, which is where the
+                        manifests are named. The filter narrows the log to the
+                        lines that mention the branch; it does not isolate one
+                        branch's manifests, because Renovate reports every
+                        branch in a single `branchesInformation` line. */}
+                    {row.lastRunId === null ? (
+                      row.packageFileCount
+                    ) : (
+                      <a
+                        className="underline decoration-neutral-300 hover:decoration-neutral-600"
+                        href={`/runs/${row.lastRunId}?q=${encodeURIComponent(row.branchName)}`}
+                        title="Open the newest run log, filtered to this branch"
+                      >
+                        {row.packageFileCount}
+                      </a>
+                    )}
+                  </td>
                   <td className="py-1 text-neutral-500">
                     {row.prNumber === null ? '' : (
                       <Maybe

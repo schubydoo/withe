@@ -32,6 +32,12 @@ export interface LockFileRefreshRow {
   /** How many manifests the branch refreshes. A Cargo workspace has many. */
   packageFileCount: number;
   prNumber: number | null;
+  /**
+   * The newest run of this repository whose log the source still holds, or
+   * null. The manifests are named in that log and nowhere in this database, so
+   * this is what the dashboard points at when it offers to show them.
+   */
+  lastRunId: number | null;
 }
 
 export interface RepoHealthRow {
@@ -79,7 +85,10 @@ export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
            r.full_name           as repoFullName,
            u.dependency_name     as branchName,
            u.package_file_count  as packageFileCount,
-           u.pr_number           as prNumber
+           u.pr_number           as prNumber,
+           (select rr.id from renovate_run rr
+             where rr.repo_id = r.id and rr.log_available = 1
+             order by rr.completed_at desc limit 1) as lastRunId
       from "update" u
       join repo r on r.id = u.repo_id
      where u.update_type is 'lock-file-maintenance'

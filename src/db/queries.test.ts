@@ -130,6 +130,16 @@ test('the page reads three groups and the lock-file refreshes', () => {
   assert.deepEqual(locks.map((l) => l.repoFullName), ['acme/gadget', 'acme/widget']);
   assert.deepEqual(locks.map((l) => l.branchName), ['package.json', 'uv.lock']);
   assert.equal(new Set(locks.map((l) => l.repoFullName)).size, 2);
+
+  // The manifests a refresh covers are named only in the run log, so each row
+  // carries the newest run that still has one to point at.
+  const widget = locks.find((l) => l.repoFullName === 'acme/widget');
+  assert.ok(widget?.lastRunId, 'a repository with runs must offer one to open');
+  const newest = runsForRepo(db, 'acme/widget', 0, 10).runs[0];
+  assert.equal(widget.lastRunId, newest?.id, 'the newest run is the one worth opening');
+
+  // acme/gadget has a run too; a repository with none must not fabricate a link.
+  assert.ok(locks.every((l) => l.lastRunId === null || l.lastRunId > 0));
   sqlite.close();
 });
 

@@ -35,18 +35,20 @@ const TONE: Record<LevelName, string> = {
 
 const ALL_LEVELS = [...new Set(Object.values(LEVELS))] as LevelName[];
 
-export function LogViewer({ runId }: { runId: number }) {
+export function LogViewer({ runId, initialSearch = '' }: { runId: number; initialSearch?: string }) {
   const [text, setText] = useState('');
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [failure, setFailure] = useState('');
   const [levels, setLevels] = useState<LevelName[]>([]);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(initialSearch);
   const [scrollTop, setScrollTop] = useState(0);
   const [height, setHeight] = useState(600);
   const [open, setOpen] = useState<number | null>(null);
 
   const viewport = useRef<HTMLDivElement>(null);
-  const jumped = useRef(false);
+  // Opened with a search means the operator came for those lines, not for the
+  // first warning, so the jump below is marked done before it can fire.
+  const jumped = useRef(initialSearch !== '');
 
   useEffect(() => {
     const controller = new AbortController();
