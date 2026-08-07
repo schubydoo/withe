@@ -148,7 +148,7 @@ test('held means major, or minor below 1.0', () => {
   assert.equal(isHeld({ updateType: 'minor', currentVersion: null }), false);
 });
 
-test('a lock-file refresh is named for its manifest, not dropped', async () => {
+test('one lock-file branch is one refresh, whatever it counts manifests', async () => {
   const log = JSON.stringify({
     branchesInformation: [
       {
@@ -163,16 +163,54 @@ test('a lock-file refresh is named for its manifest, not dropped', async () => {
   });
 
   const extract = await extractFromLog(lines(log), CONTEXT);
+  assert.equal(extract.updates.length, 1);
+  const [update] = extract.updates;
+  assert.ok(update);
+  assert.equal(update.dependencyName, 'renovate/lock-file-maintenance');
+  assert.equal(update.packageFileCount, 2);
+  assert.equal(update.updateType, 'lock-file-maintenance');
+  assert.equal(update.targetVersion, null);
+  assert.equal(isHeld(update), false);
+});
+
+test('two lock-file branches stay two refreshes', async () => {
+  const log = JSON.stringify({
+    branchesInformation: [
+      {
+        branchName: 'renovate/lock-file-maintenance',
+        upgrades: [
+          { packageFile: 'Cargo.toml', updateType: 'lockFileMaintenance' },
+          { packageFile: 'crates/cli/Cargo.toml', updateType: 'lockFileMaintenance' },
+        ],
+      },
+      {
+        branchName: 'renovate/lock-file-maintenance-docs',
+        upgrades: [{ packageFile: 'docs/requirements.in', updateType: 'lockFileMaintenance' }],
+      },
+    ],
+  });
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
   assert.equal(extract.updates.length, 2);
   assert.deepEqual(
-    extract.updates.map((u) => u.dependencyName).sort(),
-    ['package.json', 'pyproject.toml'],
+    extract.updates.map((u) => [u.dependencyName, u.packageFileCount]).sort(),
+    [
+      ['renovate/lock-file-maintenance', 2],
+      ['renovate/lock-file-maintenance-docs', 1],
+    ],
   );
-  for (const update of extract.updates) {
-    assert.equal(update.updateType, 'lock-file-maintenance');
-    assert.equal(update.targetVersion, null);
-    assert.equal(isHeld(update), false);
-  }
+});
+
+test('a lock-file refresh on an unnamed branch falls back to its manifest', async () => {
+  const log = JSON.stringify({
+    branchesInformation: [
+      { upgrades: [{ packageFile: 'pyproject.toml', updateType: 'lockFileMaintenance' }] },
+    ],
+  });
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+  assert.equal(extract.updates.length, 1);
+  assert.equal(extract.updates[0]?.dependencyName, 'pyproject.toml');
 });
 
 test('an upgrade with neither a name nor a manifest is dropped', async () => {

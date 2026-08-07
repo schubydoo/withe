@@ -34,8 +34,8 @@ export interface RepoHealthRow {
 /**
  * Every pending update, newest repository first.
  *
- * Lock-file refreshes are excluded here and counted separately. They were 20 of
- * 26 on the author's install and would bury everything that names a dependency.
+ * Lock-file refreshes are excluded here and counted separately. They were 7 of
+ * 9 on the author's install and would bury everything that names a dependency.
  */
 export function pendingUpdates(db: Db): PendingUpdateRow[] {
   return db.all<PendingUpdateRow>(sql`

@@ -82,10 +82,11 @@ export interface RenovateRun {
  * with digests matched by /^[a-f0-9]{7,40}$/.
  *
  * `lock-file-maintenance` is a seventh value, added on 2026-08-06 because the
- * live probe found it in the data: 20 of 34 pending updates on the author's
- * own install were lock-file refreshes. It names no dependency version change,
- * so it cannot be classified into the other six, and dropping it would silently
- * lose most of the rows. Task 1.8 counts these and does not list them.
+ * live probe found it in the data: 7 of 9 pending updates on the author's own
+ * install were lock-file refreshes, covering 20 manifests between them. It
+ * names no dependency version change, so it cannot be classified into the
+ * other six, and dropping it would silently lose most of the rows. Task 1.8
+ * counts these and does not list them.
  */
 export type UpdateType =
   | 'digest'
