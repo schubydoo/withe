@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs';
 
 import { createAdapter } from '../../../../../adapters/register.ts';
 import { loadConfig } from '../../../../../config/load.ts';
+import { authGuard } from '../../../../../core/basic-auth.ts';
 import type { RenovateRun } from '../../../../../core/model.ts';
 import { openDatabase } from '../../../../../db/client.ts';
 import { runLocation } from '../../../../../db/queries.ts';
@@ -24,9 +25,19 @@ function problem(status: number, message: string): Response {
 }
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  const config = loadConfig();
+
+  // The proxy layer already checked this. It is checked again here because
+  // this is the one route that returns real repository content, and the
+  // framework's own guidance treats that layer as a last resort rather than an
+  // authorization boundary. Before the id is even read: an anonymous caller
+  // learns nothing, not even whether a run exists.
+  const refusal = await authGuard(request, new URL(request.url).pathname, config.auth);
+  if (refusal) return refusal;
+
   const { id: raw } = await context.params;
 
   // The id addresses a row, never a path. Anything else is rejected before it
@@ -34,7 +45,6 @@ export async function GET(
   const id = Number(raw);
   if (!Number.isInteger(id) || id <= 0) return problem(400, 'That is not a run id.');
 
-  const config = loadConfig();
   if (!existsSync(config.dbPath)) return problem(503, 'Withe has not synced yet.');
 
   const { sqlite, db } = openDatabase(config.dbPath);
