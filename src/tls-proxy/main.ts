@@ -6,9 +6,13 @@
  * nothing to serve.
  */
 import { loadConfig } from '../config/load.ts';
+import { installRedaction, secretsFrom } from '../core/redact.ts';
 import { createTlsProxy, readKeyPair, TlsError } from './proxy.ts';
 
 const config = loadConfig();
+
+// NFR-12. A TLS error can quote a path, and an upstream error a URL.
+installRedaction(secretsFrom(config));
 
 if (!config.tls) {
   console.error(

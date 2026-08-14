@@ -6,6 +6,7 @@
  * guarantees a single migrator and removes the start-order race.
  */
 import { ConfigError, loadConfig, type WitheConfig } from '../config/load.ts';
+import { installRedaction, secretsFrom } from '../core/redact.ts';
 import { clearMigrationAttempts, migrateOnce, MigrationGaveUpError } from './migrate.ts';
 import { Supervisor, type ChildSpec } from './children.ts';
 
@@ -14,6 +15,9 @@ import { Supervisor, type ChildSpec } from './children.ts';
 let config: WitheConfig;
 try {
   config = loadConfig();
+  // NFR-12. The children inherit stdout, so this covers what the supervisor
+  // itself writes; each child installs its own filter.
+  installRedaction(secretsFrom(config));
   for (const warning of config.warnings) console.warn(`configuration: ${warning}`);
 } catch (cause) {
   if (cause instanceof ConfigError) {

@@ -12,6 +12,7 @@
     "build": "NEXT_TELEMETRY_DISABLED=1 next build && npm run build:static",
     "build:static": "rm -rf .next/standalone/.next/static && cp -r .next/static .next/standalone/.next/static",
     "build:client": "npx --yes openapi-typescript@7.13.0 spec/openapi-community.yaml -o src/adapters/ce/generated/ce.d.ts",
+    "check:payloads": "node scripts/check-payloads.ts",
     "db:generate": "drizzle-kit generate",
     "deploy": "npm run build && npm run restart",
     "dev": "NEXT_TELEMETRY_DISABLED=1 next dev",

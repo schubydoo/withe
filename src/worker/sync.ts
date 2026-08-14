@@ -6,6 +6,7 @@
  * without a server or a real interval.
  */
 import type { SourceAdapter } from '../adapters/types.ts';
+import { redact } from '../core/redact.ts';
 import type { openDatabase } from '../db/client.ts';
 import { persist, recomputeStalled, recordSyncFailure } from '../db/persist.ts';
 
@@ -17,6 +18,11 @@ export interface SyncOptions {
   /** Injectable so tests do not wait. Defaults to the wall clock. */
   now?: () => number;
   log?: (message: string) => void;
+  /**
+   * Configured values that must never be stored or printed. NFR-8: an upstream
+   * failure message is the one path by which a credential reaches a column.
+   */
+  secrets?: readonly string[];
 }
 
 export interface SourceOutcome {
@@ -146,7 +152,12 @@ export class SyncLoop {
     } catch (cause) {
       // A failing source must not stop the others, so this is caught per source
       // rather than around the cycle.
-      const error = cause instanceof Error ? cause.message : String(cause);
+      // Redacted before it is written, logged or returned. The console filter
+      // covers the log line; nothing covers the column but this.
+      const error = redact(
+        cause instanceof Error ? cause.message : String(cause),
+        this.options.secrets ?? [],
+      );
       const failures = (this.failures.get(id) ?? 0) + 1;
       this.failures.set(id, failures);
       const wait = backoffMs(failures, this.options.intervalMs);

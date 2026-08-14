@@ -10,6 +10,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { createAdapter } from '../adapters/register.ts';
 import type { SourceAdapter } from '../adapters/types.ts';
 import { ConfigError, loadConfig } from '../config/load.ts';
+import { installRedaction, secretsFrom } from '../core/redact.ts';
 import { openDatabase } from '../db/client.ts';
 import { SyncLoop } from './sync.ts';
 
@@ -27,6 +28,10 @@ const config = (() => {
     throw cause;
   }
 })();
+
+// NFR-12, before the first line this process writes about a source. Everything
+// above logs field names only; everything below can carry an upstream message.
+installRedaction(secretsFrom(config));
 
 for (const warning of config.warnings) console.warn(`configuration: ${warning}`);
 
@@ -64,6 +69,7 @@ if (usable.length === 0) {
 const loop = new SyncLoop(db, usable, {
   intervalMs: config.syncIntervalSeconds * 1000,
   stalledAfterMs: config.stalledAfterDays * DAY_MS,
+  secrets: secretsFrom(config),
 });
 
 const first = await loop.runCycle();
