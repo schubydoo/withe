@@ -4,7 +4,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 
+import type { ContainerProbe } from './exposure.ts';
 import { ConfigError, loadConfig } from './load.ts';
+
+/**
+ * A probe that always answers "not a container", so these tests describe the
+ * configuration rather than the machine they run on. Container behaviour is
+ * tested against its own probes below and in `exposure.test.ts`.
+ */
+const HOST: ContainerProbe = { markerFile: () => false, cgroup: () => '0::/init.scope\n' };
+const CONTAINER: ContainerProbe = { markerFile: () => true, cgroup: () => '0::/\n' };
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-cfg-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -21,11 +30,14 @@ function file(body: string): string {
 const NO_FILE = join(dir, 'absent.yaml');
 
 test('flat variables produce one source called default', () => {
-  const config = loadConfig({
-    WITHE_CONFIG: NO_FILE,
-    WITHE_CE_URL: 'http://ce.local',
-    WITHE_CE_TOKEN: 'secret',
-  });
+  const config = loadConfig(
+    {
+      WITHE_CONFIG: NO_FILE,
+      WITHE_CE_URL: 'http://ce.local',
+      WITHE_CE_TOKEN: 'secret',
+    },
+    HOST,
+  );
 
   assert.deepEqual(config.sources, [
     { id: 'default', kind: 'ce', url: 'http://ce.local', token: 'secret' },
@@ -34,7 +46,7 @@ test('flat variables produce one source called default', () => {
 });
 
 test('every documented variable is read, with its documented default', () => {
-  const config = loadConfig({ WITHE_CONFIG: NO_FILE });
+  const config = loadConfig({ WITHE_CONFIG: NO_FILE }, HOST);
 
   assert.equal(config.dbPath, '/data/withe.db');
   assert.equal(config.configPath, NO_FILE);
@@ -60,7 +72,7 @@ test('every documented variable can be overridden', () => {
     WITHE_TLS_KEY: '/certs/k.pem',
     WITHE_BIND: '0.0.0.0',
     WITHE_PORT: '8080',
-  });
+  }, HOST);
 
   assert.equal(config.dbPath, '/tmp/x.db');
   assert.equal(config.syncIntervalSeconds, 60);
@@ -245,4 +257,38 @@ sources:
     orgs: [acme]
 `);
   assert.deepEqual(loadConfig({ WITHE_CONFIG: path, A: 't' }).sources[0]?.orgs, ['acme']);
+});
+
+test('outside a container the default bind is loopback and nothing is warned about', () => {
+  const config = loadConfig({ WITHE_CONFIG: NO_FILE }, HOST);
+
+  assert.equal(config.container, false);
+  assert.equal(config.bind, '127.0.0.1');
+  assert.deepEqual(config.warnings, []);
+});
+
+test('inside a container Withe binds every interface and says so', () => {
+  const config = loadConfig({ WITHE_CONFIG: NO_FILE }, CONTAINER);
+
+  assert.equal(config.container, true);
+  assert.equal(config.bind, '0.0.0.0');
+  assert.equal(config.warnings.length, 1);
+  assert.match(config.warnings[0] as string, /WITHE_AUTH_USER and WITHE_AUTH_PASS/);
+});
+
+test('credentials silence the exposure warning without changing the bind', () => {
+  const config = loadConfig(
+    { WITHE_CONFIG: NO_FILE, WITHE_AUTH_USER: 'me', WITHE_AUTH_PASS: 'pw' },
+    CONTAINER,
+  );
+
+  assert.equal(config.bind, '0.0.0.0');
+  assert.deepEqual(config.warnings, []);
+});
+
+test('a bind beyond loopback is warned about wherever Withe runs', () => {
+  const config = loadConfig({ WITHE_CONFIG: NO_FILE, WITHE_BIND: '192.168.1.20' }, HOST);
+
+  assert.equal(config.bind, '192.168.1.20');
+  assert.equal(config.warnings.length, 1);
 });

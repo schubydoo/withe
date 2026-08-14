@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 
 import type { SourceConfig, SourceKind } from '../adapters/types.ts';
+import { bindAddress, exposureWarning, inContainer, systemProbe, type ContainerProbe } from './exposure.ts';
 
 export class ConfigError extends Error {
   readonly field: string;
@@ -32,6 +33,8 @@ export interface WitheConfig {
   retentionDays: number | null;
   auth: { user: string; pass: string } | null;
   tls: { cert: string; key: string } | null;
+  /** True when Withe is running in a container, which decides `bind`. */
+  container: boolean;
   bind: string;
   port: number;
   /** Things the operator should know at startup but which are not fatal. */
@@ -43,7 +46,6 @@ const DEFAULTS = {
   configPath: '/data/withe.yaml',
   syncIntervalSeconds: 300,
   stalledAfterDays: 7,
-  bind: '127.0.0.1',
   port: 3000,
 } as const;
 
@@ -51,7 +53,7 @@ const KNOWN_KINDS: readonly string[] = ['ce', 'jsonlog', 'forge'];
 
 type Env = Record<string, string | undefined>;
 
-export function loadConfig(env: Env = process.env): WitheConfig {
+export function loadConfig(env: Env = process.env, probe: ContainerProbe = systemProbe): WitheConfig {
   const warnings: string[] = [];
 
   const configPath = env.WITHE_CONFIG ?? DEFAULTS.configPath;
@@ -70,6 +72,16 @@ export function loadConfig(env: Env = process.env): WitheConfig {
     );
   }
 
+  const auth = authFrom(env);
+  const container = inContainer(env, probe);
+  const bind = bindAddress(env, container);
+
+  // NFR-13b. The operator is told once at startup and again on every page,
+  // because a warning scrolled past during a container start is a warning
+  // nobody read.
+  const exposed = exposureWarning(bind, auth !== null);
+  if (exposed) warnings.push(exposed);
+
   return {
     sources,
     dbPath: env.WITHE_DB_PATH ?? DEFAULTS.dbPath,
@@ -77,9 +89,10 @@ export function loadConfig(env: Env = process.env): WitheConfig {
     syncIntervalSeconds: positive(env, 'WITHE_SYNC_INTERVAL_SECONDS', DEFAULTS.syncIntervalSeconds),
     stalledAfterDays: positive(env, 'WITHE_STALLED_AFTER_DAYS', DEFAULTS.stalledAfterDays),
     retentionDays: env.WITHE_RETENTION_DAYS ? positive(env, 'WITHE_RETENTION_DAYS', 0) : null,
-    auth: authFrom(env),
+    auth,
     tls: tlsFrom(env),
-    bind: env.WITHE_BIND ?? DEFAULTS.bind,
+    container,
+    bind,
     port: positive(env, 'WITHE_PORT', DEFAULTS.port),
     warnings,
   };

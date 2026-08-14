@@ -5,16 +5,15 @@
  * children and the signals. Migrating here rather than in either child
  * guarantees a single migrator and removes the start-order race.
  */
-import { ConfigError, loadConfig } from '../config/load.ts';
+import { ConfigError, loadConfig, type WitheConfig } from '../config/load.ts';
 import { clearMigrationAttempts, migrateOnce, MigrationGaveUpError } from './migrate.ts';
 import { Supervisor, type ChildSpec } from './children.ts';
 
 // Load configuration before migrating. A bad setting should be reported by
 // name rather than surfacing later as a child that will not start.
-let file: string;
+let config: WitheConfig;
 try {
-  const config = loadConfig();
-  file = config.dbPath;
+  config = loadConfig();
   for (const warning of config.warnings) console.warn(`configuration: ${warning}`);
 } catch (cause) {
   if (cause instanceof ConfigError) {
@@ -25,8 +24,8 @@ try {
 }
 
 try {
-  migrateOnce(file);
-  clearMigrationAttempts(file);
+  migrateOnce(config.dbPath);
+  clearMigrationAttempts(config.dbPath);
 } catch (cause) {
   if (cause instanceof MigrationGaveUpError) {
     // Exit 2 rather than 1: a restart cannot help, and the message names the
@@ -53,11 +52,21 @@ const children: ChildSpec[] = [
     name: 'web',
     command: webCommand[0] as string,
     args: webCommand.slice(1),
+    // NFR-13. The standalone server takes its listen address from these two
+    // variables, and the supervisor is the only process that knows what the
+    // configuration decided, so it sets them rather than trusting whatever the
+    // environment happened to carry.
+    env: { HOSTNAME: config.bind, PORT: String(config.port) },
     // The standalone server resolves its assets relative to where it runs.
     ...(process.env.WITHE_WEB_CWD ? { cwd: process.env.WITHE_WEB_CWD } : {}),
   },
   { name: 'worker', command: workerCommand[0] as string, args: workerCommand.slice(1) },
 ];
+
+console.log(
+  `supervisor: web will listen on ${config.bind}:${config.port}` +
+    `${config.container ? ' (container detected)' : ''}`,
+);
 
 const supervisor = new Supervisor(children, {
   log: (message) => console.log(message),
