@@ -3,7 +3,13 @@
 # Alpine, decided in tad.md Section 6.1.1 and confirmed by measurement here.
 # better-sqlite3 13 ships its own musl prebuilds, so nothing is compiled and no
 # build toolchain exists to keep out of the runner. See Section 6.1.
-FROM node:24-alpine AS deps
+#
+# Pinned by digest, not by the moving tag: `node:24-alpine` changes underneath
+# a rebuild, and an image nobody can reproduce is an image nobody can bisect.
+# The digest is the multi-architecture index, so it resolves on amd64 and
+# arm64 alike. Renovate keeps it current once it runs against this repository
+# (tad.md SEC-16) — it reads the tag beside the digest to know what to bump.
+FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # --ignore-scripts is what keeps a compiler out of this image. npm runs
@@ -13,7 +19,7 @@ COPY package.json package-lock.json ./
 # runs during the build.
 RUN npm ci --ignore-scripts
 
-FROM node:24-alpine AS builder
+FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -24,7 +30,7 @@ RUN npm run build
 # the whole node_modules would cost about 200 MB.
 RUN npm run bundle:server
 
-FROM node:24-alpine AS runner
+FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # tini reaps the zombies a supervisor with children would otherwise leave.
