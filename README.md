@@ -66,6 +66,9 @@ practice.
 - For the first release, that means Renovate Community Edition with its HTTP API enabled. The
   preflight page tells you which variables to set.
 - Docker, or anywhere else you can run a container.
+- A current browser. The interface is tested on Chromium, Firefox, and WebKit. WebKit is
+  Playwright's Safari engine — a stand-in for Safari, not Safari itself, so Safari is expected to
+  work but is not part of the automated suite.
 
 ## Installation
 

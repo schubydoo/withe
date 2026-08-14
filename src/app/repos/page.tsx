@@ -96,7 +96,7 @@ export default function Repos() {
                     );
                     return href ? (
                       <a
-                        className="ml-2 text-xs text-neutral-400 underline"
+                        className="ml-2 text-xs text-neutral-500 underline"
                         href={href}
                         target="_blank"
                         rel="noreferrer noopener"

@@ -116,7 +116,7 @@ export default function HealthPage() {
                   <td className="py-1.5 pr-4 text-neutral-600">
                     {ago(source.lastAttemptAt)}
                     {source.lastOutcome && (
-                      <span className="ml-1 text-neutral-400">({source.lastOutcome})</span>
+                      <span className="ml-1 text-neutral-500">({source.lastOutcome})</span>
                     )}
                   </td>
                   <td className="py-1.5 pr-4 tabular-nums text-neutral-600">
@@ -148,7 +148,7 @@ export default function HealthPage() {
           <dd className="tabular-nums">
             {migrations.applied}
             {migrations.newestAt && (
-              <span className="ml-1 text-neutral-400">
+              <span className="ml-1 text-neutral-500">
                 newest dated {migrations.newestAt.toISOString().slice(0, 10)}
               </span>
             )}
@@ -158,7 +158,7 @@ export default function HealthPage() {
           <dt className="text-neutral-500">Machine-readable</dt>
           <dd>
             <a className="underline" href="/api/health">/api/health</a>
-            <span className="ml-1 text-neutral-400">— the container healthcheck reads this</span>
+            <span className="ml-1 text-neutral-500">— the container healthcheck reads this</span>
           </dd>
         </dl>
       </section>

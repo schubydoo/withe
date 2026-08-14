@@ -24,7 +24,7 @@ const ROW = 22;
 const OVERSCAN = 20;
 
 const TONE: Record<LevelName, string> = {
-  trace: 'text-neutral-400',
+  trace: 'text-neutral-500',
   debug: 'text-neutral-500',
   info: 'text-neutral-800',
   warn: 'text-amber-700',
@@ -219,7 +219,7 @@ function Row({
         expanded ? 'bg-neutral-200' : ''
       }`}
     >
-      <span className="w-12 shrink-0 text-right text-neutral-400">{line.index + 1}</span>
+      <span className="w-12 shrink-0 text-right text-neutral-500">{line.index + 1}</span>
       <span className={`w-12 shrink-0 uppercase ${TONE[line.level]}`}>{line.level}</span>
       <span className={TONE[line.level]}>{line.message}</span>
     </button>

@@ -119,7 +119,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
                   )}
                 </td>
                 <td className="py-1.5 pr-4 whitespace-nowrap text-neutral-600">
-                  {label && <span className="text-neutral-400">{label} </span>}
+                  {label && <span className="text-neutral-500">{label} </span>}
                   {value}
                 </td>
                 <td className="py-1.5 text-neutral-600">
@@ -131,7 +131,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
                   ) : (
                     // F-06: a purged log is marked, not offered. Letting the
                     // operator click into a 404 is the failure this prevents.
-                    <span className="ml-3 text-xs text-neutral-400" title="No longer retained by the Renovate server">
+                    <span className="ml-3 text-xs text-neutral-500" title="No longer retained by the Renovate server">
                       log gone
                     </span>
                   )}

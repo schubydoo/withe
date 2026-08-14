@@ -109,7 +109,7 @@ function Group({
                 <td className="py-1 pr-4 font-medium">
                   {row.dependencyName}
                   {row.packageFileCount > 1 && (
-                    <span className="ml-1 text-neutral-400">×{row.packageFileCount} files</span>
+                    <span className="ml-1 text-neutral-500">×{row.packageFileCount} files</span>
                   )}
                 </td>
                 <td className="py-1 pr-4 tabular-nums text-neutral-600">

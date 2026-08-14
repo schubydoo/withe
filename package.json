@@ -20,6 +20,8 @@
     "db:generate": "drizzle-kit generate",
     "deploy": "npm run build && npm run restart",
     "dev": "NEXT_TELEMETRY_DISABLED=1 next dev",
+    "e2e": "node test/e2e/run.ts",
+    "e2e:browsers": "playwright test",
     "lint": "node scripts/check-boundaries.ts",
     "perf": "node scripts/perf-measure.ts",
     "check:contention": "node scripts/check-contention.ts",
@@ -28,7 +30,7 @@
     "start": "next start",
     "supervisor": "node src/supervisor/main.ts",
     "sync": "node src/worker/main.ts --once",
-    "test": "node --test",
+    "test": "node --test \"src/**/*.test.ts\" \"scripts/**/*.test.ts\" \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "worker": "node src/worker/main.ts"
   },
@@ -42,6 +44,7 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.13.3",
