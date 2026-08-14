@@ -18,7 +18,7 @@ after(() => rmSync(dir, { recursive: true, force: true }));
 let counter = 0;
 function fresh() {
   counter += 1;
-  const handle = openDatabase(join(dir, `s${counter}.db`));
+  const handle = openDatabase(join(dir, `s${counter}.db`), { role: 'owner' });
   migrate(handle.db, { migrationsFolder: './drizzle' });
   return handle;
 }

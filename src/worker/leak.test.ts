@@ -36,7 +36,7 @@ function failing(id: string, message: string): SourceAdapter {
 
 async function syncedFile(name: string, message: string, secrets: string[]): Promise<Buffer> {
   const path = join(dir, `${name}.db`);
-  const { sqlite, db } = openDatabase(path);
+  const { sqlite, db } = openDatabase(path, { role: 'owner' });
   migrate(db, { migrationsFolder: './drizzle' });
 
   const loop = new SyncLoop(db, [failing('default', message)], {
@@ -128,7 +128,7 @@ function collectingWithLog(id: string, logBody: string): SourceAdapter {
 test('a run is stored without its log body ever reaching the database', async () => {
   const marker = 'LOG-BODY-a1b2c3-must-never-be-persisted';
   const path = join(dir, 'no-log-content.db');
-  const { sqlite, db } = openDatabase(path);
+  const { sqlite, db } = openDatabase(path, { role: 'owner' });
   migrate(db, { migrationsFolder: './drizzle' });
 
   const loop = new SyncLoop(db, [collectingWithLog('default', marker)], {

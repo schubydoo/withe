@@ -23,7 +23,7 @@ test('a new database is migrated and gets no backup', () => {
   const { backup } = migrateOnce(file, { log: () => {} });
 
   assert.equal(backup, null, 'there is nothing to back up before the first migration');
-  const { sqlite } = openDatabase(file);
+  const { sqlite } = openDatabase(file, { role: 'owner' });
   const tables = sqlite
     .prepare("select name from sqlite_master where type='table'")
     .all()
@@ -36,7 +36,7 @@ test('an existing database is backed up before migrating', () => {
   const file = path();
   migrateOnce(file, { log: () => {} });
 
-  const { sqlite, db } = openDatabase(file);
+  const { sqlite, db } = openDatabase(file, { role: 'owner' });
   db.run(sql`insert into source (id, kind) values ('src', 'ce')`);
   sqlite.close();
 
@@ -45,7 +45,7 @@ test('an existing database is backed up before migrating', () => {
   assert.ok(existsSync(backup));
 
   // The copy is a real database, not an empty file.
-  const copy = openDatabase(backup);
+  const copy = openDatabase(backup, { role: 'owner' });
   const [row] = copy.db.all<{ id: string }>(sql`select id from source`);
   assert.equal(row?.id, 'src');
   copy.sqlite.close();
@@ -95,7 +95,7 @@ test('running migrations twice is harmless', () => {
   migrateOnce(file, { log: () => {} });
   migrateOnce(file, { log: () => {} });
 
-  const { sqlite } = openDatabase(file);
+  const { sqlite } = openDatabase(file, { role: 'owner' });
   const count = sqlite
     .prepare("select count(*) as n from sqlite_master where type='table' and name='repo'")
     .get() as { n: number };

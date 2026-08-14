@@ -30,7 +30,7 @@ function rng(seed: number): () => number {
 }
 
 export function generate(dbPath: string, repoCount: number, nowMs: number): void {
-  const { sqlite, db } = openDatabase(dbPath);
+  const { sqlite, db } = openDatabase(dbPath, { role: 'owner' });
   migrate(db, { migrationsFolder: './drizzle' });
   const rand = rng(repoCount);
 

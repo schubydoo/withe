@@ -31,7 +31,7 @@ let counter = 0;
 function database(agoSeconds: number | null): string {
   counter += 1;
   const path = join(dir, `h${counter}.db`);
-  const { sqlite, db } = openDatabase(path);
+  const { sqlite, db } = openDatabase(path, { role: 'owner' });
   migrate(db, { migrationsFolder: './drizzle' });
   db.insert(source).values({ id: 'default', kind: 'ce' }).run();
   if (agoSeconds !== null) {

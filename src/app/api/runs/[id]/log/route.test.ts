@@ -30,7 +30,7 @@ after(() => {
 /** One run, addressable as id 1, on a source that will not answer. */
 function databaseWithOneRun(): string {
   const path = join(dir, 'runs.db');
-  const { sqlite, db } = openDatabase(path);
+  const { sqlite, db } = openDatabase(path, { role: 'owner' });
   migrate(db, { migrationsFolder: './drizzle' });
   db.insert(source).values({ id: 'default', kind: 'ce' }).run();
   db.insert(repo)

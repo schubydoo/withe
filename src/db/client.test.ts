@@ -12,7 +12,9 @@ const dir = mkdtempSync(join(tmpdir(), 'withe-db-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
 function fresh(name: string) {
-  return openDatabase(join(dir, `${name}.db`));
+  // These tests create the file, so they open as the owner — the role that
+  // sets WAL and auto_vacuum. Pages open as readers and never set either.
+  return openDatabase(join(dir, `${name}.db`), { role: 'owner' });
 }
 
 test('a new database is opened with the pragmas two processes need', () => {
@@ -86,6 +88,20 @@ test('a volume that refuses WAL fails loudly and names the cause', () => {
   // exercises the same readback that catches an NFS or SMB volume (risk R-14).
   assert.throws(() => openDatabase(':memory:'), {
     name: 'WalUnavailableError',
-    message: /journal_mode='memory'.*network volume.*WITHE_DB_PATH/s,
+    message: /journal_mode is 'memory'.*network volume.*WITHE_DB_PATH/s,
   });
 });
+
+test('a reader never sets the journal mode, so it cannot race the writer', () => {
+  // Prove the split that fixes TR-1: create a WAL file as the owner, then a
+  // reader opens it without running the write-locking journal_mode pragma. A
+  // reader opening a non-WAL file refuses rather than converting it.
+  const { sqlite: owner } = fresh('reader-role');
+  owner.close();
+
+  const path = join(dir, 'reader-role.db');
+  const { sqlite: reader } = openDatabase(path, { role: 'reader' });
+  assert.equal(reader.pragma('journal_mode', { simple: true }), 'wal');
+  assert.equal(reader.pragma('busy_timeout', { simple: true }), 5000);
+  reader.close();
+})

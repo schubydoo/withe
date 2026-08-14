@@ -40,7 +40,7 @@ if (config.sources.length === 0) {
   process.exit(2);
 }
 
-const { sqlite, db } = openDatabase(config.dbPath);
+const { sqlite, db } = openDatabase(config.dbPath, { role: 'owner' });
 migrate(db, { migrationsFolder: './drizzle' });
 
 const adapters: SourceAdapter[] = config.sources.map((source) => createAdapter(source));

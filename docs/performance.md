@@ -67,3 +67,25 @@ is visible in a diff rather than argued about.
 - **NFR-3** windows the DOM (22 px rows, no wrapping), so first paint renders
   only the visible rows regardless of length; the cost that scales with the log
   is the parse and filter measured here.
+
+## Concurrency (Task 3.9, risk TR-1)
+
+Two processes share one SQLite file — the web reader and the sync worker. The
+risk is a long sync transaction blocking readers past `busy_timeout` until
+pages fail. `npm run check:contention` runs the real shape: a standalone server
+reads while a separate process calls `persist()` for 500 repositories, 20 times
+back to back, with 8 concurrent readers hammering `/` and `/repos` throughout.
+
+| Metric | Result |
+|--------|--------|
+| Requests served during the writes | 217 |
+| Reader failures on a locked database | **0** |
+| Reader latency p95 / max | 1,466 ms / 1,735 ms |
+| Worst reader wait vs `busy_timeout` | 1,735 ms < 5,000 ms |
+| Writer transaction (500 repos) p50 / max | 1,005 ms / 1,457 ms |
+
+The first run failed — reader p95 20,671 ms and three 500s — and exposed a real
+bug: `openDatabase` set `busy_timeout` after `PRAGMA journal_mode = WAL` and ran
+that write-locking pragma on every read connection, so a page render raced the
+sync's write lock. The fix gives the connection a role: the owner sets WAL, a
+reader only reads it. `tad.md` TR-1 holds the detail.

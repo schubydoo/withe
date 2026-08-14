@@ -28,7 +28,7 @@ let counter = 0;
 function withRuns(count: number) {
   counter += 1;
   const path = join(dir, `p${counter}.db`);
-  const { sqlite, db } = openDatabase(path);
+  const { sqlite, db } = openDatabase(path, { role: 'owner' });
   migrate(db, { migrationsFolder: './drizzle' });
   db.insert(source).values({ id: 'default', kind: 'ce' }).run();
   db.insert(repo)

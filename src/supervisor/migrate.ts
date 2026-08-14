@@ -66,7 +66,7 @@ export function migrateOnce(file: string, options: MigrateOptions = {}): { backu
     // before every migration rather than only schema-changing ones is cheap for
     // a database this size and removes a judgement call from the hot path.
     backup = join(dirname(file), `${basename(file)}.pre-migration.db`);
-    const { sqlite } = openDatabase(file);
+    const { sqlite } = openDatabase(file, { role: 'owner' });
     try {
       sqlite.exec(`VACUUM INTO '${backup.replaceAll("'", "''")}'`);
       log(`supervisor: backed up ${file} to ${backup}`);
@@ -80,7 +80,7 @@ export function migrateOnce(file: string, options: MigrateOptions = {}): { backu
     }
   }
 
-  const { sqlite, db } = openDatabase(file);
+  const { sqlite, db } = openDatabase(file, { role: 'owner' });
   try {
     migrate(db, { migrationsFolder: folder });
     log(`supervisor: migrations applied to ${file}`);
