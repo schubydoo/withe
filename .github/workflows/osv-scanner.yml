@@ -1,0 +1,44 @@
+name: OSV-Scanner
+
+# Scan the committed package-lock.json against the OSV database (osv.dev) and
+# upload SARIF to code scanning. Complements Renovate: a broader advisory
+# corpus, scanning the resolved lockfile rather than manifest ranges.
+# Report-only (fail-on-vuln: false) so findings surface without blocking merges.
+#
+# Built locally 2026-08-14, not yet pushed.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  schedule:
+    - cron: "27 5 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: osv-scanner-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scan-pr:
+    if: github.event_name == 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@8deb546fdb875b9996d27d4950be7312dac076a1 # v2.5.0
+    with:
+      fail-on-vuln: false
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+
+  scan-scheduled:
+    if: github.event_name != 'pull_request'
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@8deb546fdb875b9996d27d4950be7312dac076a1 # v2.5.0
+    with:
+      fail-on-vuln: false
+    permissions:
+      security-events: write
+      contents: read
+      actions: read

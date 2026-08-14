@@ -42,7 +42,7 @@ jobs:
       # agent-browser drives the functional flows and the a11y audit (Chromium).
       - name: Install agent-browser and its browser
         run: |
-          npm i -g agent-browser
+          npm i -g agent-browser@0.33.2
           agent-browser install --with-deps
 
       # Playwright drives the cross-browser smoke; --with-deps installs the
