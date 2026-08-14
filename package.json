@@ -20,6 +20,7 @@
     "deploy": "npm run build && npm run restart",
     "dev": "NEXT_TELEMETRY_DISABLED=1 next dev",
     "lint": "node scripts/check-boundaries.ts",
+    "perf": "node scripts/perf-measure.ts",
     "restart": "XDG_RUNTIME_DIR=${XDG_RUNTIME_DIR:-/run/user/$(id -u)} systemctl --user restart withe",
     "spec:fetch": "curl -fsSL https://raw.githubusercontent.com/mend/renovate-ce-ee/main/docs/openapi-community.yaml -o spec/openapi-community.yaml",
     "start": "next start",
