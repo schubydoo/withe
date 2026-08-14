@@ -1,0 +1,106 @@
+name: CI
+
+# Install, type-check, lint, test, build, and a licence gate, on push to main
+# and every pull request. A single aggregator job (`ci required checks passed`)
+# is what branch protection gates on — extend it by adding to its `needs`.
+#
+# Built locally 2026-08-14 (Task 3.11), not yet pushed. Conventions — SHA-pinned
+# actions, least-privilege permissions, persist-credentials false, per-job
+# timeouts, the aggregator gate — follow the sibling repos clauster and
+# claustrum.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: type-check, lint, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # The CE client is generated from the committed OpenAPI spec. Regenerating
+      # it here and failing on a diff catches a client checked in out of step
+      # with the spec — the daily client.yml catches upstream drift, this
+      # catches local drift.
+      - name: Generated client is in step with the spec
+        run: |
+          npm run build:client
+          if ! git diff --exit-code -- src/adapters/ce/generated; then
+            echo "::error::the generated CE client differs from the committed spec; run 'npm run build:client' and commit"
+            exit 1
+          fi
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Lint (adapter boundary rules)
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  licences:
+    name: no AGPL direct dependency
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: "24"
+          cache: npm
+      - name: Install
+        run: npm ci
+      # NFR-20: Withe must not take a copyleft-network dependency it would then
+      # have to relicense under. The check reads each direct dependency's own
+      # declared licence and fails on any AGPL.
+      - name: Check dependency licences
+        run: npm run check:licences
+
+  ci-required-checks:
+    name: ci required checks passed
+    if: always()
+    needs: [build, licences]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Check required jobs passed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          failing=$(echo "$NEEDS_JSON" | jq -r '
+            to_entries[]
+            | select(.value.result != "success" and .value.result != "skipped")
+            | "\(.key): \(.value.result)"
+          ')
+          if [ -n "$failing" ]; then
+            echo "Failed or cancelled jobs:"
+            echo "$failing"
+            exit 1
+          fi
+          echo "All required jobs passed."
