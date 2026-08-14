@@ -11,8 +11,10 @@
   "scripts": {
     "build": "NEXT_TELEMETRY_DISABLED=1 next build && npm run build:static",
     "build:static": "rm -rf .next/standalone/.next/static && cp -r .next/static .next/standalone/.next/static",
+    "bundle:server": "node scripts/bundle-server.ts",
     "build:client": "npx --yes openapi-typescript@7.13.0 spec/openapi-community.yaml -o src/adapters/ce/generated/ce.d.ts",
     "check:payloads": "node scripts/check-payloads.ts",
+    "check:image": "node scripts/check-image.ts",
     "db:generate": "drizzle-kit generate",
     "deploy": "npm run build && npm run restart",
     "dev": "NEXT_TELEMETRY_DISABLED=1 next dev",
@@ -42,6 +44,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.28.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
   }

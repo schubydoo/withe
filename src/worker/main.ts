@@ -50,23 +50,33 @@ const adapters: SourceAdapter[] = config.sources.map((source) => createAdapter(s
 // hide the two that work.
 const usable: SourceAdapter[] = [];
 for (const adapter of adapters) {
-  const preflight = await adapter.preflight();
-  for (const problem of preflight.problems) {
-    const where = problem.setting ? ` (${problem.setting})` : '';
-    console.error(`preflight ${adapter.id}/${problem.probe}: ${problem.detail}${where}`);
+  try {
+    const preflight = await adapter.preflight();
+    for (const problem of preflight.problems) {
+      const where = problem.setting ? ` (${problem.setting})` : '';
+      console.error(`preflight ${adapter.id}/${problem.probe}: ${problem.detail}${where}`);
+    }
+    if (preflight.reachableButEmpty) {
+      console.warn(`preflight ${adapter.id}: reachable, with no repositories onboarded.`);
+    }
+    if (preflight.ok) usable.push(adapter);
+  } catch (cause) {
+    // A server that refuses the connection makes preflight throw rather than
+    // report. Unguarded, that ends the process — and under the supervisor,
+    // three of those in a row take the whole container down with it.
+    console.error(
+      `preflight ${adapter.id}: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
   }
-  if (preflight.reachableButEmpty) {
-    console.warn(`preflight ${adapter.id}: reachable, with no repositories onboarded.`);
-  }
-  if (preflight.ok) usable.push(adapter);
 }
 
-if (usable.length === 0) {
-  sqlite.close();
-  process.exit(1);
-}
+// A source that is down at startup is not a reason to exit. The dashboard
+// stays up, the preflight page says what is wrong, and the sync loop retries
+// with its own backoff. Exiting here made an unreachable server look like a
+// broken Withe: the container crash-looped instead of explaining itself.
+const toSync = usable.length > 0 ? usable : adapters;
 
-const loop = new SyncLoop(db, usable, {
+const loop = new SyncLoop(db, toSync, {
   intervalMs: config.syncIntervalSeconds * 1000,
   stalledAfterMs: config.stalledAfterDays * DAY_MS,
   secrets: secretsFrom(config),

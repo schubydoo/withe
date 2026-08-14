@@ -1,0 +1,26 @@
+# Everything the build produces or the author keeps locally.
+.git
+.gitignore
+node_modules
+.next
+dist
+out
+coverage
+
+# Local working documents and agent state. scratch/ holds the PRD, the TAD and
+# the task list; none of it belongs in a published image.
+scratch
+.claude
+.serena
+CLAUDE.local.md
+
+# Databases, environment files, and anything that could carry a credential.
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+
+Dockerfile
+.dockerignore
