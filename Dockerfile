@@ -35,8 +35,10 @@ WORKDIR /app
 ENV NODE_ENV=production
 # tini reaps the zombies a supervisor with children would otherwise leave.
 # libstdc++ is the runtime dependency of the SQLite addon: without it the
-# import fails, and a successful build says nothing about that.
-RUN apk add --no-cache tini libstdc++
+# import fails, and a successful build says nothing about that. sqlite is the
+# CLI the README's documented backup uses — `.backup` takes a consistent copy
+# of a live WAL database, which `cp` cannot.
+RUN apk add --no-cache tini libstdc++ sqlite
 
 # Before USER, and not left to VOLUME. Docker creates an unprepared mount point
 # as root:root, so uid 1000 gets EACCES on the first run of a clean host, which
