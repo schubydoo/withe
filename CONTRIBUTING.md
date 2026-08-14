@@ -27,6 +27,13 @@ npm run dev                   # web, on :3000
 npm run dev:worker            # worker, in a second terminal
 ```
 
+Install the pre-commit hooks once — they run the same type-check, lint, changeset and test gates CI
+does, before the code leaves your machine:
+
+```bash
+uvx pre-commit install --install-hooks
+```
+
 You do not need a Renovate installation to work on most of Withe. The committed fixtures cover the
 mapping layer, and the tests run with no network.
 
