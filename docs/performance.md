@@ -30,17 +30,17 @@ is visible in a diff rather than argued about.
 
 ## Where these were measured
 
-- Latency, sync-write and **memory**: this host, **amd64**, Node v24.17.0.
-  arm64 is the constrained target the method names, but it cannot be measured
-  honestly on this amd64 host — under QEMU emulation every process runs inside
-  a `qemu-aarch64` wrapper that adds its own hundreds of megabytes, so the
-  container reads ~430 MB of emulator, not application. The amd64 figure stands
-  in: a Node process's resident set is dominated by the V8 heap and mapped
-  code, which are close across the two architectures, and the 239 MB RSS-sum
-  (140 MB PSS) leaves real headroom under 256 MB. A native-arm64 confirmation
-  belongs on real hardware or an arm64 CI runner (Task 3.11).
-- **Cold start** is measured on **arm64** under emulation, which is slower than
-  native — a conservative direction for a latency budget.
+- Latency and sync-write: this host, **amd64**, Node v24.17.0.
+- **Memory** was measured on **native arm64** — a Raspberry Pi (Debian 13,
+  aarch64, Docker 29.7.2), the constrained target the method names, on
+  2026-08-14. It could not be measured under QEMU on the amd64 host: emulation
+  wraps every process in a `qemu-aarch64` layer that adds its own hundreds of
+  megabytes, so the container there reads ~430 MB of emulator, not application.
+  On the Pi, 5 minutes idle: **232 MB RSS-sum, 133 MB PSS** — close to the
+  amd64 numbers (239 / 140), which confirms the V8 heap and mapped code
+  dominate and are architecture-stable.
+- **Cold start** was measured on **arm64** under emulation, slower than native —
+  a conservative direction for a latency budget.
 - Container image: measured in Task 3.5 on both architectures.
 
 ## Results
@@ -51,7 +51,7 @@ is visible in a diff rather than argued about.
 | NFR-2 | Landing page, 500 repos, p95 <= 1,200 ms | p50 195.4, **p95 244.6**, max 294.5 ms | pass |
 | NFR-3 | Log render, 5,000 lines, p95 <= 1,000 ms, no fetch | p50 1.5, **p95 2.0**, max 2.6 ms | pass |
 | NFR-4 | Full sync, 50 repos, <= 60 s | write half 38.8 ms; live 8-repo end-to-end ~1 s | pass |
-| NFR-5 | Idle memory <= 256 MB resident | **239 MB** RSS-sum (140 MB PSS) | pass |
+| NFR-5 | Idle memory <= 256 MB resident, arm64 | **232 MB** RSS-sum (133 MB PSS) on native arm64 | pass |
 | NFR-6 | Image <= 300 MB uncompressed | 217 MB amd64, **211 MB arm64** (Task 3.5) | pass |
 | NFR-7 | Cold start to serving <= 15 s | **6.1 s** on arm64 under emulation | pass |
 
