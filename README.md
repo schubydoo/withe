@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo/logo-full.svg" alt="Withe" width="300"></p>
+
 # Withe
 
 **Withe is a dashboard for the Renovate you already run — no operator, no migration, nothing to replace.**

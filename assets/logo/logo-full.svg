@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 72" width="320" height="72" role="img" aria-label="Withe">
+  <g transform="translate(8 8) scale(0.875)">
+    <path fill="#0D9488" fill-rule="evenodd" d="M22 8 H42 A14 14 0 0 1 56 22 V42 A14 14 0 0 1 42 56 H22 A14 14 0 0 1 8 42 V22 A14 14 0 0 1 22 8 Z M49 32 A17 17 0 1 1 15 32 A17 17 0 1 1 49 32 Z"/>
+    <circle cx="32" cy="32" r="7" fill="#0D9488"/>
+  </g>
+  <text x="82" y="48" font-family="Inter, 'Segoe UI', system-ui, -apple-system, sans-serif" font-size="36" font-weight="700" letter-spacing="-0.5">
+    <tspan fill="#0D9488">W</tspan><tspan fill="#0F172A">ithe</tspan>
+  </text>
+</svg>

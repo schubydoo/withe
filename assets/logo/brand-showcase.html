@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Withe — Brand</title>
+<style>
+  :root{ --teal:#0D9488; --teal-700:#0F766E; --ink:#0F172A; --paper:#FAFAFA; --night:#0A0A0A; --line:#E2E8F0; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; font-family:Inter,"Segoe UI",system-ui,-apple-system,sans-serif; color:var(--ink); background:var(--paper); line-height:1.55; }
+  .wrap{ max-width:960px; margin:0 auto; padding:0 24px; }
+  header{ background:linear-gradient(160deg,#042f2e,#0F172A); color:#fff; padding:72px 0 64px; text-align:center; }
+  header img{ height:64px; }
+  header p{ color:#94A3B8; max-width:44ch; margin:14px auto 0; }
+  h2{ font-size:13px; letter-spacing:.14em; text-transform:uppercase; color:#64748B; margin:56px 0 20px; }
+  section{ border-top:1px solid var(--line); }
+  .grid{ display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); }
+  .tile{ border:1px solid var(--line); border-radius:14px; padding:24px; display:flex; align-items:center; justify-content:center; min-height:120px; }
+  .tile.dark{ background:var(--night); border-color:#1e293b; }
+  .tile img{ max-width:100%; max-height:56px; }
+  .tile.big img{ max-height:96px; }
+  .cap{ font-size:12px; color:#64748B; text-align:center; margin-top:8px; }
+  .swatches{ display:grid; gap:12px; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); }
+  .sw{ border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .sw .chip{ height:64px; } .sw .meta{ padding:10px 12px; font-size:13px; }
+  .sw .meta b{ display:block; } .sw .meta code{ color:#64748B; font-size:12px; }
+  pre{ background:var(--ink); color:#E2E8F0; padding:18px 20px; border-radius:12px; overflow:auto; font-size:13px; }
+  .type-demo{ font-weight:700; letter-spacing:-.02em; }
+  footer{ color:#94A3B8; font-size:13px; text-align:center; padding:48px 0 64px; }
+  a{ color:var(--teal-700); }
+</style>
+</head>
+<body>
+<header>
+  <img src="logo-white.svg" alt="Withe"/>
+  <p>A dashboard for the Renovate you already run. It observes; it changes nothing.</p>
+</header>
+
+<div class="wrap">
+  <section>
+    <h2>The mark</h2>
+    <div class="grid">
+      <div><div class="tile big"><img src="logo-mark.svg" alt="mark"/></div><div class="cap">mark · on light</div></div>
+      <div><div class="tile big dark"><img src="logo-mark.svg" alt="mark on dark"/></div><div class="cap">mark · on dark</div></div>
+      <div><div class="tile big"><img src="logo-icon.svg" alt="app icon"/></div><div class="cap">app icon</div></div>
+      <div><div class="tile big"><img src="favicon.svg" alt="favicon" style="width:32px;height:32px;image-rendering:auto"/></div><div class="cap">favicon · 16–32px</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Concept</h2>
+    <p>A rounded-square <b>viewport</b> — the dashboard — with a circular <b>aperture</b> and a centred
+    pupil: an instrument that <b>watches</b>. It reads what Renovate already did and shows it at a glance,
+    and it does exactly that — nothing is added, nothing is written back. The single teal accent keeps the
+    tone calm and trustworthy rather than loud; the mark is two shapes so it stays sharp from a 512px app
+    icon down to a 16px favicon.</p>
+  </section>
+
+  <section>
+    <h2>Lockups</h2>
+    <div class="grid">
+      <div><div class="tile"><img src="logo-full.svg" alt="full"/></div><div class="cap">full · light</div></div>
+      <div><div class="tile dark"><img src="logo-white.svg" alt="white"/></div><div class="cap">white · dark</div></div>
+      <div><div class="tile"><img src="logo-wordmark.svg" alt="wordmark"/></div><div class="cap">wordmark</div></div>
+      <div><div class="tile"><img src="logo-black.svg" alt="black"/></div><div class="cap">black · mono</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Palette</h2>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#0D9488"></div><div class="meta"><b>Teal</b><code>#0D9488</code></div></div>
+      <div class="sw"><div class="chip" style="background:#0F766E"></div><div class="meta"><b>Teal deep</b><code>#0F766E</code></div></div>
+      <div class="sw"><div class="chip" style="background:#0F172A"></div><div class="meta"><b>Ink</b><code>#0F172A</code></div></div>
+      <div class="sw"><div class="chip" style="background:#0A0A0A"></div><div class="meta"><b>Night</b><code>#0A0A0A</code></div></div>
+      <div class="sw"><div class="chip" style="background:#FAFAFA;border-bottom:1px solid #E2E8F0"></div><div class="meta"><b>Paper</b><code>#FAFAFA</code></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Typography</h2>
+    <p style="font-size:40px" class="type-demo"><span style="color:#0D9488">W</span>ithe</p>
+    <p>Inter (or the system UI stack) Bold, tightened tracking. The wordmark carries the teal on the
+    initial <b>W</b> and ink for the rest, so the accent appears once and the name stays legible.</p>
+  </section>
+
+  <section>
+    <h2>Developer reference</h2>
+    <pre>/* Tailwind — Withe brand tokens */
+theme: {
+  extend: {
+    colors: {
+      withe: {
+        DEFAULT: '#0D9488', // teal
+        deep:    '#0F766E',
+        ink:     '#0F172A',
+        night:   '#0A0A0A',
+        paper:   '#FAFAFA',
+      },
+    },
+  },
+}</pre>
+    <pre>&lt;!-- Next.js: drop src/app/icon.svg (=logo-mark.svg) and it becomes the favicon --&gt;
+&lt;link rel="icon" href="/favicon.svg" type="image/svg+xml"&gt;
+&lt;link rel="apple-touch-icon" href="/apple-touch-icon.png"&gt;</pre>
+  </section>
+
+  <footer>Withe · MIT · <a href="https://github.com/schubydoo/withe">github.com/schubydoo/withe</a></footer>
+</div>
+</body>
+</html>
