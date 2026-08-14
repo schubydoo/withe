@@ -261,3 +261,33 @@ export function recordSyncFailure(
       .run();
   });
 }
+
+/**
+ * Delete run metadata older than `cutoff`, and give the space back to the disk.
+ *
+ * Only `renovate_run` rows are pruned. Repositories, pending updates and the
+ * forge each row points at stay: they describe the present, not the past. A
+ * run whose timestamps are all null is left alone rather than guessed at.
+ *
+ * The delete alone frees pages inside the file without shrinking it —
+ * `auto_vacuum = INCREMENTAL` (set in `openDatabase` before any table exists)
+ * only marks them reusable. `incremental_vacuum` moves them out, and in WAL
+ * mode the main file is not truncated until a checkpoint, so both run here.
+ * Without all three the file grows forever and the pragma is theatre.
+ */
+export function pruneOldRuns(db: Db, cutoff: Date): number {
+  const seconds = Math.floor(cutoff.getTime() / 1000);
+  const deleted = db.run(sql`
+    delete from renovate_run
+     where coalesce(completed_at, started_at, queued_at) < ${seconds}
+  `).changes;
+
+  if (deleted > 0) {
+    db.run(sql`PRAGMA incremental_vacuum`);
+    // The truncation lands on the main file only at checkpoint. TRUNCATE also
+    // caps the WAL, which a long-lived worker would otherwise let grow.
+    db.$client.pragma('wal_checkpoint(TRUNCATE)');
+  }
+
+  return deleted;
+}

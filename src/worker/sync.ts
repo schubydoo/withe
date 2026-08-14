@@ -8,7 +8,7 @@
 import type { SourceAdapter } from '../adapters/types.ts';
 import { redact } from '../core/redact.ts';
 import type { openDatabase } from '../db/client.ts';
-import { persist, recomputeStalled, recordSyncFailure } from '../db/persist.ts';
+import { persist, pruneOldRuns, recomputeStalled, recordSyncFailure } from '../db/persist.ts';
 
 type Db = ReturnType<typeof openDatabase>['db'];
 
@@ -23,6 +23,11 @@ export interface SyncOptions {
    * failure message is the one path by which a credential reaches a column.
    */
   secrets?: readonly string[];
+  /**
+   * Delete run metadata older than this at the end of each cycle. Unset keeps
+   * every run forever, which is the default (PRD Section 6.3.1).
+   */
+  retentionMs?: number;
 }
 
 export interface SourceOutcome {
@@ -39,6 +44,8 @@ export interface SourceOutcome {
 export interface CycleReport {
   skipped: boolean;
   sources: SourceOutcome[];
+  /** Runs deleted by retention at the end of this cycle. */
+  pruned: number;
 }
 
 /**
@@ -110,7 +117,7 @@ export class SyncLoop {
   async runCycle(): Promise<CycleReport> {
     if (this.running) {
       this.log('sync: a cycle is still running, skipping this tick');
-      return { skipped: true, sources: [] };
+      return { skipped: true, sources: [], pruned: 0 };
     }
 
     this.running = true;
@@ -119,10 +126,25 @@ export class SyncLoop {
       for (const adapter of this.adapters) {
         sources.push(await this.syncOne(adapter));
       }
-      return { skipped: false, sources };
+      // Once per cycle, after every source is written, because pruning touches
+      // the whole file rather than one source's rows.
+      const pruned = this.prune();
+      return { skipped: false, sources, pruned };
     } finally {
       this.running = false;
     }
+  }
+
+  /**
+   * Delete runs past the retention window. A no-op when it is unset, which is
+   * the default: run history is kept indefinitely (PRD Section 6.3.1).
+   */
+  private prune(): number {
+    if (this.options.retentionMs === undefined) return 0;
+    const cutoff = new Date(this.now() - this.options.retentionMs);
+    const pruned = pruneOldRuns(this.db, cutoff);
+    if (pruned > 0) this.log(`sync: pruned ${pruned} runs older than the retention window`);
+    return pruned;
   }
 
   private async syncOne(adapter: SourceAdapter): Promise<SourceOutcome> {

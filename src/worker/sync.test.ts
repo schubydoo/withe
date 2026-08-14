@@ -313,3 +313,52 @@ test('warnings make a cycle partial rather than failed', async () => {
   assert.ok(logged.some((m) => /the job family is off/.test(m)));
   sqlite.close();
 });
+
+test('with no retention set, no run is ever deleted', async () => {
+  const { sqlite, db } = fresh();
+  const old = Date.now() - 400 * DAY;
+  const loop = new SyncLoop(
+    db,
+    [stub('keep', async () => ({
+      repos: [repoOf('keep', 'acme/widget')],
+      runs: [runOf('keep', 'acme/widget', 'ancient', 'success', old)],
+      updates: [],
+      warnings: [],
+    }))],
+    { intervalMs: 1000, stalledAfterMs: 7 * DAY, log: () => {} },
+  );
+
+  const report = await loop.runCycle();
+  assert.equal(report.pruned, 0);
+  const n = (db.$client.prepare('select count(*) as n from renovate_run').get() as { n: number }).n;
+  assert.equal(n, 1, 'a year-old run must survive when retention is unset');
+  sqlite.close();
+});
+
+test('with retention set, runs past the window are pruned at the end of the cycle', async () => {
+  const { sqlite, db } = fresh();
+  const now = Date.now();
+  const loop = new SyncLoop(
+    db,
+    [stub('prune', async () => ({
+      repos: [repoOf('prune', 'acme/widget')],
+      runs: [
+        runOf('prune', 'acme/widget', 'fresh', 'success', now - 1 * DAY),
+        runOf('prune', 'acme/widget', 'stale', 'success', now - 60 * DAY),
+      ],
+      updates: [],
+      warnings: [],
+    }))],
+    { intervalMs: 1000, stalledAfterMs: 7 * DAY, retentionMs: 30 * DAY, log: () => {}, now: () => now },
+  );
+
+  const report = await loop.runCycle();
+  assert.equal(report.pruned, 1);
+
+  const jobs = db.$client
+    .prepare('select external_job_id from renovate_run')
+    .all()
+    .map((r) => (r as { external_job_id: string }).external_job_id);
+  assert.deepEqual(jobs, ['fresh'], 'only the run inside the window remains');
+  sqlite.close();
+});

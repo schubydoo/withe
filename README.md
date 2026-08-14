@@ -69,6 +69,19 @@ No release yet. Installation will be one container and one volume.
 
 No release yet.
 
+## Storage and retention
+
+Withe keeps run history in one SQLite file on its volume. It never stores log content — a run row
+holds a reference to the log, and the log is streamed from Renovate on demand.
+
+A run row costs about **150 bytes**, so the database grows by roughly **1 MB per 7,000 runs**. One
+run is one Renovate job for one repository. A fleet of 8 repositories on Renovate's hourly schedule
+records about 190 runs a day, or close to **10 MB a year**.
+
+By default Withe keeps every run. To cap the history, set `WITHE_RETENTION_DAYS` to a number of
+days. Withe then deletes runs older than that at the end of each sync and returns the freed space to
+the disk. Repositories, pending updates and forge links are never pruned.
+
 ## Relationship to Mend and Renovate
 
 Withe is an independent project. **It is not affiliated with, endorsed by, or supported by Mend.io,

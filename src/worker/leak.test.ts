@@ -76,3 +76,74 @@ test('the search can find a value that is really there', async () => {
   const contents = await syncedFile('planted', 'the-cause-was-a-teapot', []);
   assert.ok(contents.includes('the-cause-was-a-teapot'), 'the file scan cannot see stored text');
 });
+
+/** An adapter that collects one run and, separately, can serve a log body. */
+function collectingWithLog(id: string, logBody: string): SourceAdapter {
+  return {
+    id,
+    kind: 'ce',
+    collect: () =>
+      Promise.resolve({
+        repos: [
+          {
+            id: `${id}:acme/widget`,
+            org: 'acme',
+            name: 'widget',
+            fullName: 'acme/widget',
+            enabled: true,
+            installStatus: 'activated',
+            queueName: 'main',
+            installedAt: null,
+            removedAt: null,
+            sourceAdapterId: id,
+          },
+        ],
+        runs: [
+          {
+            id: `${id}:job-1`,
+            repoId: `${id}:acme/widget`,
+            externalJobId: 'job-1',
+            triggerReason: 'schedule-all',
+            queuedAt: new Date(),
+            startedAt: new Date(),
+            completedAt: new Date(),
+            status: 'success',
+            error: null,
+            artifactErrors: [],
+            // A reference to where the log lives, never the log itself.
+            logLocation: 'jobs/job-1',
+            runnerVersion: '43.0.0',
+            sourceAdapterId: id,
+          },
+        ],
+        updates: [],
+        warnings: [],
+      }),
+    // The log body is served on demand by the route, never during a sync.
+    fetchLog: () => Promise.resolve(new Response(logBody).body as ReadableStream<Uint8Array>),
+    preflight: () => Promise.resolve([]),
+  } as unknown as SourceAdapter;
+}
+
+test('a run is stored without its log body ever reaching the database', async () => {
+  const marker = 'LOG-BODY-a1b2c3-must-never-be-persisted';
+  const path = join(dir, 'no-log-content.db');
+  const { sqlite, db } = openDatabase(path);
+  migrate(db, { migrationsFolder: './drizzle' });
+
+  const loop = new SyncLoop(db, [collectingWithLog('default', marker)], {
+    intervalMs: 60_000,
+    stalledAfterMs: 60_000,
+    log: () => {},
+  });
+  await loop.runCycle();
+  sqlite.close();
+
+  const wal = `${path}-wal`;
+  const bytes = Buffer.concat([readFileSync(path), existsSync(wal) ? readFileSync(wal) : Buffer.alloc(0)]);
+
+  // The reference is stored; the body is not. NFR-12, and the same file scan
+  // the planted test above proves can see stored text.
+  assert.ok(bytes.includes('jobs/job-1'), 'the log location should be stored');
+  assert.equal(bytes.includes(marker), false, 'the log body reached the database');
+});

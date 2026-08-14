@@ -80,6 +80,8 @@ const loop = new SyncLoop(db, toSync, {
   intervalMs: config.syncIntervalSeconds * 1000,
   stalledAfterMs: config.stalledAfterDays * DAY_MS,
   secrets: secretsFrom(config),
+  // Unset keeps every run forever; set, it prunes at the end of each cycle.
+  ...(config.retentionDays !== null ? { retentionMs: config.retentionDays * DAY_MS } : {}),
 });
 
 const first = await loop.runCycle();
