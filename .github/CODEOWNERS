@@ -1,0 +1,16 @@
+# Code owners for Withe — https://docs.github.com/articles/about-code-owners
+#
+# GitHub auto-requests review from the owner on matching PRs. Branch protection
+# does not require code-owner review (a solo project has no second approver), but
+# declaring ownership is good hygiene and makes required review a one-line switch
+# if the maintainer set grows.
+
+* @schubydoo
+
+# Renovate-managed and generated paths — no owner, so dependency and regeneration
+# PRs don't auto-request a review that would only rubber-stamp them.
+/package-lock.json
+/Dockerfile
+/.github/workflows/
+/spec/openapi-community.yaml
+/src/adapters/ce/generated/
