@@ -35,8 +35,12 @@ export interface WitheConfig {
   tls: { cert: string; key: string } | null;
   /** True when Withe is running in a container, which decides `bind`. */
   container: boolean;
+  /** Where Withe answers: the TLS proxy when there is one, the web server otherwise. */
   bind: string;
   port: number;
+  /** Where the Next.js server itself listens, which is not the same behind TLS. */
+  webBind: string;
+  webPort: number;
   /** Things the operator should know at startup but which are not fatal. */
   warnings: string[];
 }
@@ -73,8 +77,10 @@ export function loadConfig(env: Env = process.env, probe: ContainerProbe = syste
   }
 
   const auth = authFrom(env);
+  const tls = tlsFrom(env);
   const container = inContainer(env, probe);
   const bind = bindAddress(env, container);
+  const port = positive(env, 'WITHE_PORT', DEFAULTS.port);
 
   // NFR-13b. The operator is told once at startup and again on every page,
   // because a warning scrolled past during a container start is a warning
@@ -90,10 +96,16 @@ export function loadConfig(env: Env = process.env, probe: ContainerProbe = syste
     stalledAfterDays: positive(env, 'WITHE_STALLED_AFTER_DAYS', DEFAULTS.stalledAfterDays),
     retentionDays: env.WITHE_RETENTION_DAYS ? positive(env, 'WITHE_RETENTION_DAYS', 0) : null,
     auth,
-    tls: tlsFrom(env),
+    tls,
     container,
     bind,
-    port: positive(env, 'WITHE_PORT', DEFAULTS.port),
+    port,
+    // Behind TLS the proxy answers on the configured address and the Next
+    // server moves to loopback one port up, where only the proxy can reach it.
+    // AD-2: standalone output emits its own server and supports no custom one,
+    // so TLS cannot be terminated inside the web process.
+    webBind: tls ? '127.0.0.1' : bind,
+    webPort: tls ? port + 1 : port,
     warnings,
   };
 }

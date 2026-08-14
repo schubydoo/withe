@@ -46,6 +46,9 @@ const webCommand = (process.env.WITHE_WEB_CMD ?? `${process.execPath} server.js`
 const workerCommand = (
   process.env.WITHE_WORKER_CMD ?? `${process.execPath} src/worker/main.ts`
 ).split(' ');
+const tlsCommand = (
+  process.env.WITHE_TLS_CMD ?? `${process.execPath} src/tls-proxy/main.ts`
+).split(' ');
 
 const children: ChildSpec[] = [
   {
@@ -55,16 +58,28 @@ const children: ChildSpec[] = [
     // NFR-13. The standalone server takes its listen address from these two
     // variables, and the supervisor is the only process that knows what the
     // configuration decided, so it sets them rather than trusting whatever the
-    // environment happened to carry.
-    env: { HOSTNAME: config.bind, PORT: String(config.port) },
+    // environment happened to carry. Behind TLS these are loopback and one
+    // port up, and the proxy takes the configured address.
+    env: { HOSTNAME: config.webBind, PORT: String(config.webPort) },
     // The standalone server resolves its assets relative to where it runs.
     ...(process.env.WITHE_WEB_CWD ? { cwd: process.env.WITHE_WEB_CWD } : {}),
   },
   { name: 'worker', command: workerCommand[0] as string, args: workerCommand.slice(1) },
 ];
 
+// AD-2. Only when the operator supplied both paths; there is nothing to
+// terminate otherwise.
+if (config.tls) {
+  children.push({
+    name: 'tls-proxy',
+    command: tlsCommand[0] as string,
+    args: tlsCommand.slice(1),
+  });
+}
+
 console.log(
-  `supervisor: web will listen on ${config.bind}:${config.port}` +
+  `supervisor: web will listen on ${config.webBind}:${config.webPort}` +
+    `${config.tls ? `, behind TLS on ${config.bind}:${config.port}` : ''}` +
     `${config.container ? ' (container detected)' : ''}`,
 );
 

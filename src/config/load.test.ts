@@ -292,3 +292,30 @@ test('a bind beyond loopback is warned about wherever Withe runs', () => {
   assert.equal(config.bind, '192.168.1.20');
   assert.equal(config.warnings.length, 1);
 });
+
+test('behind TLS the web server moves to loopback and the proxy takes the port', () => {
+  const config = loadConfig(
+    {
+      WITHE_CONFIG: NO_FILE,
+      WITHE_BIND: '0.0.0.0',
+      WITHE_PORT: '8443',
+      WITHE_TLS_CERT: '/certs/c.pem',
+      WITHE_TLS_KEY: '/certs/k.pem',
+    },
+    HOST,
+  );
+
+  assert.equal(config.bind, '0.0.0.0');
+  assert.equal(config.port, 8443);
+  // Only the proxy can reach it there, which is the point of terminating TLS
+  // in a separate process.
+  assert.equal(config.webBind, '127.0.0.1');
+  assert.equal(config.webPort, 8444);
+});
+
+test('without TLS the web server is the thing that answers', () => {
+  const config = loadConfig({ WITHE_CONFIG: NO_FILE, WITHE_BIND: '0.0.0.0' }, HOST);
+
+  assert.equal(config.webBind, '0.0.0.0');
+  assert.equal(config.webPort, config.port);
+});
