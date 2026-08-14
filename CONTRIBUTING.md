@@ -89,6 +89,32 @@ have committed one, treat it as a security report — see below.
 Reviews come from one maintainer working evenings and weekends. Expect days, not hours. A pull
 request going quiet is not a rejection; comment on it again.
 
+## Changesets
+
+Any user-visible change ships a **changeset** — a small fragment in `.changeset/` that drives both
+the version bump and the changelog. Create `.changeset/<slug>.md` (or run `knope document-change`)
+with YAML front matter and a **single-line** body:
+
+```markdown
+---
+default: minor
+---
+
+List lock-file refreshes in their own section instead of only counting them
+```
+
+- `default:` is one of `major` (breaking), `minor` (feature → Features), `patch` (fix → Fixes),
+  `security`, or `perf`.
+- The body must be **exactly one line**. knope renders a second line as a `#### heading` mid-list,
+  which corrupts the release notes. Fold all detail into that one sentence.
+- **Never add a `README.md` or any non-fragment `.md` to `.changeset/`** — knope parses every `.md`
+  there and a file without front matter fails the release.
+- `CHANGELOG.md` is generated from these fragments; do not hand-edit it. Internal-only pull requests
+  (CI, refactor, tests) skip the changeset.
+
+Releases run through [knope](https://knope.tech): merging a `chore: prepare release` pull request
+tags `v*` and builds the image.
+
 ## Accessibility
 
 Every user-facing change must meet WCAG 2.1 AA: sufficient contrast, full keyboard navigation, a

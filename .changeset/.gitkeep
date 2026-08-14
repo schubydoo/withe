@@ -1,0 +1,3 @@
+# Changeset fragments live here. See CONTRIBUTING.md ("Changesets").
+# Do not add a README.md or any non-fragment .md — knope parses every .md here
+# and a file without front matter fails the release.

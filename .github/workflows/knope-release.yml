@@ -1,0 +1,54 @@
+name: Knope Release
+
+# knope's "publish" half. When the `chore: prepare release X.Y.Z` PR merges,
+# knope creates the GitHub Release + tag from the CHANGELOG notes. Because the
+# tag is pushed with the PAT (not GITHUB_TOKEN), it triggers release.yml — the
+# multi-arch image build. This workflow builds nothing itself.
+#
+# GATED OFF behind `KNOPE_ENABLED`. Triggered on the release PR merging (head
+# branch `release`), tagging the squash commit that landed on main.
+#
+# Built locally 2026-08-14, not yet pushed.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+  workflow_dispatch: # manual fallback; run from main once package.json holds the version
+
+permissions:
+  contents: read
+
+concurrency:
+  group: knope-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      ${{ vars.KNOPE_ENABLED == 'true'
+          && ((github.event_name == 'pull_request'
+               && github.event.pull_request.merged == true
+               && github.head_ref == 'release')
+              || (github.event_name == 'workflow_dispatch'
+                  && github.ref == 'refs/heads/main')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # Tag the squash commit that landed on main, not the orphaned PR head.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          fetch-depth: 0
+          token: ${{ secrets.WITHE_RELEASE_TOKEN }}
+          persist-credentials: true
+      - name: Install knope
+        uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
+        with:
+          version: 0.23.0
+      - name: Create the tag + GitHub Release
+        run: knope release --verbose
+        env:
+          GITHUB_TOKEN: ${{ secrets.WITHE_RELEASE_TOKEN }}

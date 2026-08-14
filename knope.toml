@@ -1,0 +1,78 @@
+# Release automation for Withe — knope (CHANGESETS model).
+#
+# Every user-facing change ships a `.changeset/*.md` fragment; those fragments —
+# not commit messages — drive both the version bump and the changelog. See the
+# changeset section in CONTRIBUTING.md. Conventional-commit titles stay enforced
+# for a clean history but are ignored for release purposes.
+#
+# The two halves live in .github/workflows/knope-{prepare,release}.yml, gated OFF
+# behind the `KNOPE_ENABLED` repo variable until the flow is proven on a pushed
+# repo. knope only ORCHESTRATES (version PR + changelog + tag/GitHub Release);
+# the multi-arch image build (release.yml) still runs on the pushed `v*` tag.
+
+[package]
+# knope has native package.json support: it rewrites the top-level "version".
+# The lockfile is resynced with `npm install --package-lock-only` in the prepare
+# workflow, since knope does not touch package-lock.json.
+versioned_files = ["package.json"]
+changelog = "CHANGELOG.md"
+
+extra_changelog_sections = [
+  { name = "Security", types = ["security"] },
+  { name = "Performance", types = ["perf"] },
+]
+
+[changes]
+ignore_conventional_commits = true # fragments in .changeset/ are the sole source of truth
+
+[github]
+owner = "schubydoo"
+repo = "withe"
+
+[release_notes]
+change_templates = [
+  "### $summary ([#$pr_number](https://github.com/schubydoo/withe/pull/$pr_number))\n\n$details",
+  "### $summary\n\n$details",
+  "- $summary ([#$pr_number](https://github.com/schubydoo/withe/pull/$pr_number))",
+  "- $summary",
+]
+
+# --- prepare-release: open/refresh the `release` PR (run on push to main) -----
+[[workflows]]
+name = "prepare-release"
+
+[[workflows.steps]]
+type = "Command"
+command = "git switch -C release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = "npm install --package-lock-only --ignore-scripts" # resync the lockfile version
+
+[[workflows.steps]]
+type = "Command"
+command = 'git commit -am "chore: prepare release $version"'
+
+[[workflows.steps]]
+type = "Command"
+command = "git push --force --set-upstream origin release"
+
+[[workflows.steps]]
+type = "CreatePullRequest"
+base = "main"
+
+[workflows.steps.title]
+template = "chore: prepare release $version"
+
+[workflows.steps.body]
+template = "Automated release PR. Merging it tags `v$version`, which fires release.yml (the multi-arch image build). Do not hand-edit the changelog — it is generated from `.changeset/`."
+
+# --- release: create the tag + GitHub Release (run when the release PR merges) -
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "Release"
