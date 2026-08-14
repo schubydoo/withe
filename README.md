@@ -199,6 +199,30 @@ docker exec withe sh -c 'sqlite3 /data/withe.db ".backup /data/withe-backup.db"'
 Then copy `withe-backup.db` off the volume. It is safe to take while Withe is running. Withe holds
 nothing you cannot re-read from Renovate, so this protects your run history, not irreplaceable data.
 
+### Taking your data out
+
+Withe will not trap your history. Two export forms, both behind the same login as the rest of the
+dashboard, and both work even if the sync worker has stopped:
+
+```bash
+# Every table as one JSON document
+curl -u user:pass http://127.0.0.1:8080/api/export -o withe-export.json
+
+# A consistent SQLite copy (VACUUM INTO — safe to take while Withe is syncing)
+curl -u user:pass 'http://127.0.0.1:8080/api/export?format=sqlite' -o withe-export.db
+```
+
+### Teardown
+
+To remove Withe completely, stop the container and delete its volume:
+
+```bash
+docker rm -f withe
+docker volume rm withe-data
+```
+
+Nothing lives outside that volume, so this leaves no residue.
+
 ## Relationship to Mend and Renovate
 
 Withe is an independent project. **It is not affiliated with, endorsed by, or supported by Mend.io,

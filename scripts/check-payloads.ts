@@ -119,7 +119,8 @@ async function waitForPort(): Promise<void> {
  * inventory. A dynamic route with no id is a route this scan never covers.
  */
 async function discoverRoutes(): Promise<string[]> {
-  const routes = ['/', '/repos', '/preflight'];
+  // The export endpoint returns the whole database; it must never carry a token.
+  const routes = ['/', '/repos', '/preflight', '/api/export'];
 
   const repos = await (await fetch(`http://127.0.0.1:${PORT}/repos`)).text();
   const repoHref = /href="(\/repos\/[^"]+\/[^"]+)"/.exec(repos)?.[1];
