@@ -1,10 +1,12 @@
 /**
- * Is the web server answering? (`HEALTHCHECK` in the Dockerfile.)
+ * Is Withe working? (`HEALTHCHECK` in the Dockerfile.)
  *
- * Any HTTP response counts, including 401. The question this asks is whether
- * the process is serving, and a server that refuses a request without
- * credentials is serving. Task 3.6 replaces this with `/api/health`, which
- * will also say whether the worker is still syncing.
+ * `/api/health` answers 200 only when a source has synced within three
+ * intervals, so this catches the half-dead container a plain HTTP check calls
+ * healthy: the web process serving yesterday's data with no worker behind it.
+ *
+ * It is the one route that answers without credentials, so a healthcheck never
+ * needs the operator's password.
  */
 import { request } from 'node:http';
 
@@ -14,11 +16,13 @@ const config = loadConfig();
 const host = config.webBind === '0.0.0.0' ? '127.0.0.1' : config.webBind;
 
 const probe = request(
-  { host, port: config.webPort, path: '/', method: 'HEAD', timeout: 4000 },
+  { host, port: config.webPort, path: '/api/health', timeout: 4000 },
   (response) => {
-    // 5xx means the server is up and broken, which the restart policy should
-    // hear about; anything else means it is answering.
-    process.exit(response.statusCode && response.statusCode >= 500 ? 1 : 0);
+    // 503 is a stale or unstarted sync; anything else that answers is fine.
+    // The body is read so the connection closes cleanly rather than being
+    // destroyed mid-response every minute.
+    response.resume();
+    process.exit(response.statusCode === 200 ? 0 : 1);
   },
 );
 

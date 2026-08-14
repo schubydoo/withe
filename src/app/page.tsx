@@ -313,6 +313,10 @@ export default function Home() {
         {repos.length} repositories · {updates.length + locks.length} pending updates ·{' '}
         <a className="underline" href="/repos">
           all repositories
+        </a>{' '}
+        ·{' '}
+        <a className="underline" href="/health">
+          health
         </a>
       </p>
 

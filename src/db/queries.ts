@@ -405,3 +405,103 @@ export function forges(db: Db): Map<string, ForgeInfo> {
   `);
   return new Map(rows.map((r) => [r.id, { platform: r.platform, webBaseUrl: r.webBaseUrl }]));
 }
+
+export interface SourceHealth {
+  sourceAdapterId: string;
+  kind: string;
+  /** The last cycle that actually collected something. */
+  lastSuccessAt: Date | null;
+  lastAttemptAt: Date | null;
+  lastOutcome: string | null;
+  /** Seconds, because the timestamps are stored in seconds. */
+  lastDurationSeconds: number | null;
+  lastError: string | null;
+  attemptsInWindow: number;
+  failuresInWindow: number;
+}
+
+/**
+ * What each source has been doing, for `/health` and `/api/health`.
+ *
+ * `since` bounds the two counts. A failure count over all time says nothing
+ * about whether a source is healthy now — a server that broke in June and has
+ * worked ever since would read as broken forever.
+ */
+export function sourceHealth(db: Db, since: Date): SourceHealth[] {
+  const cutoff = Math.floor(since.getTime() / 1000);
+  const rows = db.all<{
+    sourceAdapterId: string;
+    kind: string;
+    lastSuccessAt: number | null;
+    lastAttemptAt: number | null;
+    lastOutcome: string | null;
+    lastStartedAt: number | null;
+    lastFinishedAt: number | null;
+    lastError: string | null;
+    attemptsInWindow: number;
+    failuresInWindow: number;
+  }>(sql`
+    select s.id as sourceAdapterId,
+           s.kind as kind,
+           (select max(ss.finished_at) from sync_status ss
+             where ss.source_adapter_id = s.id and ss.outcome in ('ok', 'partial')) as lastSuccessAt,
+           (select max(ss.started_at) from sync_status ss
+             where ss.source_adapter_id = s.id) as lastAttemptAt,
+           (select ss.outcome from sync_status ss
+             where ss.source_adapter_id = s.id order by ss.id desc limit 1) as lastOutcome,
+           (select ss.started_at from sync_status ss
+             where ss.source_adapter_id = s.id order by ss.id desc limit 1) as lastStartedAt,
+           (select ss.finished_at from sync_status ss
+             where ss.source_adapter_id = s.id order by ss.id desc limit 1) as lastFinishedAt,
+           (select ss.error from sync_status ss
+             where ss.source_adapter_id = s.id and ss.error is not null
+             order by ss.id desc limit 1) as lastError,
+           (select count(*) from sync_status ss
+             where ss.source_adapter_id = s.id and ss.started_at >= ${cutoff}) as attemptsInWindow,
+           (select count(*) from sync_status ss
+             where ss.source_adapter_id = s.id and ss.started_at >= ${cutoff}
+               and ss.outcome = 'failed') as failuresInWindow
+      from source s
+     order by s.id
+  `);
+
+  return rows.map((row) => ({
+    sourceAdapterId: row.sourceAdapterId,
+    kind: row.kind,
+    lastSuccessAt: row.lastSuccessAt === null ? null : new Date(row.lastSuccessAt * 1000),
+    lastAttemptAt: row.lastAttemptAt === null ? null : new Date(row.lastAttemptAt * 1000),
+    lastOutcome: row.lastOutcome,
+    lastDurationSeconds:
+      row.lastStartedAt === null || row.lastFinishedAt === null
+        ? null
+        : row.lastFinishedAt - row.lastStartedAt,
+    lastError: row.lastError,
+    attemptsInWindow: row.attemptsInWindow,
+    failuresInWindow: row.failuresInWindow,
+  }));
+}
+
+export interface MigrationState {
+  applied: number;
+  /**
+   * When the newest applied migration was **written**, not when it ran.
+   * Drizzle stores the journal's `when`, so this identifies the schema rather
+   * than the install.
+   */
+  newestAt: Date | null;
+}
+
+/**
+ * Which migrations this database has. A bug report that states this saves the
+ * first two questions of answering it.
+ */
+export function migrationState(db: Db): MigrationState {
+  const [row] = db.all<{ applied: number; latestAt: number | null }>(sql`
+    select count(*) as applied, max(created_at) as latestAt from __drizzle_migrations
+  `);
+  return {
+    applied: row?.applied ?? 0,
+    // Drizzle records this one in milliseconds, unlike every other timestamp here.
+    newestAt: row?.latestAt ? new Date(row.latestAt) : null,
+  };
+}
