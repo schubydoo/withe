@@ -4,11 +4,12 @@ name: Security
 # individually in the checks list, and feed a single aggregator. Adapted from
 # schubydoo/claustodian for a TS/Node repo that also ships a container image.
 #
-# Simplified for a fresh repo: every job uses GITHUB_TOKEN, not a GitHub App
-# token. The App token in the sibling repos only raises the REST rate limit and
-# grants Scorecard's admin:read; add it later if the pool gets tight.
-#
-# Built locally 2026-08-14, not yet pushed.
+# The gitleaks and zizmor jobs mint a short-lived `withe-ci` App token so their
+# GitHub API calls draw on the App's >=5,000/hr budget instead of the 1,000/hr
+# github-actions[bot] pool; same-repo runs only (fork PRs can't read the App
+# secrets), soft-fail to GITHUB_TOKEN. CodeQL, Trivy, and the SARIF uploads keep
+# GITHUB_TOKEN — github/codeql-action/upload-sarif rejects App installation
+# tokens.
 
 on:
   push:
@@ -59,10 +60,24 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # withe-ci App token (>=5,000 REST req/hr) so the action's API calls don't
+      # exhaust the 1,000/hr github-actions[bot] pool. Same-repo only; fork PRs
+      # skip the mint (soft-fail) and fall back to GITHUB_TOKEN below.
+      - name: Mint withe-ci App token
+        id: app-token
+        if: >-
+          ${{ github.event_name != 'pull_request'
+          || github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WITHE_CI_APP_ID }}
+          private-key: ${{ secrets.WITHE_CI_APP_PRIVATE_KEY }}
+          permission-contents: read
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
 
   zizmor:
     name: workflow audit
@@ -77,6 +92,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # withe-ci App token so zizmor's advisory API lookups don't 403 against the
+      # 1,000/hr github-actions[bot] pool. Same-repo only; fork PRs fall back.
+      - name: Mint withe-ci App token
+        id: app-token
+        if: >-
+          ${{ github.event_name != 'pull_request'
+          || github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WITHE_CI_APP_ID }}
+          private-key: ${{ secrets.WITHE_CI_APP_PRIVATE_KEY }}
+          permission-contents: read
       - name: Set up uv
         uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install zizmor
@@ -84,7 +112,7 @@ jobs:
       - name: Run zizmor
         run: zizmor --format sarif . > results.sarif
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:

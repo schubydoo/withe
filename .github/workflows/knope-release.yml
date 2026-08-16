@@ -2,13 +2,12 @@ name: Knope Release
 
 # knope's "publish" half. When the `chore: prepare release X.Y.Z` PR merges,
 # knope creates the GitHub Release + tag from the CHANGELOG notes. Because the
-# tag is pushed with the PAT (not GITHUB_TOKEN), it triggers release.yml — the
-# multi-arch image build. This workflow builds nothing itself.
+# tag is pushed as the `withe-ci` App (not GITHUB_TOKEN), it triggers release.yml
+# — the multi-arch image build. This workflow builds nothing itself.
 #
 # GATED OFF behind `KNOPE_ENABLED`. Triggered on the release PR merging (head
-# branch `release`), tagging the squash commit that landed on main.
-#
-# Built locally 2026-08-14, not yet pushed.
+# branch `release`), tagging the squash commit that landed on main. Needs the
+# `withe-ci` App (WITHE_CI_APP_ID / WITHE_CI_APP_PRIVATE_KEY secrets).
 
 on:
   pull_request:
@@ -37,18 +36,32 @@ jobs:
     permissions:
       contents: read
     steps:
-      # Tag the squash commit that landed on main, not the orphaned PR head.
+      - name: Mint withe-ci App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WITHE_CI_APP_ID }}
+          private-key: ${{ secrets.WITHE_CI_APP_PRIVATE_KEY }}
+          permission-contents: write
+      - name: Verify App token was minted
+        if: ${{ steps.app-token.outputs.token == '' }}
+        run: |
+          echo "::error::withe-ci App token mint produced an empty token; check the WITHE_CI_APP_ID / WITHE_CI_APP_PRIVATE_KEY secrets and the App installation."
+          exit 1
+      # Tag the squash commit that landed on main (merge_commit_sha), not the
+      # orphaned PR head. Full history + tags for knope's version comparison.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
-          token: ${{ secrets.WITHE_RELEASE_TOKEN }}
-          persist-credentials: true
+          persist-credentials: false
       - name: Install knope
         uses: knope-dev/action@19617851f9f13ab2f27a05989c55efb18aca3675 # v2.1.2
         with:
           version: 0.23.0
+      # knope creates the GitHub Release + tag as the App token, which triggers
+      # release.yml (the image build). No-op if the version already has a release.
       - name: Create the tag + GitHub Release
         run: knope release --verbose
         env:
-          GITHUB_TOKEN: ${{ secrets.WITHE_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

@@ -46,9 +46,22 @@ jobs:
       - name: Regenerate the client
         run: npm run build:client
 
+      # withe-ci App token so the PR is opened by the App, not github-actions[bot]
+      # — a GITHUB_TOKEN-opened PR does NOT trigger CI. Soft-fail to GITHUB_TOKEN
+      # (the PR still opens; it just won't kick CI) if the App secrets are absent.
+      - name: Mint withe-ci App token
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WITHE_CI_APP_ID }}
+          private-key: ${{ secrets.WITHE_CI_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
       - name: Open a pull request if anything changed
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
         with:
+          token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           branch: ce-client-update
           commit-message: "chore: regenerate the CE client from the upstream spec"
           title: "chore: regenerate the CE client from the upstream spec"

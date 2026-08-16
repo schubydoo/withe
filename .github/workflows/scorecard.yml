@@ -5,12 +5,12 @@ name: Scorecard
 # and publishes to the public OSSF report. Default branch only; the action
 # hard-fails on a tag ref, so there is no release trigger.
 #
-# Uses GITHUB_TOKEN. The Branch-Protection check wants admin:read, which
-# GITHUB_TOKEN lacks, so that one check scores lower until a short-lived App
-# token is added — everything else scores normally. publish_results needs a
-# PUBLIC repo.
-#
-# Built locally 2026-08-14, not yet pushed.
+# The Branch-Protection check needs administration:read, which GITHUB_TOKEN
+# lacks. A short-lived `withe-ci` App token supplies it (and lifts the API
+# budget to >=5,000/hr). Soft-fail: if the App secrets are absent the mint yields
+# an empty token and Scorecard falls back to GITHUB_TOKEN (Branch-Protection
+# stays inconclusive) rather than failing the run. Requires the App to be granted
+# `administration: read`. publish_results needs a PUBLIC repo.
 
 on:
   branch_protection_rule:
@@ -40,12 +40,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      # withe-ci App token as Scorecard's repo_token: the Branch-Protection check
+      # needs administration:read (GITHUB_TOKEN can't read branch rules). Soft-fail
+      # to GITHUB_TOKEN so a missing App secret leaves that one check inconclusive
+      # rather than failing the whole run.
+      - name: Mint withe-ci App token
+        id: app-token
+        continue-on-error: true
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WITHE_CI_APP_ID }}
+          private-key: ${{ secrets.WITHE_CI_APP_PRIVATE_KEY }}
+          permission-administration: read
+          permission-contents: read
       - name: Run Scorecard
         uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
         with:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
+          repo_token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:

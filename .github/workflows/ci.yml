@@ -56,8 +56,21 @@ jobs:
       - name: Lint (adapter boundary rules)
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Test (with coverage)
+        run: npm run test:coverage
+
+      # Report coverage to Codecov (reads codecov.yml). Uploads even if the
+      # coverage floor step above failed, so a drop surfaces alongside the
+      # breakage. Public repo -> tokenless upload; fail_ci_if_error stays false so
+      # a flaky Codecov upload never blocks a merge — the node --test floor is the
+      # real gate. Add a CODECOV_TOKEN secret later if tokenless uploads get rate
+      # limited.
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
 
       - name: Build
         run: npm run build

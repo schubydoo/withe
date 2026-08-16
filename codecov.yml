@@ -1,0 +1,157 @@
+# Codecov config. Coverage is REPORTED here for visibility (PR comment + trend
+# graphs + per-component breakdown). The REAL gate is the CI floor in
+# .github/workflows/ci.yml (the build job runs `npm run test:coverage`, which
+# fails under 90% lines / 80% branches / 85% functions via node --test's
+# --test-coverage-* thresholds). The `project` status below mirrors that floor
+# and stays informational (a nudge, never a block); `patch` is a real pass/fail
+# traffic light on new-code coverage, but is NOT a required check unless
+# `codecov/patch` is added to the branch ruleset.
+#
+# Baseline at first wiring (2026-08-16): ~94% lines / 87% branches / 90%
+# functions across the tested modules. node --test reports only files a test
+# LOADS, so untested entrypoints (the Next.js pages, the supervisor/worker/
+# tls-proxy mains, src/proxy.ts) are absent rather than shown as 0% — their
+# components populate as tests reach them.
+#
+# Validate before deploying changes:
+#   curl -X POST --data-binary @codecov.yml https://api.codecov.io/validate
+
+codecov:
+  # ci.yml uploads coverage even when the floor step FAILS (the `!cancelled()`
+  # guard), on purpose: a coverage drop should surface exactly when a change
+  # breaks the floor. So don't gate the Codecov status on CI passing.
+  require_ci_to_pass: false
+  notify:
+    after_n_builds: 1 # single Ubuntu coverage cell
+    wait_for_ci: false
+
+coverage:
+  precision: 2
+  round: down # a strict floor rounds down, matching the CI --test-coverage-lines gate
+  range: "85...95" # red->green band around the ~94% baseline
+  status:
+    project:
+      default:
+        target: 90% # mirror the ci.yml line floor
+        threshold: 1% # tolerate sub-1% drift before flagging
+        informational: true # nudge, never block — ci.yml is the source of truth
+    patch:
+      default:
+        target: 80% # new code must clear this
+        threshold: 0% # no slack — new code meets the target or the status goes red
+        informational: false # a real pass/fail traffic light (still a non-required check)
+        if_not_found: success # docs-only PRs upload no diff → don't block them
+
+# Generated types, tests, the e2e harness, and non-product tooling don't count
+# toward coverage.
+ignore:
+  - "src/adapters/ce/generated/**"
+  - "**/*.test.ts"
+  - "test/**"
+  - "scripts/perf-dataset.ts"
+  - "scripts/perf-measure.ts"
+  - "scripts/bundle-server.ts"
+
+github_checks:
+  annotations: false
+
+comment:
+  layout: "condensed_header, diff, components, files"
+  behavior: default # update the existing comment in place
+  require_changes: true # only comment when coverage actually moves
+  hide_project_coverage: false
+
+# Per-area coverage breakdown in the dashboard + PR comment. No `statuses` are
+# defined, so components add VISIBILITY only — no extra per-component PR checks.
+#
+# IMPORTANT: paths use explicit files / single-`*` segments, NOT `src/<area>/**`
+# globs — the sibling repos found Codecov's component matcher silently ignores a
+# `**` glob (the component renders empty even at 100%), whereas explicit paths
+# match. Bracketed Next.js route dirs (`[id]`, `[org]`) use a single `*` segment
+# because a literal `[` is a glob character class. When an area gains a module,
+# add its file here — a `**` glob will look fine and quietly track nothing.
+component_management:
+  individual_components:
+    - component_id: adapters_ce
+      name: CE adapter
+      paths:
+        - src/adapters/ce/adapter.ts
+        - src/adapters/ce/client.ts
+        - src/adapters/ce/limit.ts
+        - src/adapters/ce/map.ts
+        - src/adapters/ce/preflight.ts
+    - component_id: adapters_registry
+      name: adapter registry
+      paths:
+        - src/adapters/register.ts
+        - src/adapters/registry.ts
+        - src/adapters/types.ts
+    - component_id: config
+      name: config
+      paths:
+        - src/config/exposure.ts
+        - src/config/load.ts
+    - component_id: core
+      name: core (auth, health, redact, log parsing)
+      paths:
+        - src/core/basic-auth.ts
+        - src/core/health.ts
+        - src/core/links.ts
+        - src/core/log-lines.ts
+        - src/core/model.ts
+        - src/core/redact.ts
+        - src/core/renovate-log.ts
+    - component_id: db
+      name: database (drizzle + queries)
+      paths:
+        - src/db/client.ts
+        - src/db/persist.ts
+        - src/db/queries.ts
+        - src/db/schema.ts
+    - component_id: supervisor
+      name: supervisor
+      paths:
+        - src/supervisor/children.ts
+        - src/supervisor/main.ts
+        - src/supervisor/migrate.ts
+    - component_id: worker
+      name: sync worker
+      paths:
+        - src/worker/main.ts
+        - src/worker/sync.ts
+    - component_id: tls_proxy
+      name: TLS proxy
+      paths:
+        - src/tls-proxy/main.ts
+        - src/tls-proxy/proxy.ts
+    - component_id: web_app
+      name: web app (Next.js pages + API routes)
+      paths:
+        - src/app/api/export/route.ts
+        - src/app/api/health/route.ts
+        - src/app/api/runs/*/log/route.ts
+        - src/app/health/page.tsx
+        - src/app/layout.tsx
+        - src/app/page.tsx
+        - src/app/preflight/actions.ts
+        - src/app/preflight/copy-button.tsx
+        - src/app/preflight/page.tsx
+        - src/app/repos/*/*/page.tsx
+        - src/app/repos/page.tsx
+        - src/app/runs/*/log-viewer.tsx
+        - src/app/runs/*/page.tsx
+    - component_id: runtime_wiring
+      name: runtime wiring (proxy, healthcheck, instrumentation)
+      paths:
+        - src/proxy.ts
+        - src/healthcheck.ts
+        - src/instrumentation.ts
+    - component_id: ci_checks
+      name: CI check scripts
+      paths:
+        - scripts/check-boundaries.ts
+        - scripts/check-contention.ts
+        - scripts/check-image.ts
+        - scripts/check-licenses.ts
+        - scripts/check-network.ts
+        - scripts/check-payloads.ts
