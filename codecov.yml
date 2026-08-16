@@ -42,15 +42,15 @@ coverage:
         informational: false # a real pass/fail traffic light (still a non-required check)
         if_not_found: success # docs-only PRs upload no diff → don't block them
 
-# Generated types, tests, the e2e harness, and non-product tooling don't count
-# toward coverage.
+# Generated types, tests, the e2e harness, and the scripts/ build + CI tooling
+# don't count toward coverage — scripts/ is tooling, not the product (its tests
+# still run in CI; they just don't gate the app's coverage). This mirrors the
+# --test-coverage-exclude in the test:coverage floor.
 ignore:
   - "src/adapters/ce/generated/**"
   - "**/*.test.ts"
   - "test/**"
-  - "scripts/perf-dataset.ts"
-  - "scripts/perf-measure.ts"
-  - "scripts/bundle-server.ts"
+  - "scripts/**"
 
 github_checks:
   annotations: false
@@ -146,12 +146,3 @@ component_management:
         - src/proxy.ts
         - src/healthcheck.ts
         - src/instrumentation.ts
-    - component_id: ci_checks
-      name: CI check scripts
-      paths:
-        - scripts/check-boundaries.ts
-        - scripts/check-contention.ts
-        - scripts/check-image.ts
-        - scripts/check-licenses.ts
-        - scripts/check-network.ts
-        - scripts/check-payloads.ts
