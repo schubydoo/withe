@@ -38,10 +38,12 @@ export function GET(): Response {
   try {
     sources = sourceHealth(db, new Date(0));
   } catch (cause) {
-    return answer(
-      { status: 'unreadable', detail: cause instanceof Error ? cause.message : String(cause) },
-      503,
-    );
+    // This is the one credential-less route, so the caller is unauthenticated:
+    // the database error's internals must not go in the response body
+    // (js/stack-trace-exposure). Log it for the operator instead — the redaction
+    // filter installed over `console` sanitizes any credential in the message.
+    console.error('health: reading source health failed', cause);
+    return answer({ status: 'unreadable', detail: 'the database could not be read' }, 503);
   } finally {
     sqlite.close();
   }
