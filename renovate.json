@@ -1,14 +1,4 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>schubydoo/renovate-config"],
-  "customManagers": [
-    {
-      "description": "Track the openapi-typescript version pinned in the build:client script. It is invoked with npx at build time, so it is not a dependency in package.json and neither the npm nor github-actions manager sees it. A withe.json preset in schubydoo/renovate-config can hold this once one exists.",
-      "customType": "regex",
-      "managerFilePatterns": ["/^package\\.json$/"],
-      "matchStrings": ["openapi-typescript@(?<currentValue>\\d+\\.\\d+\\.\\d+)"],
-      "depNameTemplate": "openapi-typescript",
-      "datasourceTemplate": "npm"
-    }
-  ]
+  "extends": ["local>schubydoo/renovate-config:withe"]
 }
