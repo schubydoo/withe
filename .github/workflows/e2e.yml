@@ -40,8 +40,11 @@ jobs:
         run: npm run build
 
       # agent-browser drives the functional flows and the a11y audit (Chromium).
+      # It bundles Chromium, so lockfile-pinning it would pull the browser into
+      # every CI job that runs `npm ci`; accept the version-pinned ad-hoc global
+      # install here rather than bloat the whole matrix (zizmor: adhoc-packages).
       - name: Install agent-browser and its browser
-        run: |
+        run: | # zizmor: ignore[adhoc-packages]
           npm i -g agent-browser@0.33.2
           agent-browser install --with-deps
 
