@@ -1,117 +1,109 @@
-<p align="center"><img src="assets/logo/logo-full.svg" alt="Withe" width="300"></p>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/logo-full-dark.svg">
+    <img src="assets/logo/logo-full.svg" alt="Withe" width="300">
+  </picture>
+</p>
 
-# Withe
+<p align="center">
+  <a href="https://github.com/schubydoo/withe/actions/workflows/ci.yml"><img src="https://github.com/schubydoo/withe/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
+  <img src="https://img.shields.io/badge/status-pre--release-orange" alt="Pre-release">
+</p>
 
-**Withe is a dashboard for the Renovate you already run — no operator, no migration, nothing to replace.**
+# One page for the Renovate you already run
 
-You point it at a Renovate installation that is already working. It reads. It changes nothing.
+Withe reads a Renovate installation that already works and puts the whole fleet on one page — what is
+failing, what is waiting to merge, and what is queued next. It observes. It changes nothing.
 
----
+[**Install →**](#install) · [What it shows](#what-it-shows) · [What it is not](#what-it-is-not)
 
-## Status: not released yet
-
-Withe is built and runs — the container image below builds from this repository and the dashboard
-works. What does not exist yet is a **tagged release and a published image**: `ghcr.io/schubydoo/withe`
-is not pushed until v1.0. Until then, build the image yourself (see [Installation](#installation)).
-This section is removed when the first release exists.
-
----
+> **Not released yet.** The image builds from this repository and the dashboard works, but there is
+> no tagged release and `ghcr.io/schubydoo/withe` is not published until v1.0. Build it yourself
+> for now — see [Install](#install).
 
 ## The problem
 
-Renovate tells you what it did, one repository at a time. A run that failed three days ago on one
-of forty repositories looks exactly like a run that did not happen. Finding it means reading
-container logs or opening forty Dependency Dashboard issues.
+Renovate works across every repository, but you see what it did one repository at a time — in each
+repo's Dependency Dashboard issue and in the logs. Across a fleet that does not scale: a run that
+failed three days ago on one of forty repos looks exactly like one that never happened, and the
+updates waiting to merge or still queued are spread across forty dashboards. Withe puts all of it on
+one page.
 
-Withe answers, on one page: **which repositories are broken, and since when.**
+## How it works
 
-## What Withe shows
+```mermaid
+graph LR
+    R[Renovate CE<br/>HTTP API] -->|sync every 5 min| W[Withe sync worker]
+    W -->|run + update metadata| DB[(SQLite<br/>one file)]
+    DB --> UI[Dashboard]
+    R -.->|logs streamed on demand,<br/>never stored| UI
+    UI --> You
+```
 
-- **Preflight.** Renovate CE ships its API switched off. Withe names the exact environment
-  variables that are missing and gives you a block to paste into your Compose file.
-- **Repository inventory.** Every organization and repository Renovate knows about, with its
-  enablement state, install status, and last run.
-- **Failure triage.** The landing page. Repositories with failing runs, ordered by how long they
-  have been failing, with the error attached.
-- **Run history.** Every run for a repository — when it was queued, when it started, how long it
-  took, and how it ended.
-- **Log viewer.** The full JSON-Lines log for any run, read through Renovate's documented log
-  endpoint. No log scraping off a container.
+Withe polls Renovate CE's documented API, stores only metadata in one SQLite file, and streams log
+content from Renovate on demand. No log scraping, no writes back to Renovate.
 
-Later releases read plain Renovate runs from JSON log files, so a Renovate on cron or a GitHub
-Action works too, and then read open pull requests from your forge.
+## What it shows
 
-![The failure-triage landing page: a banner when data is stale, then the repositories that are
-failing ordered by how long they have been failing, each with its error, above the pending
-updates.](docs/images/failure-triage.png)
+The landing page is your whole fleet on one screen, ordered the way you act on it:
 
-## What this is not
+| Section | What you get |
+|---|---|
+| **Failing repositories** | Repos with failing runs, oldest failure first, the error attached |
+| **Held for your review** | Updates Renovate is holding for you to act on |
+| **Open pull requests** | Updates with a live PR, linked to your forge — what is waiting to merge |
+| **Queued, no PR yet** | Updates coming that Renovate has not opened a pull request for |
 
-Every item here is a permanent exclusion, not a feature that is coming.
+Plus, per source and per repository:
 
-- **Withe does not run Renovate.** It observes one that is already running. With no Renovate, it
-  shows nothing.
-- **Withe does not schedule runs.**
-- **Withe does not edit or write back Renovate configuration.** Your `renovate.json` is never
-  touched, and you never add anything to it to make Withe work.
-- **Withe does not merge pull requests.**
-- **Withe does not trigger runs.** Renovate CE offers an endpoint for it. Withe does not call it.
-- **Withe has no user accounts, roles, or permissions.** It is one operator looking at their own
-  installation. Optional HTTP basic authentication is the whole of it.
+| View | What you get |
+|---|---|
+| **Preflight** | The exact env vars Renovate CE is missing, as a block to paste into your Compose file |
+| **Repository inventory** | Every org and repo Renovate knows, with enablement, install status, and last run |
+| **Run history** | Every run for a repo — queued, started, duration, outcome |
+| **Log viewer** | The full JSON-Lines log for any run, via Renovate's documented log endpoint |
 
-Withe is read-only against Renovate by design. Everything above is what "non-invasive" means in
-practice.
+![The landing page: a staleness banner, then the repositories that are failing ordered by how long
+they have been failing with each error attached, above the updates held for your
+review.](docs/images/failure-triage.png)
 
-## Requirements
+## What it is not
 
-- A working Renovate installation.
-- For the first release, that means Renovate Community Edition with its HTTP API enabled. The
-  preflight page tells you which variables to set.
-- Docker, or anywhere else you can run a container.
-- A current browser. The interface is tested on Chromium, Firefox, and WebKit. WebKit is
-  Playwright's Safari engine — a stand-in for Safari, not Safari itself, so Safari is expected to
-  work but is not part of the automated suite.
+Every row is a permanent exclusion, not a roadmap item. Withe is read-only against Renovate by design.
 
-## Installation
+| Withe does NOT | Meaning |
+|---|---|
+| Run Renovate | It observes one already running; with no Renovate it shows nothing |
+| Schedule or trigger runs | Renovate CE offers an endpoint for it; Withe does not call it |
+| Write Renovate config | Your `renovate.json` is never touched, and you add nothing to it |
+| Merge pull requests | It shows which are open; merging stays on your forge |
+| Manage users or roles | One operator viewing their own install; optional HTTP basic auth is the whole of it |
 
-One container, one volume, one published port. Build the image from this repository until a release
-is published:
+## Install
+
+One container, one volume, one published port. Build the image until a release is published:
 
 ```bash
 docker build -t withe .
 ```
 
-### Run it
+Run it (loopback only — see [Exposure](#exposure)):
 
 ```bash
-docker run -d \
-  --name withe \
-  --restart unless-stopped \
-  --read-only \
-  --tmpfs /tmp \
-  --tmpfs /app/.next/cache \
-  -p 127.0.0.1:8080:3000 \
-  -v withe-data:/data \
+docker run -d --name withe --restart unless-stopped \
+  --read-only --tmpfs /tmp --tmpfs /app/.next/cache \
+  -p 127.0.0.1:8080:3000 -v withe-data:/data \
   -e WITHE_CE_URL=https://renovate.example.lan \
   -e WITHE_CE_TOKEN=your-server-secret \
   withe
 ```
 
-Open `http://127.0.0.1:8080`. If Renovate's API is not switched on, the preflight page names the
-exact variables to set on the Renovate side.
+Open `http://127.0.0.1:8080`. If Renovate's API is off, the preflight page names the exact variables
+to set on the Renovate side.
 
-Every flag earns its place:
-
-- **`-p 127.0.0.1:8080:3000`** publishes to host loopback only. This is the real containment
-  control: it is what keeps Withe off your network. Publishing as `-p 8080:3000` instead puts the
-  dashboard on your LAN with no password — do not, unless you have read [Exposure](#exposure) below.
-- **`--restart unless-stopped`** is required, not optional. The supervisor exits after three
-  consecutive start failures so the restart policy takes over; with no policy the container simply
-  stops, and you are left with the dead container the design exists to avoid.
-- **`--read-only` with the two `tmpfs` mounts** runs the root filesystem read-only. Withe writes
-  only to `/data` (the volume), to `/tmp`, and to the Next.js cache; the mounts cover the last two.
-
-### Or with Docker Compose
+<details>
+<summary><b>Docker Compose</b></summary>
 
 ```yaml
 services:
@@ -132,119 +124,106 @@ services:
       WITHE_CE_TOKEN: ${WITHE_CE_TOKEN}   # from a .env file or your secret store
       # WITHE_AUTH_USER and WITHE_AUTH_PASS to require a login — see Exposure
       # WITHE_RETENTION_DAYS to cap run history — see Storage and retention
-
 volumes:
   withe-data:
 ```
 
-The full set of variables — sync interval, TLS, a multi-source config file — is listed on the
-preflight page and in the configuration reference.
+</details>
+
+<details>
+<summary><b>Why each flag is required</b></summary>
+
+- **`-p 127.0.0.1:8080:3000`** publishes to host loopback only — the real containment control that keeps Withe off your network. `-p 8080:3000` puts the dashboard on your LAN with no password; do not, unless you have read [Exposure](#exposure).
+- **`--restart unless-stopped`** is required. The supervisor exits after three consecutive start failures so the restart policy takes over; with no policy the container simply stops.
+- **`--read-only` with the two `tmpfs` mounts** runs the root filesystem read-only. Withe writes only to `/data`, `/tmp`, and the Next.js cache; the mounts cover the last two.
+
+</details>
+
+## Requirements
+
+- A working Renovate installation. For the first release, that means Renovate Community Edition with
+  its HTTP API enabled — the preflight page tells you which variables to set.
+- Docker, or anywhere else you can run a container.
+- A current browser (tested on Chromium, Firefox, and WebKit).
 
 ## Exposure
 
-**Withe must not be published to the internet without authentication and TLS in front of it.** It is
-read-only against Renovate, but it shows every repository, run and log your Renovate can see, and by
-default it has no password.
+**Do not publish Withe to the internet without authentication and TLS in front of it.** It is
+read-only against Renovate, but it shows every repository, run, and log your Renovate can see, and by
+default it has no password. When Withe detects it is reachable beyond loopback with no credentials, it
+warns at startup and banners every page.
 
-Two dials, both off by default:
+<details>
+<summary><b>The two dials (both off by default) and what to put in front</b></summary>
 
-- **Basic authentication.** Set `WITHE_AUTH_USER` and `WITHE_AUTH_PASS`, and every page and route
-  requires that credential. It is a floor, not a gate: use it behind something, not as the only
-  control.
-- **TLS.** Set `WITHE_TLS_CERT` and `WITHE_TLS_KEY` to two mounted certificate files, and Withe
-  terminates HTTPS itself. It neither obtains nor renews certificates — that is your reverse proxy
-  or ACME client.
+- **Basic authentication.** Set `WITHE_AUTH_USER` and `WITHE_AUTH_PASS`; every page and route then requires that credential. A floor, not a gate — use it behind something.
+- **TLS.** Set `WITHE_TLS_CERT` and `WITHE_TLS_KEY` to two mounted certificate files and Withe terminates HTTPS itself. It neither obtains nor renews certificates — that is your reverse proxy or ACME client.
 
 Most operators running Renovate CE already run something better than basic auth. Put Withe behind
-it: **[Authelia](https://www.authelia.com/)**, **[Authentik](https://goauthentik.io/)**, or
-**[Tailscale](https://tailscale.com/)** so it is only reachable on your tailnet. When Withe detects
-it is reachable beyond loopback with no credentials set, it prints a warning at startup and shows a
-banner on every page.
+[Authelia](https://www.authelia.com/), [Authentik](https://goauthentik.io/), or
+[Tailscale](https://tailscale.com/) so it is only reachable on your tailnet.
 
-## Usage
+</details>
 
-Once it is running and Renovate's API is on, Withe syncs on its own every five minutes and needs no
-further attention. The landing page is the failure-triage view above: it leads with what is broken.
-`/health` shows the last sync per source and links `/api/health`, which a container healthcheck (or
-your own monitoring) can poll — it answers `200` only while the data is fresh.
+## Storage, retention, and backup
 
-## Storage and retention
+Withe keeps run history in one SQLite file on its volume and never stores log content — a run row
+holds a reference, and the log is streamed from Renovate on demand. A run row costs about 150 bytes:
+roughly 1 MB per 7,000 runs, or about 10 MB a year for a fleet of 8 repos on Renovate's hourly schedule.
 
-Withe keeps run history in one SQLite file on its volume. It never stores log content — a run row
-holds a reference to the log, and the log is streamed from Renovate on demand.
+<details>
+<summary><b>Retention, disk placement, backup, and export</b></summary>
 
-A run row costs about **150 bytes**, so the database grows by roughly **1 MB per 7,000 runs**. One
-run is one Renovate job for one repository. A fleet of 8 repositories on Renovate's hourly schedule
-records about 190 runs a day, or close to **10 MB a year**.
+**Retention.** By default Withe keeps every run. Set `WITHE_RETENTION_DAYS` to a number of days and
+Withe deletes older runs at the end of each sync and returns the freed space to disk. Repositories,
+pending updates, and forge links are never pruned.
 
-By default Withe keeps every run. To cap the history, set `WITHE_RETENTION_DAYS` to a number of
-days. Withe then deletes runs older than that at the end of each sync and returns the freed space to
-the disk. Repositories, pending updates and forge links are never pruned.
+**Put the volume on local disk.** Use a Docker named volume or a local path. **Do not point the
+volume at an NFS or SMB mount** — SQLite's write-ahead-logging needs a memory-mapped `-shm` file that
+network filesystems do not provide, and two processes sharing the database over NFS is the surest way
+to corrupt it. Withe checks this at startup and refuses to run rather than risk the data.
 
-### Put the volume on local disk
-
-Use a Docker named volume or a local disk path. **Do not point the volume at an NFS or SMB mount.**
-SQLite runs in write-ahead-logging mode, which needs a memory-mapped `-shm` file that network
-filesystems do not provide; two processes sharing the database over NFS is the surest way to corrupt
-it. Withe checks this at startup and refuses to run rather than risk the data, naming the cause.
-
-### Backing up
-
-The database is written live by two processes, so **do not `cp` the `.db` file** — a copy taken
-mid-write is a torn, possibly unusable database, and it misses the `-wal` file beside it. Use
-SQLite's own consistent copy instead:
+**Backup.** The database is written live by two processes, so **do not `cp` the `.db` file** — a copy
+taken mid-write is torn and misses the `-wal` file beside it. Use SQLite's own consistent copy:
 
 ```bash
 docker exec withe sh -c 'sqlite3 /data/withe.db ".backup /data/withe-backup.db"'
 ```
 
-Then copy `withe-backup.db` off the volume. It is safe to take while Withe is running. Withe holds
-nothing you cannot re-read from Renovate, so this protects your run history, not irreplaceable data.
+Then copy `withe-backup.db` off the volume. Safe to take while Withe runs.
 
-### Taking your data out
-
-Withe will not trap your history. Two export forms, both behind the same login as the rest of the
-dashboard, and both work even if the sync worker has stopped:
+**Export.** Two forms, both behind the same login, both work even if the sync worker has stopped:
 
 ```bash
-# Every table as one JSON document
 curl -u user:pass http://127.0.0.1:8080/api/export -o withe-export.json
+```
 
-# A consistent SQLite copy (VACUUM INTO — safe to take while Withe is syncing)
+```bash
 curl -u user:pass 'http://127.0.0.1:8080/api/export?format=sqlite' -o withe-export.db
 ```
 
-### Teardown
-
-To remove Withe completely, stop the container and delete its volume:
+**Teardown.** Nothing lives outside the volume:
 
 ```bash
 docker rm -f withe
 docker volume rm withe-data
 ```
 
-Nothing lives outside that volume, so this leaves no residue.
+</details>
 
 ## Relationship to Mend and Renovate
 
 Withe is an independent project. **It is not affiliated with, endorsed by, or supported by Mend.io,
-and it is not part of Renovate.** Renovate and Renovate Community Edition are Mend's; your use of
-them stays subject to Mend's terms, whatever Withe does.
-
-Two rules Withe holds itself to:
-
-- **It uses only Renovate CE's documented public API.** No private endpoint, no undocumented
-  behavior, no scraping around the API.
-- **You run Withe against your own Renovate installation.** It is not built to be operated as a
-  hosted service for other people, and it will not be.
-
+and it is not part of Renovate.** Renovate and Renovate Community Edition are Mend's; your use of them
+stays subject to Mend's terms. Withe uses only Renovate CE's documented public API, and you run it
+against your own installation — it is not built to be operated as a hosted service for other people.
 Report a bug against Withe to this repository, not to Mend.
 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through
-[private advisories](https://github.com/schubydoo/withe/security/advisories/new), not public
-issues — see [SECURITY.md](SECURITY.md).
+[private advisories](https://github.com/schubydoo/withe/security/advisories/new), not public issues —
+see [SECURITY.md](SECURITY.md).
 
 ## License
 
