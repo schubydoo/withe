@@ -55,5 +55,8 @@
     "esbuild": "^0.28.2",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2"
+  },
+  "overrides": {
+    "esbuild": "$esbuild"
   }
 }
