@@ -6,8 +6,6 @@ name: CE client
 # and opens a pull request when anything changed. CI's own "generated client is
 # in step with the spec" check is what fails a PR that drifts locally; this is
 # what surfaces upstream drift instead of a user's bug report.
-#
-# Built locally 2026-08-14 (Task 3.11), not yet pushed.
 
 on:
   schedule:

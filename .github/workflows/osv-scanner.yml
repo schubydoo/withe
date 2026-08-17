@@ -4,8 +4,6 @@ name: OSV-Scanner
 # upload SARIF to code scanning. Complements Renovate: a broader advisory
 # corpus, scanning the resolved lockfile rather than manifest ranges.
 # Report-only (fail-on-vuln: false) so findings surface without blocking merges.
-#
-# Built locally 2026-08-14, not yet pushed.
 
 on:
   pull_request:

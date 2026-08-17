@@ -4,8 +4,6 @@ name: E2E
 # Two suites: the agent-browser flows (`npm run e2e`, the four operator flows
 # plus a WCAG 2.1 AA audit, Chromium) and the Playwright cross-browser smoke
 # (`npm run e2e:browsers`, chromium/firefox/webkit for NFR-17).
-#
-# Built locally 2026-08-14 (Task 3.12), not yet pushed.
 
 on:
   push:
