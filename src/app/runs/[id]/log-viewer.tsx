@@ -217,7 +217,7 @@ function Row({
       onClick={onToggle}
       aria-expanded={expanded}
       style={{ position: 'absolute', top, height: ROW }}
-      className={`flex w-full items-center gap-3 whitespace-pre px-2 text-left hover:bg-neutral-100 ${
+      className={`flex w-full items-center gap-3 whitespace-pre px-2 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
         expanded ? 'bg-neutral-200 dark:bg-neutral-800' : ''
       }`}
     >

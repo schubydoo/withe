@@ -179,7 +179,7 @@ export default async function Preflight() {
         <form action={reprobe}>
           <button
             type="submit"
-            className="rounded border border-neutral-300 dark:border-neutral-700 px-3 py-1 text-sm hover:bg-neutral-100"
+            className="rounded border border-neutral-300 dark:border-neutral-700 px-3 py-1 text-sm hover:bg-neutral-100 dark:hover:bg-neutral-800"
           >
             Probe again
           </button>
