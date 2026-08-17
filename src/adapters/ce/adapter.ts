@@ -22,8 +22,6 @@ import { mapRepo, mapRun } from './map.ts';
 import { classify, composeBlock, type Family } from './preflight.ts';
 import type { components } from './generated/ce.d.ts';
 
-type OrgMeta = components['schemas']['OrgMeta'];
-type RepositoryInfo = components['schemas']['RepositoryInfo'];
 type JobReport = components['schemas']['JobReport'];
 
 /** Section 4.3. Also a contractual limit, not only courtesy. */
@@ -74,7 +72,7 @@ export class CeAdapter implements SourceAdapter {
           : `Could not list organizations (${response.response.status}).`,
       };
     }
-    return { names: (response.data as OrgMeta[]).map((org) => org.name), problem: null, warning: null };
+    return { names: response.data.map((org) => org.name), problem: null, warning: null };
   }
 
   async preflight(): Promise<PreflightResult> {
@@ -117,7 +115,7 @@ export class CeAdapter implements SourceAdapter {
         params: { path: { org: name } },
       });
       if (!add('inventory', repos.response.status)) continue;
-      const list = (repos.data ?? []) as RepositoryInfo[];
+      const list = repos.data ?? [];
       repoCount += list.length;
       firstRepo ??= list[0]?.fullName ?? null;
     }
@@ -180,7 +178,7 @@ export class CeAdapter implements SourceAdapter {
         );
         continue;
       }
-      const infos = result.data as RepositoryInfo[];
+      const infos = result.data;
       if (infos.length === 0 && this.configuredOrgs) {
         // TEMPORARY(org-discovery). The server answers 200 with an empty list
         // for an organization it has never heard of, so a typo in WITHE_CE_ORGS
@@ -265,7 +263,7 @@ export class CeAdapter implements SourceAdapter {
     const stream = await this.fetchLog(run);
     // Streamed and parsed as it arrives. A log is hundreds of kilobytes and is
     // never stored — PRD Section 6.3.1.
-    const extract = await extractFromLog(stream as unknown as AsyncIterable<Uint8Array>, {
+    const extract = await extractFromLog(stream, {
       repoId: repo.id,
       sourceAdapterId: this.id,
       detectedAt: run.completedAt ?? run.startedAt ?? new Date(),
@@ -274,7 +272,7 @@ export class CeAdapter implements SourceAdapter {
     return extract.updates;
   }
 
-  async fetchLog(run: RenovateRun): Promise<ReadableStream<Uint8Array>> {
+  async fetchLog(run: Pick<RenovateRun, 'repoId' | 'externalJobId'>): Promise<ReadableStream<Uint8Array>> {
     // The log body is this endpoint's response. There is no /logs sub-path;
     // that URL answers 404 with a message about libyears.
     const [, fullName] = run.repoId.split(/:(.*)/s);

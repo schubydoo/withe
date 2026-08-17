@@ -109,9 +109,11 @@ export interface SourceAdapter {
 
   /**
    * The run's log, streamed. Logs are megabytes and are never stored, so this
-   * returns a stream rather than a string. F-06.
+   * returns a stream rather than a string. F-06. The parameter names only the
+   * fields a log fetch reads, so a caller holding a bare run reference does
+   * not have to fabricate a full run.
    */
-  fetchLog(run: RenovateRun): Promise<ReadableStream<Uint8Array>>;
+  fetchLog(run: Pick<RenovateRun, 'repoId' | 'externalJobId'>): Promise<ReadableStream<Uint8Array>>;
 }
 
 /** Everything an adapter needs to be built, before it knows its own kind. */

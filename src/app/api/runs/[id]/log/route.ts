@@ -65,10 +65,10 @@ export async function GET(
 
   // Only the fields fetchLog reads. Building the whole model here would mean
   // inventing values that would then be wrong.
-  const run = {
+  const run: Pick<RenovateRun, 'repoId' | 'externalJobId'> = {
     repoId: `${location.sourceAdapterId}:${location.repoFullName}`,
     externalJobId: location.externalJobId,
-  } as RenovateRun;
+  };
 
   try {
     const body = await createAdapter(source).fetchLog(run);

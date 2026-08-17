@@ -33,7 +33,7 @@ const TONE: Record<LevelName, string> = {
   raw: 'text-purple-700',
 };
 
-const ALL_LEVELS = [...new Set(Object.values(LEVELS))] as LevelName[];
+const ALL_LEVELS: LevelName[] = [...new Set(Object.values(LEVELS))];
 
 export function LogViewer({ runId }: { runId: number }) {
   const [text, setText] = useState('');
