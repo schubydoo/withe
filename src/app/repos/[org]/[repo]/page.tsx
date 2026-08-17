@@ -48,11 +48,11 @@ function since(when: Date): string {
 }
 
 const TONE: Record<string, string> = {
-  success: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-  queued: 'bg-neutral-100 text-neutral-700',
-  running: 'bg-blue-100 text-blue-800',
-  unknown: 'bg-neutral-100 text-neutral-600',
+  success: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300',
+  failed: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300',
+  queued: 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300',
+  running: 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-300',
+  unknown: 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300',
 };
 
 export default async function RunHistory({ params, searchParams }: Props) {
@@ -70,7 +70,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
   return (
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">{fullName}</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {total} {total === 1 ? 'run' : 'runs'}
         {known.removedAt && ' · removed at the source, history kept'}
         {failures > 0 && ` · ${failures} failed on this page`}
@@ -80,7 +80,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
       <table className="mt-6 w-full text-sm">
         <caption className="sr-only">Runs for {fullName}, newest first.</caption>
         <thead>
-          <tr className="border-b border-neutral-300 text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b border-neutral-300 dark:border-neutral-700 text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             <th scope="col" className="py-2 pr-4 font-medium">When</th>
             <th scope="col" className="py-2 pr-4 font-medium">Status</th>
             <th scope="col" className="py-2 pr-4 font-medium">Duration</th>
@@ -91,8 +91,8 @@ export default async function RunHistory({ params, searchParams }: Props) {
           {runs.map((run) => {
             const { label, value } = timing(run);
             return (
-              <tr key={run.externalJobId} className="border-b border-neutral-200 align-top">
-                <td className="py-1.5 pr-4 whitespace-nowrap text-neutral-600">
+              <tr key={run.externalJobId} className="border-b border-neutral-200 dark:border-neutral-800 align-top">
+                <td className="py-1.5 pr-4 whitespace-nowrap text-neutral-600 dark:text-neutral-300">
                   {runWhen(run) ?? '—'}
                 </td>
                 <td className="py-1.5 pr-4">
@@ -100,12 +100,12 @@ export default async function RunHistory({ params, searchParams }: Props) {
                     {run.status}
                   </span>
                   {run.error && (
-                    <p className="mt-1 max-w-md text-xs text-red-800">
+                    <p className="mt-1 max-w-md text-xs text-red-800 dark:text-red-300">
                       <span className="font-medium">Run error:</span> {run.error}
                     </p>
                   )}
                   {run.artifactErrors.length > 0 && (
-                    <div className="mt-1 max-w-md text-xs text-amber-900">
+                    <div className="mt-1 max-w-md text-xs text-amber-900 dark:text-amber-200">
                       {/* Kept apart from the run error on purpose: a run can
                           succeed and still fail to update a lock file. */}
                       <span className="font-medium">
@@ -119,11 +119,11 @@ export default async function RunHistory({ params, searchParams }: Props) {
                     </div>
                   )}
                 </td>
-                <td className="py-1.5 pr-4 whitespace-nowrap text-neutral-600">
-                  {label && <span className="text-neutral-500">{label} </span>}
+                <td className="py-1.5 pr-4 whitespace-nowrap text-neutral-600 dark:text-neutral-300">
+                  {label && <span className="text-neutral-500 dark:text-neutral-400">{label} </span>}
                   {value}
                 </td>
-                <td className="py-1.5 text-neutral-600">
+                <td className="py-1.5 text-neutral-600 dark:text-neutral-300">
                   {run.reason ?? '—'}
                   {run.logAvailable ? (
                     <a className="ml-3 text-xs underline" href={`/runs/${run.id}`}>
@@ -132,7 +132,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
                   ) : (
                     // F-06: a purged log is marked, not offered. Letting the
                     // operator click into a 404 is the failure this prevents.
-                    <span className="ml-3 text-xs text-neutral-500" title="No longer retained by the Renovate server">
+                    <span className="ml-3 text-xs text-neutral-500 dark:text-neutral-400" title="No longer retained by the Renovate server">
                       log gone
                     </span>
                   )}
@@ -144,12 +144,12 @@ export default async function RunHistory({ params, searchParams }: Props) {
       </table>
 
       {runs.length === 0 && total === 0 && (
-        <p className="mt-4 text-sm text-neutral-500">No runs recorded yet.</p>
+        <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">No runs recorded yet.</p>
       )}
       {runs.length === 0 && total > 0 && (
         // Saying "no runs recorded" here would be false: there are runs, this
         // page is simply past the end of them.
-        <p className="mt-4 text-sm text-neutral-500">
+        <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
           Page {page + 1} is past the end of {total} runs.{' '}
           <a className="underline" href="?page=0">
             Back to the newest
@@ -165,7 +165,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
               Newer
             </a>
           )}
-          <span className="text-neutral-500">
+          <span className="text-neutral-500 dark:text-neutral-400">
             Page {page + 1} of {pages}
           </span>
           {page + 1 < pages && (

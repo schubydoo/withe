@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+/* Dark mode follows a `dark` class on <html>, which the script in the layout
+   sets before first paint. That lets a page default to the operating system's
+   preference while still honouring a saved manual choice (B-3). */
+@custom-variant dark (&:where(.dark, .dark *));

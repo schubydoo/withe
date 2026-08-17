@@ -29,12 +29,12 @@ function read(): { rows: InventoryRow[]; forge: Map<string, ForgeInfo> } {
  * label. The colour is a second signal, never the only one.
  */
 function state(row: InventoryRow): { label: string; tone: string } {
-  if (row.removedAt) return { label: 'removed', tone: 'bg-neutral-200 text-neutral-700' };
-  if (!row.enabled) return { label: 'disabled', tone: 'bg-neutral-100 text-neutral-600' };
-  if (row.lastRunStatus === 'failed') return { label: 'failing', tone: 'bg-red-100 text-red-800' };
-  if (row.stalled) return { label: 'stalled', tone: 'bg-amber-100 text-amber-900' };
-  if (row.lastRunStatus === null) return { label: 'no runs yet', tone: 'bg-neutral-100 text-neutral-600' };
-  return { label: 'active', tone: 'bg-green-100 text-green-800' };
+  if (row.removedAt) return { label: 'removed', tone: 'bg-neutral-200 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300' };
+  if (!row.enabled) return { label: 'disabled', tone: 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300' };
+  if (row.lastRunStatus === 'failed') return { label: 'failing', tone: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300' };
+  if (row.stalled) return { label: 'stalled', tone: 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-200' };
+  if (row.lastRunStatus === null) return { label: 'no runs yet', tone: 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300' };
+  return { label: 'active', tone: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' };
 }
 
 export default function Repos() {
@@ -45,7 +45,7 @@ export default function Repos() {
   return (
     <main className="mx-auto max-w-5xl p-8">
       <h1 className="text-2xl font-semibold">Repositories</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {rows.length} across {orgs.length} {orgs.length === 1 ? 'organization' : 'organizations'}
         {removed > 0 && `, ${removed} removed at the source and kept for their history`}
       </p>
@@ -55,7 +55,7 @@ export default function Repos() {
           Every repository Withe knows about, with its state and most recent run.
         </caption>
         <thead>
-          <tr className="border-b border-neutral-300 text-left text-xs uppercase tracking-wide text-neutral-500">
+          <tr className="border-b border-neutral-300 dark:border-neutral-700 text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             <th scope="col" className="py-2 pr-4 font-medium">Repository</th>
             <th scope="col" className="py-2 pr-4 font-medium">State</th>
             <th scope="col" className="py-2 pr-4 font-medium">Install</th>
@@ -68,13 +68,13 @@ export default function Repos() {
           {rows.map((row) => {
             const { label, tone } = state(row);
             return (
-              <tr key={`${row.sourceAdapterId}/${row.fullName}`} className="border-b border-neutral-200">
+              <tr key={`${row.sourceAdapterId}/${row.fullName}`} className="border-b border-neutral-200 dark:border-neutral-800">
                 <td className="py-1.5 pr-4">
                   <a
-                    className="underline decoration-neutral-300 hover:decoration-neutral-600"
+                    className="underline decoration-neutral-300 dark:decoration-neutral-700 hover:decoration-neutral-600"
                     href={`/repos/${encodeURIComponent(row.org)}/${encodeURIComponent(row.name)}`}
                   >
-                    <span className="text-neutral-500">{row.org}/</span>
+                    <span className="text-neutral-500 dark:text-neutral-400">{row.org}/</span>
                     <span className="font-medium">{row.name}</span>
                   </a>
                   {(() => {
@@ -87,7 +87,7 @@ export default function Repos() {
                     );
                     return href ? (
                       <a
-                        className="ml-2 text-xs text-neutral-500 underline"
+                        className="ml-2 text-xs text-neutral-500 dark:text-neutral-400 underline"
                         href={href}
                         target="_blank"
                         rel="noreferrer noopener"
@@ -101,15 +101,15 @@ export default function Repos() {
                 <td className="py-1.5 pr-4">
                   <span className={`rounded px-1.5 py-0.5 text-xs ${tone}`}>{label}</span>
                 </td>
-                <td className="py-1.5 pr-4 text-neutral-600">{row.installStatus ?? '—'}</td>
-                <td className="py-1.5 pr-4 text-neutral-600">{row.queueName ?? '—'}</td>
-                <td className="py-1.5 pr-4 text-neutral-600">
+                <td className="py-1.5 pr-4 text-neutral-600 dark:text-neutral-300">{row.installStatus ?? '—'}</td>
+                <td className="py-1.5 pr-4 text-neutral-600 dark:text-neutral-300">{row.queueName ?? '—'}</td>
+                <td className="py-1.5 pr-4 text-neutral-600 dark:text-neutral-300">
                   {ago(row.lastRunAt, '—')}
                   {row.lastRunStatus && row.lastRunStatus !== 'success' && (
-                    <span className="ml-1 text-neutral-500">({row.lastRunStatus})</span>
+                    <span className="ml-1 text-neutral-500 dark:text-neutral-400">({row.lastRunStatus})</span>
                   )}
                 </td>
-                <td className="py-1.5 tabular-nums text-neutral-600">
+                <td className="py-1.5 tabular-nums text-neutral-600 dark:text-neutral-300">
                   {row.pendingCount === 0 ? '—' : row.pendingCount}
                 </td>
               </tr>
@@ -119,7 +119,7 @@ export default function Repos() {
       </table>
 
       {rows.length === 0 && (
-        <p className="mt-4 text-sm text-neutral-500">
+        <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
           No repositories yet. The <a className="underline" href="/preflight">setup check</a> says
           why.
         </p>

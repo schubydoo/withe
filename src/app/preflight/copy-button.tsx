@@ -9,7 +9,7 @@ export function CopyButton({ text }: { text: string }) {
   return (
     <button
       type="button"
-      className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-100"
+      className="rounded border border-neutral-300 dark:border-neutral-700 px-2 py-1 text-xs hover:bg-neutral-100"
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);

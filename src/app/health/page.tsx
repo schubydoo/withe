@@ -61,10 +61,10 @@ export default function HealthPage() {
   // NFR-18: the state is a word first. The colour repeats it, never replaces it.
   const tone =
     health.status === 'ok'
-      ? 'bg-green-100 text-green-800'
+      ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300'
       : health.status === 'stale'
-        ? 'bg-red-100 text-red-800'
-        : 'bg-amber-100 text-amber-900';
+        ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
+        : 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-200';
   const summary =
     health.status === 'ok'
       ? `Syncing. Freshest data is ${health.ageSeconds === null ? 'unknown' : `${Math.round(health.ageSeconds / 60)} minutes`} old.`
@@ -77,20 +77,20 @@ export default function HealthPage() {
       <h1 className="text-2xl font-semibold">Health</h1>
       <p className="mt-3">
         <span className={`rounded px-1.5 py-0.5 text-sm ${tone}`}>{health.status}</span>
-        <span className="ml-2 text-sm text-neutral-600">{summary}</span>
+        <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-300">{summary}</span>
       </p>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">Sources</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Sources</h2>
         {sources.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-500">
+          <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
             No source has been recorded yet. <a className="underline" href="/preflight">Check the setup</a>.
           </p>
         ) : (
           <table className="mt-2 w-full text-sm">
             <caption className="sr-only">Every configured source, with its most recent sync.</caption>
             <thead>
-              <tr className="border-b border-neutral-300 text-left text-xs uppercase tracking-wide text-neutral-500">
+              <tr className="border-b border-neutral-300 dark:border-neutral-700 text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 <th scope="col" className="py-2 pr-4 font-medium">Source</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Last success</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Last attempt</th>
@@ -101,22 +101,22 @@ export default function HealthPage() {
             </thead>
             <tbody>
               {sources.map((source) => (
-                <tr key={source.sourceAdapterId} className="border-b border-neutral-200">
+                <tr key={source.sourceAdapterId} className="border-b border-neutral-200 dark:border-neutral-800">
                   <td className="py-1.5 pr-4 font-medium">{source.sourceAdapterId}</td>
-                  <td className="py-1.5 pr-4 text-neutral-600">{ago(source.lastSuccessAt, 'never')}</td>
-                  <td className="py-1.5 pr-4 text-neutral-600">
+                  <td className="py-1.5 pr-4 text-neutral-600 dark:text-neutral-300">{ago(source.lastSuccessAt, 'never')}</td>
+                  <td className="py-1.5 pr-4 text-neutral-600 dark:text-neutral-300">
                     {ago(source.lastAttemptAt, 'never')}
                     {source.lastOutcome && (
-                      <span className="ml-1 text-neutral-500">({source.lastOutcome})</span>
+                      <span className="ml-1 text-neutral-500 dark:text-neutral-400">({source.lastOutcome})</span>
                     )}
                   </td>
-                  <td className="py-1.5 pr-4 tabular-nums text-neutral-600">
+                  <td className="py-1.5 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
                     {duration(source.lastDurationSeconds)}
                   </td>
-                  <td className="py-1.5 pr-4 tabular-nums text-neutral-600">
+                  <td className="py-1.5 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
                     {source.failuresInWindow} of {source.attemptsInWindow}
                   </td>
-                  <td className="py-1.5 text-neutral-500">{source.lastError ?? '—'}</td>
+                  <td className="py-1.5 text-neutral-500 dark:text-neutral-400">{source.lastError ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -125,11 +125,11 @@ export default function HealthPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">This instance</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">This instance</h2>
         <dl className="mt-2 grid grid-cols-[12rem_1fr] gap-y-1 text-sm">
-          <dt className="text-neutral-500">Database size</dt>
+          <dt className="text-neutral-500 dark:text-neutral-400">Database size</dt>
           <dd className="tabular-nums">{size(databaseBytes)}</dd>
-          <dt className="text-neutral-500">Migrations applied</dt>
+          <dt className="text-neutral-500 dark:text-neutral-400">Migrations applied</dt>
           {/*
             Quote this in a bug report and the first two questions are
             answered. The date is when the newest migration was written, not
@@ -139,17 +139,17 @@ export default function HealthPage() {
           <dd className="tabular-nums">
             {migrations.applied}
             {migrations.newestAt && (
-              <span className="ml-1 text-neutral-500">
+              <span className="ml-1 text-neutral-500 dark:text-neutral-400">
                 newest dated {migrations.newestAt.toISOString().slice(0, 10)}
               </span>
             )}
           </dd>
-          <dt className="text-neutral-500">Sync interval</dt>
+          <dt className="text-neutral-500 dark:text-neutral-400">Sync interval</dt>
           <dd className="tabular-nums">{intervalSeconds}s</dd>
-          <dt className="text-neutral-500">Machine-readable</dt>
+          <dt className="text-neutral-500 dark:text-neutral-400">Machine-readable</dt>
           <dd>
             <a className="underline" href="/api/health">/api/health</a>
-            <span className="ml-1 text-neutral-500">— the container healthcheck reads this</span>
+            <span className="ml-1 text-neutral-500 dark:text-neutral-400">— the container healthcheck reads this</span>
           </dd>
         </dl>
       </section>

@@ -68,12 +68,12 @@ function Unconfigured() {
   return (
     <section className="mt-6">
       <h2 className="text-lg font-medium">No Renovate server is configured yet</h2>
-      <p className="mt-2 text-sm text-neutral-600">
+      <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
         Withe reads a Renovate deployment you already run. Point it at one with two settings, or
         write a config file at <code>WITHE_CONFIG</code> to describe several.
       </p>
       <Block title="Add this to your Compose file" text={sample} />
-      <p className="mt-3 text-sm text-neutral-600">
+      <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-300">
         <code>WITHE_CE_TOKEN</code> is the value of <code>MEND_RNV_API_SERVER_SECRET</code> on the
         Renovate server. Withe only ever reads.
       </p>
@@ -83,9 +83,9 @@ function Unconfigured() {
 
 function Block({ title, text }: { title: string; text: string }) {
   return (
-    <div className="mt-3 rounded border border-neutral-200">
-      <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-3 py-1.5">
-        <span className="text-xs font-medium text-neutral-600">{title}</span>
+    <div className="mt-3 rounded border border-neutral-200 dark:border-neutral-800">
+      <div className="flex items-center justify-between border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-3 py-1.5">
+        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{title}</span>
         <CopyButton text={text} />
       </div>
       <pre className="overflow-x-auto p-3 text-xs leading-relaxed">{text}</pre>
@@ -98,12 +98,12 @@ function Source({ probed }: { probed: Probed }) {
 
   if (error) {
     return (
-      <section className="mt-6 rounded border border-neutral-200 p-4">
+      <section className="mt-6 rounded border border-neutral-200 dark:border-neutral-800 p-4">
         <h2 className="font-medium">
-          {id} <span className="font-normal text-neutral-500">— unreachable</span>
+          {id} <span className="font-normal text-neutral-500 dark:text-neutral-400">— unreachable</span>
         </h2>
-        <p className="mt-2 text-sm text-neutral-700">{error}</p>
-        <p className="mt-2 text-sm text-neutral-500">
+        <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">{error}</p>
+        <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
           Check <code>WITHE_CE_URL</code>. From inside a container, <code>localhost</code> is the
           container itself, not the host.
         </p>
@@ -116,23 +116,23 @@ function Source({ probed }: { probed: Probed }) {
   const notes = result.problems.filter((p) => !p.fatal);
 
   return (
-    <section className="mt-6 rounded border border-neutral-200 p-4">
+    <section className="mt-6 rounded border border-neutral-200 dark:border-neutral-800 p-4">
       <h2 className="font-medium">
         {id}{' '}
-        <span className={result.ok ? 'font-normal text-green-700' : 'font-normal text-red-700'}>
+        <span className={result.ok ? 'font-normal text-green-700 dark:text-green-300' : 'font-normal text-red-700 dark:text-red-300'}>
           {result.ok ? '— reachable' : '— not usable yet'}
         </span>
       </h2>
 
       {result.reachableButEmpty && (
-        <p className="mt-2 text-sm text-neutral-700">
+        <p className="mt-2 text-sm text-neutral-700 dark:text-neutral-300">
           The server answered, and reports no repositories onboarded. Withe has nothing to show until
           Renovate is installed on at least one repository. This is not a Withe problem.
         </p>
       )}
 
       {result.ok && result.problems.length === 0 && (
-        <p className="mt-2 text-sm text-neutral-600">Everything Withe reads is enabled.</p>
+        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">Everything Withe reads is enabled.</p>
       )}
 
       {[...fatal, ...notes].map((problem) => (
@@ -141,8 +141,8 @@ function Source({ probed }: { probed: Probed }) {
             <span
               className={
                 problem.fatal
-                  ? 'mr-2 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-800'
-                  : 'mr-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-700'
+                  ? 'mr-2 rounded bg-red-100 dark:bg-red-900 px-1.5 py-0.5 text-xs text-red-800 dark:text-red-300'
+                  : 'mr-2 rounded bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 text-xs text-neutral-700 dark:text-neutral-300'
               }
             >
               {problem.fatal ? 'blocking' : 'optional'}
@@ -150,7 +150,7 @@ function Source({ probed }: { probed: Probed }) {
             {problem.detail}
           </p>
           {problem.remedies.length > 0 && (
-            <ul className="mt-1 ml-4 list-disc text-sm text-neutral-600">
+            <ul className="mt-1 ml-4 list-disc text-sm text-neutral-600 dark:text-neutral-300">
               {problem.remedies.map((remedy) => (
                 <li key={remedy.variable}>
                   <code>
@@ -179,19 +179,19 @@ export default async function Preflight() {
         <form action={reprobe}>
           <button
             type="submit"
-            className="rounded border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-100"
+            className="rounded border border-neutral-300 dark:border-neutral-700 px-3 py-1 text-sm hover:bg-neutral-100"
           >
             Probe again
           </button>
         </form>
       </div>
-      <p className="mt-1 text-sm text-neutral-500">
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         Probed just now. Change a setting on the Renovate server, then probe again — nothing here
         needs Withe restarted.
       </p>
 
       {configError && (
-        <p className="mt-6 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p className="mt-6 rounded border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-800 dark:text-red-300">
           Configuration is invalid: {configError}
         </p>
       )}
@@ -199,7 +199,7 @@ export default async function Preflight() {
       {warnings.map((warning) => (
         <p
           key={warning}
-          className="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          className="mt-4 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-900 dark:text-amber-200"
         >
           {warning}
         </p>
