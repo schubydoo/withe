@@ -13,7 +13,7 @@ import { loadConfig } from '../../../../../config/load.ts';
 import { authGuard } from '../../../../../core/basic-auth.ts';
 import type { RenovateRun } from '../../../../../core/model.ts';
 import { openDatabase } from '../../../../../db/client.ts';
-import { runLocation } from '../../../../../db/queries.ts';
+import { runLocation, type RunLocation } from '../../../../../db/queries.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,16 +70,25 @@ export async function GET(
     externalJobId: location.externalJobId,
   };
 
+  // `?download` turns the same stream into a saved file. Without it, a browser
+  // opening the URL shows the log; with it, the browser saves it under a name
+  // that identifies the repository, run, and date without being opened. Either
+  // way the body is the whole log as the source served it, not the viewer's
+  // filtered subset (B-1).
+  const download = new URL(request.url).searchParams.has('download');
+
   try {
     const body = await createAdapter(source).fetchLog(run);
-    return new Response(body, {
-      headers: {
-        // NDJSON rendered as text: a browser opening this directly should show
-        // it rather than download it.
-        'content-type': 'text/plain; charset=utf-8',
-        'cache-control': 'no-store',
-      },
-    });
+    const headers: Record<string, string> = {
+      // NDJSON rendered as text: a browser opening this directly should show
+      // it rather than download it.
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+    };
+    if (download) {
+      headers['content-disposition'] = `attachment; filename="${logFilename(location)}"`;
+    }
+    return new Response(body, { headers });
   } catch (cause) {
     // Deliberately vague about the upstream. The message an adapter throws can
     // carry a URL, and this response goes to a browser.
@@ -95,4 +104,20 @@ export async function GET(
 
 function describe(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+/**
+ * A download name that reads on its own: `renovate-<org>-<repo>-<date>-job-<id>.log`.
+ * Every part is reduced to filename-safe characters, so the header value needs
+ * no escaping and the saved file opens on any platform. A run with no instant is
+ * named "undated" rather than left without a date.
+ */
+export function logFilename(
+  location: Pick<RunLocation, 'repoFullName' | 'externalJobId' | 'at'>,
+): string {
+  const safe = (value: string) => value.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  const repo = safe(location.repoFullName);
+  const job = safe(location.externalJobId);
+  const date = location.at ? location.at.toISOString().slice(0, 10) : 'undated';
+  return `renovate-${repo}-${date}-job-${job}.log`;
 }

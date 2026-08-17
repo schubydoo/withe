@@ -48,6 +48,15 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
         </p>
       )}
 
+      {run.logAvailable && (
+        <p className="mt-4 text-sm">
+          <a className="underline" href={`/api/runs/${id}/log?download=1`}>
+            Download log
+          </a>{' '}
+          <span className="text-neutral-500">— the whole log, as Renovate served it.</span>
+        </p>
+      )}
+
       {run.logAvailable ? (
         <LogViewer runId={id} />
       ) : (
