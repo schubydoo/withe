@@ -1,7 +1,7 @@
 # Contributing to Withe
 
-Thanks for looking. Withe is early — there is no release yet, and the code below does not all
-exist. Where a command is not implemented, this file says so.
+Thanks for looking. Withe is a small project maintained in spare time; bug reports and pull
+requests are welcome.
 
 ## Before you write code
 
