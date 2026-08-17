@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { loadConfig } from '../../../../config/load.ts';
 import { openDatabase } from '../../../../db/client.ts';
 import { repoInventory, runsForRepo, RUNS_PER_PAGE, type RunRow } from '../../../../db/queries.ts';
+import { runWhen } from '../../../format.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -92,7 +93,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
             return (
               <tr key={run.externalJobId} className="border-b border-neutral-200 align-top">
                 <td className="py-1.5 pr-4 whitespace-nowrap text-neutral-600">
-                  {(run.completedAt ?? run.startedAt ?? run.queuedAt)?.toISOString().replace('T', ' ').slice(0, 19) ?? '—'}
+                  {runWhen(run) ?? '—'}
                 </td>
                 <td className="py-1.5 pr-4">
                   <span className={`rounded px-1.5 py-0.5 text-xs ${TONE[run.status] ?? TONE.unknown}`}>

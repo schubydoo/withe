@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { loadConfig } from '../../../config/load.ts';
 import { openDatabase } from '../../../db/client.ts';
 import { runLocation, runsForRepo } from '../../../db/queries.ts';
+import { runWhen } from '../../format.ts';
 import { LogViewer } from './log-viewer.tsx';
 
 export const dynamic = 'force-dynamic';
@@ -37,8 +38,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
       <h1 className="text-2xl font-semibold">{location.repoFullName}</h1>
       <p className="mt-1 text-sm text-neutral-500">
         {run.status} · {run.reason ?? 'no reason recorded'} ·{' '}
-        {(run.completedAt ?? run.startedAt ?? run.queuedAt)?.toISOString().replace('T', ' ').slice(0, 19) ??
-          'not started'}
+        {runWhen(run) ?? 'not started'}
         {run.runnerVersion && ` · Renovate ${run.runnerVersion}`}
       </p>
 

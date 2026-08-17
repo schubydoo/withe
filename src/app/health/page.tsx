@@ -10,6 +10,7 @@ import { loadConfig } from '../../config/load.ts';
 import { assess } from '../../core/health.ts';
 import { openDatabase } from '../../db/client.ts';
 import { migrationState, sourceHealth, type MigrationState, type SourceHealth } from '../../db/queries.ts';
+import { ago } from '../format.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,16 +40,6 @@ function read(): Report {
   } finally {
     sqlite.close();
   }
-}
-
-function ago(when: Date | null): string {
-  if (!when) return 'never';
-  const minutes = Math.round((Date.now() - when.getTime()) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
 }
 
 function size(bytes: number | null): string {
@@ -112,9 +103,9 @@ export default function HealthPage() {
               {sources.map((source) => (
                 <tr key={source.sourceAdapterId} className="border-b border-neutral-200">
                   <td className="py-1.5 pr-4 font-medium">{source.sourceAdapterId}</td>
-                  <td className="py-1.5 pr-4 text-neutral-600">{ago(source.lastSuccessAt)}</td>
+                  <td className="py-1.5 pr-4 text-neutral-600">{ago(source.lastSuccessAt, 'never')}</td>
                   <td className="py-1.5 pr-4 text-neutral-600">
-                    {ago(source.lastAttemptAt)}
+                    {ago(source.lastAttemptAt, 'never')}
                     {source.lastOutcome && (
                       <span className="ml-1 text-neutral-500">({source.lastOutcome})</span>
                     )}
