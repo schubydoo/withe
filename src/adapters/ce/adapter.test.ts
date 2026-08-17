@@ -257,6 +257,18 @@ test('a metrics probe that cannot connect is reported, not thrown', async (t) =>
   assert.match(note.detail, /answered 0/);
 });
 
+test('a repository list with no body counts as zero repositories, not a crash', async () => {
+  routes = healthy();
+  // 200 with a JSON `null` body: the generated client hands back data: null,
+  // which is the arm the `?? []` guard exists for.
+  routes['/api/v1/orgs/acme/-/repos'] = { status: 200, body: null };
+
+  const result = await adapter().preflight();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.reachableButEmpty, true, 'an empty answer is the empty-fleet case, not an error');
+});
+
 test('a repository list failure becomes a warning, not a crash', async () => {
   routes = healthy();
   routes['/api/v1/orgs/acme/-/repos'] = { status: 500, body: { reason: 'boom' } };
