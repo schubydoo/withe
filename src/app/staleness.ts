@@ -84,8 +84,24 @@ export function bannerText(status: string, ageSeconds: number | null, syncInterv
   if (status === 'unreadable') {
     return 'Withe cannot read its database, so what is shown may be out of date.';
   }
+  // Two ways the data is stale, and the banner must catch both:
+  //
+  //  - The reported age is itself past the threshold. This is the single-source
+  //    case, and the case where the server still said `ok` on its last poll but
+  //    the age has crossed since — the client re-derives it so the banner
+  //    appears the moment it can, not only when the next poll lands.
+  //  - The server said `stale` while the reported age is recent. `assess`
+  //    reports the *freshest* source's age but turns stale when *any* source is
+  //    past the threshold, so on a multi-source install the age can read fresh
+  //    while /api/health returns 503. Honoring only the age here would leave the
+  //    banner silent while the healthcheck is red — the split-brain this module
+  //    exists to remove, moved rather than closed. Name it without the freshest
+  //    age, which would understate a source that is hours behind.
   if (isStale(ageSeconds, syncIntervalSeconds) && ageSeconds !== null) {
     return `Data is ${describeAge(ageSeconds)}. It may not reflect what Renovate has done since.`;
+  }
+  if (status === 'stale') {
+    return 'Some sources are out of date. What is shown may not reflect what Renovate has done since.';
   }
   return null;
 }

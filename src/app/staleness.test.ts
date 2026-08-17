@@ -71,3 +71,22 @@ test('bannerText re-derives staleness from age even when the server still says o
 test('bannerText shows nothing for an unknown status with no stale age', () => {
   assert.equal(bannerText('something-new', 10, 300), null);
 });
+
+test('bannerText honors a server stale verdict even when the freshest age reads fresh', () => {
+  // Multi-source: one source synced 10s ago, another is hours behind. `assess`
+  // reports the freshest age (10s) but sets status 'stale'. The banner must not
+  // stay silent while /api/health returns 503.
+  assert.equal(
+    bannerText('stale', 10, 300),
+    'Some sources are out of date. What is shown may not reflect what Renovate has done since.',
+  );
+});
+
+test('bannerText prefers the aging phrase when the reported age is itself stale', () => {
+  // Single-source stale: the age is past the threshold, so name the age rather
+  // than the generic multi-source line.
+  assert.equal(
+    bannerText('stale', 1000, 300),
+    'Data is 17 minutes old. It may not reflect what Renovate has done since.',
+  );
+});
