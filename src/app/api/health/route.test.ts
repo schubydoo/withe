@@ -89,3 +89,20 @@ test('the answer carries no repository data', async () => {
   // way to read the inventory.
   assert.doesNotMatch(text, /repo|full_name|org|token/i);
 });
+
+test('a database that cannot be read answers 503 without leaking the error', async () => {
+  counter += 1;
+  const path = join(dir, `h${counter}.db`);
+  // A database file with no schema: opening succeeds, the health query fails.
+  const { sqlite } = openDatabase(path, { role: 'owner' });
+  sqlite.close();
+
+  const response = await call(path);
+  assert.equal(response.status, 503);
+
+  const body = (await response.json()) as { status: string; detail: string };
+  assert.equal(body.status, 'unreadable');
+  // The caller is unauthenticated, so the driver's message stays out of the
+  // body (js/stack-trace-exposure).
+  assert.doesNotMatch(body.detail, /no such table|sqlite/i);
+});

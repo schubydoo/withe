@@ -11,7 +11,7 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist, recomputeStalled } from './persist.ts';
-import { lastSync, lockFileRefreshes, pendingUpdates, repoHealth, repoInventory, runsForRepo, triage } from './queries.ts';
+import { forges, lastSync, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runsForRepo, triage } from './queries.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -435,5 +435,29 @@ test('a removed repository does not appear in triage', () => {
 
   const names = triage(db).map((r) => r.fullName);
   assert.deepEqual(names, ['acme/widget'], 'an uninstalled repository is not something to fix');
+  sqlite.close();
+});
+
+test('forges reports what each source said about its forge, or nulls', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', {
+    ...FLEET,
+    meta: { platform: 'github', webBaseUrl: 'https://github.example' },
+  }, new Date());
+  persist(db, 'quiet', 'ce', { repos: [], runs: [], updates: [], warnings: [] }, new Date());
+
+  const map = forges(db);
+  assert.deepEqual(map.get(SOURCE), { platform: 'github', webBaseUrl: 'https://github.example' });
+  assert.deepEqual(map.get('quiet'), { platform: null, webBaseUrl: null });
+  sqlite.close();
+});
+
+test('migrationState counts the applied migrations and dates the newest', () => {
+  const { sqlite, db } = fresh();
+  const state = migrationState(db);
+
+  assert.ok(state.applied >= 1, 'fresh() applies the committed migrations');
+  assert.ok(state.newestAt instanceof Date);
+  assert.ok(!Number.isNaN(state.newestAt.getTime()), 'drizzle stores this one in milliseconds');
   sqlite.close();
 });

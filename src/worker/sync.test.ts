@@ -362,3 +362,39 @@ test('with retention set, runs past the window are pruned at the end of the cycl
   assert.deepEqual(jobs, ['fresh'], 'only the run inside the window remains');
   sqlite.close();
 });
+
+/** Let the cycle a mocked tick started run to completion. */
+async function drain(): Promise<void> {
+  for (let i = 0; i < 4; i += 1) await new Promise((resolve) => setImmediate(resolve));
+}
+
+test('start runs a cycle each interval, once, and stop ends them', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const { sqlite, db } = fresh();
+  let cycles = 0;
+  const loop = new SyncLoop(
+    db,
+    [stub('tick', async () => {
+      cycles += 1;
+      return EMPTY;
+    })],
+    { intervalMs: 1000, stalledAfterMs: 7 * DAY, log: () => {} },
+  );
+
+  loop.start();
+  loop.start(); // a second start must not add a second timer
+
+  t.mock.timers.tick(1000);
+  await drain();
+  assert.equal(cycles, 1, 'one interval, one cycle — a doubled timer would show 2');
+
+  t.mock.timers.tick(1000);
+  await drain();
+  assert.equal(cycles, 2);
+
+  loop.stop();
+  t.mock.timers.tick(5000);
+  await drain();
+  assert.equal(cycles, 2, 'a stopped loop must not keep syncing');
+  sqlite.close();
+});
