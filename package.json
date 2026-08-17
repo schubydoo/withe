@@ -31,7 +31,7 @@
     "supervisor": "node src/supervisor/main.ts",
     "sync": "node src/worker/main.ts --once",
     "test": "node --test \"src/**/*.test.ts\" \"scripts/**/*.test.ts\" \"test/**/*.test.ts\"",
-    "test:coverage": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-exclude=\"scripts/**\" --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=85 --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test-reporter=spec --test-reporter-destination=stdout \"src/**/*.test.ts\" \"scripts/**/*.test.ts\" \"test/**/*.test.ts\"",
+    "test:coverage": "mkdir -p coverage && node --test --experimental-test-coverage --test-coverage-exclude=\"scripts/**\" --test-coverage-lines=90 --test-coverage-branches=80 --test-coverage-functions=85 --test-reporter=lcov --test-reporter-destination=coverage/lcov.info --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-report.junit.xml \"src/**/*.test.ts\" \"scripts/**/*.test.ts\" \"test/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "worker": "node src/worker/main.ts"
   },

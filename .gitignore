@@ -37,6 +37,7 @@ tsconfig.tsbuildinfo
 /coverage/
 /test-results/
 /playwright-report/
+test-report.junit.xml
 
 # OS
 .DS_Store
