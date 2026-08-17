@@ -8,6 +8,7 @@
 <p align="center">
   <a href="https://github.com/schubydoo/withe/actions/workflows/ci.yml"><img src="https://github.com/schubydoo/withe/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://codecov.io/github/schubydoo/withe"><img src="https://codecov.io/github/schubydoo/withe/branch/main/graph/badge.svg?token=ACbVs6XzIG" alt="codecov"></a>
+  <a href="https://www.bestpractices.dev/projects/14108"><img src="https://www.bestpractices.dev/projects/14108/badge" alt="OpenSSF Best Practices"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
 </p>
 
