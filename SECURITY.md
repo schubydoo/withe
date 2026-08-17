@@ -2,8 +2,7 @@
 
 ## Supported versions
 
-Withe has not had a release yet. Once it does, only the latest release receives
-security fixes.
+Only the latest release receives security fixes.
 
 | Version | Supported |
 | --- | --- |
