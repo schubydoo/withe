@@ -130,6 +130,7 @@ component_management:
         - src/app/api/export/route.ts
         - src/app/api/health/route.ts
         - src/app/api/runs/*/log/route.ts
+        - src/app/format.ts
         - src/app/health/page.tsx
         - src/app/layout.tsx
         - src/app/page.tsx
