@@ -74,8 +74,10 @@ export async function GET(
   // opening the URL shows the log; with it, the browser saves it under a name
   // that identifies the repository, run, and date without being opened. Either
   // way the body is the whole log as the source served it, not the viewer's
-  // filtered subset (B-1).
-  const download = new URL(request.url).searchParams.has('download');
+  // filtered subset (B-1). A bare `?download` is on; an explicit `=0`/`=false`
+  // is off, so the flag reads the way a hand-edited URL would expect.
+  const downloadParam = new URL(request.url).searchParams.get('download');
+  const download = downloadParam !== null && downloadParam !== '0' && downloadParam !== 'false';
 
   try {
     const body = await createAdapter(source).fetchLog(run);

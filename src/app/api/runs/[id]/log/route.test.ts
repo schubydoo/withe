@@ -169,6 +169,13 @@ test('a reachable log streams through with the right headers', async () => {
       'attachment; filename="renovate-acme-widget-2026-08-06-job-job-1.log"',
     );
     assert.equal(await downloaded.text(), lines);
+
+    // An explicit `?download=0` shows rather than downloads, so a value the
+    // reader would read as "off" is not treated as "on".
+    const notDownloaded = await GET(new Request('https://withe.example/api/runs/1/log?download=0'), {
+      params: Promise.resolve({ id: '1' }),
+    });
+    assert.equal(notDownloaded.headers.get('content-disposition'), null);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
