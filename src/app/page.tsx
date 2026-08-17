@@ -101,7 +101,15 @@ function Group({
       ) : (
         <table className="mt-2 w-full text-sm">
           <tbody>
-            {rows.map((row) => (
+            {rows.map((row) => {
+              const link = dependencyLink(
+                row.datasource,
+                row.packageName,
+                row.currentVersion,
+                row.targetVersion,
+                compareUrl,
+              );
+              return (
               <tr
                 key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
                 className="border-t border-neutral-200 dark:border-neutral-800"
@@ -119,23 +127,9 @@ function Group({
                 </td>
                 <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
                   <Maybe
-                    href={
-                      dependencyLink(
-                        row.datasource,
-                        row.packageName,
-                        row.currentVersion,
-                        row.targetVersion,
-                        compareUrl,
-                      )?.href ?? null
-                    }
+                    href={link?.href ?? null}
                     title={
-                      dependencyLink(
-                        row.datasource,
-                        row.packageName,
-                        row.currentVersion,
-                        row.targetVersion,
-                        compareUrl,
-                      )?.kind === 'compare'
+                      link?.kind === 'compare'
                         ? 'Compare these two versions upstream'
                         : 'Open the package page'
                     }
@@ -159,7 +153,8 @@ function Group({
                   )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       )}
