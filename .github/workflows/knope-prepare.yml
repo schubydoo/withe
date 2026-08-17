@@ -91,6 +91,16 @@ jobs:
           version: 0.23.0
       - name: Open or refresh the release PR
         if: ${{ steps.changesets.outputs.has == 'true' }}
-        run: knope prepare-release --verbose
+        # KNOPE_OVERRIDE_VERSION forces a specific version. knope never selects a
+        # 1.0 (or later major) graduation from a 0.x line on its own, so set the
+        # repo variable to e.g. `1.0.0` for that one release, then clear it —
+        # later releases fall back to the changeset-derived version.
+        run: |
+          if [ -n "${OVERRIDE:-}" ]; then
+            knope prepare-release --verbose --override-version "${OVERRIDE}"
+          else
+            knope prepare-release --verbose
+          fi
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          OVERRIDE: ${{ vars.KNOPE_OVERRIDE_VERSION }}

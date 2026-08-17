@@ -8,7 +8,6 @@
 <p align="center">
   <a href="https://github.com/schubydoo/withe/actions/workflows/ci.yml"><img src="https://github.com/schubydoo/withe/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT">
-  <img src="https://img.shields.io/badge/status-pre--release-orange" alt="Pre-release">
 </p>
 
 # One page for the Renovate you already run
@@ -17,10 +16,6 @@ Withe reads a Renovate installation that already works and puts the whole fleet 
 failing, what is waiting to merge, and what is queued next. It observes. It changes nothing.
 
 [**Install →**](#install) · [What it shows](#what-it-shows) · [What it is not](#what-it-is-not)
-
-> **Not released yet.** The image builds from this repository and the dashboard works, but there is
-> no tagged release and `ghcr.io/schubydoo/withe` is not published until v1.0. Build it yourself
-> for now — see [Install](#install).
 
 ## The problem
 
@@ -82,11 +77,22 @@ Every row is a permanent exclusion, not a roadmap item. Withe is read-only again
 
 ## Install
 
-One container, one volume, one published port. Build the image until a release is published:
+One container, one volume, one published port. The image is published to GHCR:
+
+```bash
+docker pull ghcr.io/schubydoo/withe:latest
+```
+
+<details>
+<summary><b>Build from source instead</b></summary>
 
 ```bash
 docker build -t withe .
 ```
+
+Then use `withe` wherever the commands below say `ghcr.io/schubydoo/withe:latest`.
+
+</details>
 
 Run it (loopback only — see [Exposure](#exposure)):
 
@@ -96,7 +102,7 @@ docker run -d --name withe --restart unless-stopped \
   -p 127.0.0.1:8080:3000 -v withe-data:/data \
   -e WITHE_CE_URL=https://renovate.example.lan \
   -e WITHE_CE_TOKEN=your-server-secret \
-  withe
+  ghcr.io/schubydoo/withe:latest
 ```
 
 Open `http://127.0.0.1:8080`. If Renovate's API is off, the preflight page names the exact variables
@@ -108,7 +114,7 @@ to set on the Renovate side.
 ```yaml
 services:
   withe:
-    image: withe          # or build: . from this repository
+    image: ghcr.io/schubydoo/withe:latest   # or build: . from this repository
     container_name: withe
     restart: unless-stopped
     read_only: true
