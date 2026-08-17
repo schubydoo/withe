@@ -13,7 +13,8 @@ import { loadConfig } from '../../../../../config/load.ts';
 import { authGuard } from '../../../../../core/basic-auth.ts';
 import type { RenovateRun } from '../../../../../core/model.ts';
 import { openDatabase } from '../../../../../db/client.ts';
-import { runLocation, type RunLocation } from '../../../../../db/queries.ts';
+import { runLocation } from '../../../../../db/queries.ts';
+import { logFilename } from './filename.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,13 +30,14 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const config = loadConfig();
+  const url = new URL(request.url);
 
   // The proxy layer already checked this. It is checked again here because
   // this is the one route that returns real repository content, and the
   // framework's own guidance treats that layer as a last resort rather than an
   // authorization boundary. Before the id is even read: an anonymous caller
   // learns nothing, not even whether a run exists.
-  const refusal = await authGuard(request, new URL(request.url).pathname, config.auth);
+  const refusal = await authGuard(request, url.pathname, config.auth);
   if (refusal) return refusal;
 
   const { id: raw } = await context.params;
@@ -76,7 +78,7 @@ export async function GET(
   // way the body is the whole log as the source served it, not the viewer's
   // filtered subset (B-1). A bare `?download` is on; an explicit `=0`/`=false`
   // is off, so the flag reads the way a hand-edited URL would expect.
-  const downloadParam = new URL(request.url).searchParams.get('download');
+  const downloadParam = url.searchParams.get('download');
   const download = downloadParam !== null && downloadParam !== '0' && downloadParam !== 'false';
 
   try {
@@ -106,20 +108,4 @@ export async function GET(
 
 function describe(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
-}
-
-/**
- * A download name that reads on its own: `renovate-<org>-<repo>-<date>-job-<id>.log`.
- * Every part is reduced to filename-safe characters, so the header value needs
- * no escaping and the saved file opens on any platform. A run with no instant is
- * named "undated" rather than left without a date.
- */
-export function logFilename(
-  location: Pick<RunLocation, 'repoFullName' | 'externalJobId' | 'at'>,
-): string {
-  const safe = (value: string) => value.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
-  const repo = safe(location.repoFullName);
-  const job = safe(location.externalJobId);
-  const date = location.at ? location.at.toISOString().slice(0, 10) : 'undated';
-  return `renovate-${repo}-${date}-job-${job}.log`;
 }

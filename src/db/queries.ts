@@ -325,7 +325,7 @@ export function runLocation(db: Db, id: number): RunLocation | null {
     sourceAdapterId: row.sourceAdapterId,
     repoFullName: row.repoFullName,
     externalJobId: row.externalJobId,
-    at: row.at === null ? null : new Date(row.at * 1000),
+    at: seconds(row.at),
   };
 }
 

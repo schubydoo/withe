@@ -17,7 +17,8 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import { openDatabase } from '../../../../../db/client.ts';
 import { renovateRun, repo, source } from '../../../../../db/schema.ts';
-import { GET, logFilename } from './route.ts';
+import { logFilename } from './filename.ts';
+import { GET } from './route.ts';
 
 const AUTH = { user: 'operator', pass: 'correct horse battery staple' };
 const original = { ...process.env };
@@ -194,4 +195,13 @@ test('logFilename names the repo, date, and job, filesystem-safe', () => {
     logFilename({ repoFullName: 'acme/widget', externalJobId: 'j1', at: null }),
     'renovate-acme-widget-undated-job-j1.log',
   );
+  // The header claim: nothing a repository or job can be called reaches the
+  // `content-disposition` value as a quote or a line break.
+  const hostile = logFilename({
+    repoFullName: 'acme/"widget"\r\nx-injected: 1',
+    externalJobId: 'j1',
+    at: null,
+  });
+  assert.equal(hostile, 'renovate-acme-widget-x-injected-1-undated-job-j1.log');
+  assert.doesNotMatch(hostile, /["\r\n]/);
 });
