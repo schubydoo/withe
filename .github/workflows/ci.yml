@@ -4,10 +4,9 @@ name: CI
 # and every pull request. A single aggregator job (`ci required checks passed`)
 # is what branch protection gates on — extend it by adding to its `needs`.
 #
-# Built locally 2026-08-14 (Task 3.11), not yet pushed. Conventions — SHA-pinned
-# actions, least-privilege permissions, persist-credentials false, per-job
-# timeouts, the aggregator gate — follow the sibling repos clauster and
-# claustrum.
+# Conventions — SHA-pinned actions, least-privilege permissions,
+# persist-credentials false, per-job timeouts, the aggregator gate — follow the
+# sibling repos clauster and claustrum.
 
 on:
   push:

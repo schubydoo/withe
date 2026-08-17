@@ -13,7 +13,6 @@ name: Docs
 # (Scorecard Pinned-Dependencies). Bump via docs/requirements.in.
 #
 # GitHub Pages must be enabled with the source set to the `gh-pages` branch.
-# Built locally 2026-08-14, not yet pushed.
 
 on:
   push:
