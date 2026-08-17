@@ -20,12 +20,13 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-white text-neutral-900">
         {warning && (
-          <p
-            role="alert"
-            className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
-          >
-            {warning}
-          </p>
+          // Full-width bar, but the text sits in a centered, padded column
+          // rather than hard against the window edge (B-8). The pages below use
+          // no single width, so align to the dashboard (`max-w-4xl`), the page a
+          // reader sees first and most.
+          <div role="alert" className="border-b border-amber-200 bg-amber-50 text-amber-900">
+            <p className="mx-auto max-w-4xl px-8 py-2 text-sm">{warning}</p>
+          </div>
         )}
         {children}
       </body>
