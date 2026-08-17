@@ -8,7 +8,6 @@
 import type { RenovateRun, Repo, RepoInstallStatus, RunStatus } from '../../core/model.ts';
 import type { components } from './generated/ce.d.ts';
 
-type OrgMeta = components['schemas']['OrgMeta'];
 type RepositoryInfo = components['schemas']['RepositoryInfo'];
 type JobReport = components['schemas']['JobReport'];
 
@@ -120,10 +119,6 @@ export function mapRepo(
     removedAt: toDate(info.removedAt),
     sourceAdapterId,
   };
-}
-
-export function mapOrgName(org: OrgMeta): string {
-  return org.name;
 }
 
 export function mapRun(

@@ -10,10 +10,8 @@
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { CollectResult } from '../adapters/types.ts';
-import type { openDatabase } from './client.ts';
+import type { Db } from './client.ts';
 import { renovateRun, repo, source, syncStatus, update } from './schema.ts';
-
-type Db = ReturnType<typeof openDatabase>['db'];
 
 export interface PersistCounts {
   repos: number;

@@ -6,6 +6,7 @@ import { loadConfig } from '../../config/load.ts';
 import { repoUrl } from '../../core/links.ts';
 import { openDatabase } from '../../db/client.ts';
 import { forges, repoInventory, type ForgeInfo, type InventoryRow } from '../../db/queries.ts';
+import { ago } from '../format.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,16 +35,6 @@ function state(row: InventoryRow): { label: string; tone: string } {
   if (row.stalled) return { label: 'stalled', tone: 'bg-amber-100 text-amber-900' };
   if (row.lastRunStatus === null) return { label: 'no runs yet', tone: 'bg-neutral-100 text-neutral-600' };
   return { label: 'active', tone: 'bg-green-100 text-green-800' };
-}
-
-function ago(when: Date | null): string {
-  if (!when) return '—';
-  const minutes = Math.round((Date.now() - when.getTime()) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
 }
 
 export default function Repos() {
@@ -113,7 +104,7 @@ export default function Repos() {
                 <td className="py-1.5 pr-4 text-neutral-600">{row.installStatus ?? '—'}</td>
                 <td className="py-1.5 pr-4 text-neutral-600">{row.queueName ?? '—'}</td>
                 <td className="py-1.5 pr-4 text-neutral-600">
-                  {ago(row.lastRunAt)}
+                  {ago(row.lastRunAt, '—')}
                   {row.lastRunStatus && row.lastRunStatus !== 'success' && (
                     <span className="ml-1 text-neutral-500">({row.lastRunStatus})</span>
                   )}

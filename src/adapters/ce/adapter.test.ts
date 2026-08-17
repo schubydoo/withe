@@ -238,6 +238,37 @@ test('a disabled system API is reported but does not block the dashboard', async
   assert.match(note.setting ?? '', /MEND_RNV_API_ENABLE_SYSTEM/);
 });
 
+test('a metrics probe that cannot connect is reported, not thrown', async (t) => {
+  routes = healthy();
+  // Only the /metrics fetch dies; every specified endpoint keeps answering.
+  // This is the one probe that reaches the network outside the generated
+  // client, so its network failure is a status of 0, not an exception.
+  const real = globalThis.fetch;
+  t.mock.method(globalThis, 'fetch', ((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith('/metrics')) return Promise.reject(new TypeError('fetch failed'));
+    return real(input, init);
+  }) as typeof fetch);
+
+  const result = await adapter().preflight();
+
+  const note = result.problems.find((p) => p.probe === 'metrics');
+  assert.ok(note, 'the failed probe must be named');
+  assert.equal(note.fatal, false, 'metrics are optional; their absence must not fail preflight');
+  assert.match(note.detail, /answered 0/);
+});
+
+test('a repository list with no body counts as zero repositories, not a crash', async () => {
+  routes = healthy();
+  // 200 with a JSON `null` body: the generated client hands back data: null,
+  // which is the arm the `?? []` guard exists for.
+  routes['/api/v1/orgs/acme/-/repos'] = { status: 200, body: null };
+
+  const result = await adapter().preflight();
+
+  assert.equal(result.ok, true);
+  assert.equal(result.reachableButEmpty, true, 'an empty answer is the empty-fleet case, not an error');
+});
+
 test('a repository list failure becomes a warning, not a crash', async () => {
   routes = healthy();
   routes['/api/v1/orgs/acme/-/repos'] = { status: 500, body: { reason: 'boom' } };

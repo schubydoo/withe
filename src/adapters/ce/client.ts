@@ -20,8 +20,6 @@ export interface CeClientConfig {
   token: string;
 }
 
-export type CeClient = ReturnType<typeof createCeClient>;
-
 export function createCeClient({ baseUrl, token }: CeClientConfig) {
   if (!token) {
     throw new Error('A CE API token is required. Set WITHE_CE_TOKEN.');

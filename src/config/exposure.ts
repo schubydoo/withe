@@ -12,7 +12,8 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 
-type Env = Record<string, string | undefined>;
+/** The environment as read: names to values, with absent names undefined. */
+export type Env = Record<string, string | undefined>;
 
 export interface ContainerProbe {
   /** Docker writes this file into every container it creates. */
