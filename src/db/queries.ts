@@ -7,9 +7,7 @@
 import { sql } from 'drizzle-orm';
 
 import type { UpdateType } from '../core/model.ts';
-import type { openDatabase } from './client.ts';
-
-type Db = ReturnType<typeof openDatabase>['db'];
+import type { Db } from './client.ts';
 
 export interface PendingUpdateRow {
   sourceAdapterId: string;

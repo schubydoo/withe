@@ -11,7 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 
 import type { SourceConfig, SourceKind } from '../adapters/types.ts';
-import { bindAddress, exposureWarning, inContainer, systemProbe, type ContainerProbe } from './exposure.ts';
+import { bindAddress, exposureWarning, inContainer, systemProbe, type ContainerProbe, type Env } from './exposure.ts';
 
 export class ConfigError extends Error {
   readonly field: string;
@@ -54,8 +54,6 @@ const DEFAULTS = {
 } as const;
 
 const KNOWN_KINDS: readonly string[] = ['ce', 'jsonlog', 'forge'];
-
-type Env = Record<string, string | undefined>;
 
 export function loadConfig(env: Env = process.env, probe: ContainerProbe = systemProbe): WitheConfig {
   const warnings: string[] = [];

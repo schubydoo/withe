@@ -71,6 +71,9 @@ export function openDatabase(file: string, options: OpenOptions = {}) {
   return { sqlite, db: drizzle(sqlite, { schema }) };
 }
 
+/** The database handle `openDatabase` returns. Every query and write takes it. */
+export type Db = ReturnType<typeof openDatabase>['db'];
+
 function assertWal(sqlite: Database.Database, file: string): void {
   const mode = String((sqlite.pragma('journal_mode', { simple: true }) ?? '')).toLowerCase();
   if (mode !== 'wal') {

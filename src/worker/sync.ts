@@ -7,10 +7,8 @@
  */
 import type { SourceAdapter } from '../adapters/types.ts';
 import { redact } from '../core/redact.ts';
-import type { openDatabase } from '../db/client.ts';
+import type { Db } from '../db/client.ts';
 import { persist, pruneOldRuns, recomputeStalled, recordSyncFailure } from '../db/persist.ts';
-
-type Db = ReturnType<typeof openDatabase>['db'];
 
 export interface SyncOptions {
   intervalMs: number;

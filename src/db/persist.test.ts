@@ -14,7 +14,7 @@ import { after, test } from 'node:test';
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
-import { openDatabase } from './client.ts';
+import { openDatabase, type Db } from './client.ts';
 import { pruneOldRuns } from './persist.ts';
 import { renovateRun, repo, source } from './schema.ts';
 
@@ -53,7 +53,7 @@ function withRuns(count: number) {
   return { path, sqlite, db };
 }
 
-function runCount(db: ReturnType<typeof openDatabase>['db']): number {
+function runCount(db: Db): number {
   return (db.$client.prepare('select count(*) as n from renovate_run').get() as { n: number }).n;
 }
 
