@@ -89,6 +89,7 @@ export function dependencyLink(
   packageName: string | null,
   currentVersion: string | null,
   targetVersion: string | null,
+  compareTemplate: string | null = null,
 ): DependencyLink | null {
   if (!packageName) return null;
   const name = packageName.trim();
@@ -102,8 +103,12 @@ export function dependencyLink(
       if (encoded === null) return null;
       const repo = `https://github.com/${encoded}`;
       if (currentVersion && targetVersion && currentVersion !== targetVersion) {
+        const templated =
+          compareTemplate && fillCompareTemplate(compareTemplate, name, currentVersion, targetVersion);
         return {
-          href: `${repo}/compare/${encodeURIComponent(currentVersion)}...${encodeURIComponent(targetVersion)}`,
+          href:
+            templated ||
+            `${repo}/compare/${encodeURIComponent(currentVersion)}...${encodeURIComponent(targetVersion)}`,
           kind: 'compare',
         };
       }
@@ -117,8 +122,12 @@ export function dependencyLink(
       if (encoded === null) return null;
       const repo = `https://gitlab.com/${encoded}`;
       if (currentVersion && targetVersion && currentVersion !== targetVersion) {
+        const templated =
+          compareTemplate && fillCompareTemplate(compareTemplate, name, currentVersion, targetVersion);
         return {
-          href: `${repo}/-/compare/${encodeURIComponent(currentVersion)}...${encodeURIComponent(targetVersion)}`,
+          href:
+            templated ||
+            `${repo}/-/compare/${encodeURIComponent(currentVersion)}...${encodeURIComponent(targetVersion)}`,
           kind: 'compare',
         };
       }
@@ -160,4 +169,33 @@ export function dependencyLink(
 /** npm and Packagist names contain a slash that is part of the name, not a path. */
 function encodeName(name: string): string {
   return path(name) ?? encodeURIComponent(name);
+}
+
+/**
+ * Fill an operator's compare-URL template, or null when it does not produce a
+ * safe web address (B-6).
+ *
+ * The three placeholders are URL-encoded before substitution, so a query-string
+ * template like octochangelog's — `?repo={repo}&from={from}&to={to}` — gets the
+ * escaping it needs (`{repo}` becomes `owner%2Frepo`). The result must be an
+ * http or https URL; anything else, including a `javascript:` scheme, returns
+ * null and the forge's own compare link is used instead.
+ */
+export function fillCompareTemplate(
+  template: string,
+  repo: string,
+  from: string,
+  to: string,
+): string | null {
+  const href = template
+    .replaceAll('{repo}', encodeURIComponent(repo))
+    .replaceAll('{from}', encodeURIComponent(from))
+    .replaceAll('{to}', encodeURIComponent(to));
+  try {
+    const url = new URL(href);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    return href;
+  } catch {
+    return null;
+  }
 }

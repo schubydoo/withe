@@ -40,6 +40,7 @@ function read() {
       repos: triage(db),
       forge: forges(db),
       schedule: schedules(db),
+      compareUrl: config.compareUrl,
       intervalSeconds: config.syncIntervalSeconds,
       stalledAfterDays: config.stalledAfterDays,
     };
@@ -82,11 +83,13 @@ function Group({
   rows,
   empty,
   forge,
+  compareUrl,
 }: {
   title: string;
   rows: PendingUpdateRow[];
   empty: string;
   forge: Map<string, ForgeInfo>;
+  compareUrl: string | null;
 }) {
   return (
     <section className="mt-8">
@@ -117,12 +120,22 @@ function Group({
                 <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
                   <Maybe
                     href={
-                      dependencyLink(row.datasource, row.packageName, row.currentVersion, row.targetVersion)
-                        ?.href ?? null
+                      dependencyLink(
+                        row.datasource,
+                        row.packageName,
+                        row.currentVersion,
+                        row.targetVersion,
+                        compareUrl,
+                      )?.href ?? null
                     }
                     title={
-                      dependencyLink(row.datasource, row.packageName, row.currentVersion, row.targetVersion)
-                        ?.kind === 'compare'
+                      dependencyLink(
+                        row.datasource,
+                        row.packageName,
+                        row.currentVersion,
+                        row.targetVersion,
+                        compareUrl,
+                      )?.kind === 'compare'
                         ? 'Compare these two versions upstream'
                         : 'Open the package page'
                     }
@@ -286,7 +299,7 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
 }
 
 export default function Home() {
-  const { updates, locks, repos, forge, schedule, intervalSeconds, stalledAfterDays } = read();
+  const { updates, locks, repos, forge, schedule, compareUrl, intervalSeconds, stalledAfterDays } = read();
   const graceMs = intervalSeconds * 1000;
   const nextRun = soonestNextRun(schedule, Date.now(), graceMs);
 
@@ -333,10 +346,23 @@ export default function Home() {
         title="Held for your review"
         rows={held}
         forge={forge}
+        compareUrl={compareUrl}
         empty="Nothing is waiting on a decision. Majors and 0.x minors appear here."
       />
-      <Group title="Open pull requests" rows={open} forge={forge} empty="No update has an open pull request." />
-      <Group title="Queued, no pull request yet" rows={queued} forge={forge} empty="Nothing is queued." />
+      <Group
+        title="Open pull requests"
+        rows={open}
+        forge={forge}
+        compareUrl={compareUrl}
+        empty="No update has an open pull request."
+      />
+      <Group
+        title="Queued, no pull request yet"
+        rows={queued}
+        forge={forge}
+        compareUrl={compareUrl}
+        empty="Nothing is queued."
+      />
 
       <Locks rows={locks} forge={forge} />
 
