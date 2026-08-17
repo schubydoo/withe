@@ -237,3 +237,66 @@ test('a disabled system API is reported but does not block the dashboard', async
   assert.equal(note.fatal, false);
   assert.match(note.setting ?? '', /MEND_RNV_API_ENABLE_SYSTEM/);
 });
+
+test('a repository list failure becomes a warning, not a crash', async () => {
+  routes = healthy();
+  routes['/api/v1/orgs/acme/-/repos'] = { status: 500, body: { reason: 'boom' } };
+  const result = await adapter().collect();
+
+  assert.deepEqual(result.repos, []);
+  assert.deepEqual(result.runs, []);
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0] ?? '', /acme/);
+});
+
+test('the status endpoint, when it answers, names the forge', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: { platform: 'github', endpoint: 'https://api.github.com/' },
+  };
+  const result = await adapter().collect();
+
+  assert.deepEqual(result.meta, { platform: 'github', webBaseUrl: 'https://github.com' });
+});
+
+test("the newest finished run's log names the pending updates", async () => {
+  routes = healthy();
+  routes[JOBS_PAGE_1] = {
+    status: 200,
+    body: [{ jobId: 'j1', reason: 'schedule-all', status: 'success', completedAt: '2026-08-06T17:05:00.000Z' }],
+  };
+  routes['/api/v1/repos/acme%2Fwidget/-/jobs/j1'] = {
+    status: 200,
+    body:
+      '{"renovateVersion":"43.1.0","branchesInformation":[{"branchName":"renovate/lodash-5.x","prNo":7,' +
+      '"upgrades":[{"depName":"lodash","updateType":"major","currentValue":"4.17.21","newValue":"5.0.0",' +
+      '"packageFile":"package.json","datasource":"npm"}]}]}\n',
+  };
+  const result = await adapter().collect();
+
+  assert.deepEqual(result.warnings, []);
+  assert.equal(result.updates.length, 1);
+  const update = result.updates[0];
+  assert.equal(update?.dependencyName, 'lodash');
+  assert.equal(update?.updateType, 'major');
+  assert.equal(update?.state, 'pr-open');
+  // The jobs endpoint does not report the runner version; the log does.
+  assert.equal(result.runs[0]?.runnerVersion, '43.1.0');
+});
+
+test('a log that cannot be fetched costs a warning, never the run itself', async () => {
+  routes = healthy();
+  routes[JOBS_PAGE_1] = {
+    status: 200,
+    body: [{ jobId: 'j1', reason: 'schedule-all', status: 'success', completedAt: '2026-08-06T17:05:00.000Z' }],
+  };
+  // No log route: the job log endpoint answers 404.
+  const result = await adapter().collect();
+
+  assert.equal(result.runs.length, 1);
+  assert.deepEqual(result.updates, []);
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0] ?? '', /Could not read updates for acme\/widget/);
+  assert.match(result.warnings[0] ?? '', /404/);
+});
