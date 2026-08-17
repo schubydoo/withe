@@ -20,12 +20,15 @@ Node 24 LTS is required. `.nvmrc` and the `engines` field both state it.
 ```bash
 git clone https://github.com/schubydoo/withe && cd withe
 npm ci
-cp .env.example .env          # set WITHE_CE_URL and WITHE_CE_TOKEN
-npm run build:client          # generate CE types from openapi-community.yaml
-npm run db:migrate            # apply migrations to ./dev.db
-npm run dev                   # web, on :3000
-npm run dev:worker            # worker, in a second terminal
+cp .env.example .env                       # then set WITHE_CE_URL and WITHE_CE_TOKEN
+npm run build:client                       # generate the CE types from the OpenAPI spec
+node --env-file=.env src/worker/main.ts    # worker: creates and migrates the DB, then syncs
+npm run dev                                # web, on :3000, in a second terminal
 ```
+
+The worker applies migrations on startup, so there is no separate migrate step. Run it first — it
+creates and migrates the database — then start the web in a second terminal. `next dev` reads `.env`
+automatically; the worker reads the ambient environment, so it is started with `--env-file`.
 
 Install the pre-commit hooks once — they run the same type-check, lint, changeset and test gates CI
 does, before the code leaves your machine:
@@ -41,16 +44,16 @@ mapping layer, and the tests run with no network.
 
 ```bash
 npm test              # node --test, runs offline
-npm run test:e2e      # Playwright against a stub CE server
-npm run lint
+npm run e2e           # end-to-end flows against a stub CE server
+npm run lint          # import-boundary checks (scripts/check-boundaries.ts)
 npx tsc --noEmit
 ```
 
 `npm test` must pass with no network access. If a test needs a live server, it is in the wrong
 place.
 
-Two import rules are enforced by ESLint, not by convention, because they are the boundary the whole
-design rests on:
+The import boundary is enforced by a lint check (`npm run lint`, `scripts/check-boundaries.ts`), not
+by convention, because it is what the whole design rests on. Two of its rules matter most:
 
 1. Nothing outside `src/adapters/ce/` imports from `src/adapters/ce/generated/`.
 2. Nothing in `src/app/` imports from `src/adapters/`. Pages read the database, not adapters.
@@ -59,21 +62,27 @@ A pull request that breaks either fails the build.
 
 ## Recording a CE fixture
 
-Fixtures are recorded Renovate CE API responses, committed to `test/fixtures/`. They let anyone
+Fixtures are recorded Renovate CE API responses, committed to `test/fixtures/ce/`. They let anyone
 test the mapping layer without access to a Renovate server. Adding one is the most useful small
 contribution available.
 
-1. Point `.env` at your own CE server.
-2. Run the recorder for the endpoint you want:
-   ```bash
-   npm run record:fixture -- /api/v1/orgs
-   npm run record:fixture -- /api/v1/orgs/my-org/-/repos
-   npm run record:fixture -- /api/v1/repos/my-org/my-repo/-/jobs
+1. Capture the raw responses from your own CE server to `/tmp/rec/`, one file per endpoint. The
+   redactor expects these names:
    ```
-   The response is written to `test/fixtures/` as JSON.
-3. **Redact it.** Replace your token, your hostnames, your organization name, and any private
-   repository name. CI checks every fixture against a denylist and fails if a real value survives,
-   but do not rely on that — the denylist only knows the values it was told about.
+   /tmp/rec/orgs.json         # GET /api/v1/orgs
+   /tmp/rec/repos.json        # GET /api/v1/orgs/<org>/-/repos
+   /tmp/rec/jobs-page1.json   # GET /api/v1/repos/<org>/<repo>/-/jobs
+   /tmp/rec/jobs-page2.json   # the next page, if any
+   /tmp/rec/job.ndjson        # the NDJSON job log
+   ```
+2. Redact them into committable fixtures:
+   ```bash
+   python3 scripts/redact-fixtures.py    # reads /tmp/rec, writes test/fixtures/ce/
+   ```
+   It replaces your organization and repository names, IP addresses, job ids, and commit hashes with
+   stable synthetic values.
+3. **Check the result.** CI checks every fixture against a denylist and fails if a real value
+   survives, but do not rely on that — the denylist only knows the values it was told about.
 4. Add a test in the matching `*.test.ts` that asserts what the mapping layer produces from it.
 5. Commit the fixture and the test together.
 
