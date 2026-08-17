@@ -38,7 +38,10 @@ export function cronPeriodSeconds(cron: string): number | null {
   const stepValue = /^\*\/(\d{1,2})$/.exec(minute)?.[1];
   if (stepValue !== undefined) {
     const n = Number(stepValue);
-    return n >= 1 && n <= 59 ? n * 60 : null;
+    // A stepped minute restarts at 0 each hour, so `*/N` is an even interval only
+    // when N divides 60. `*/7` fires at :56 then :00 — a 4-minute gap, not 7 — so
+    // `last + 7 min` would mis-estimate near the hour. Reject the non-divisors.
+    return n >= 1 && n <= 59 && 60 % n === 0 ? n * 60 : null;
   }
 
   // A single minute-of-hour fires once an hour, whatever the timezone's offset.

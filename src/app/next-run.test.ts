@@ -31,6 +31,15 @@ test('cronPeriodSeconds refuses shapes that are not one interval', () => {
   assert.equal(cronPeriodSeconds(''), null);
 });
 
+test('cronPeriodSeconds refuses a step that does not divide 60', () => {
+  // `*/7` fires at :56 then :00, a 4-minute gap, so it is not one even interval.
+  assert.equal(cronPeriodSeconds('*/7 * * * *'), null);
+  assert.equal(cronPeriodSeconds('*/45 * * * *'), null);
+  // The divisors Renovate uses stay exact.
+  assert.equal(cronPeriodSeconds('*/10 * * * *'), 600);
+  assert.equal(cronPeriodSeconds('*/30 * * * *'), 1800);
+});
+
 test('nextRunAt projects forward from the last scheduling instant', () => {
   const last = new Date('2026-08-17T10:00:00Z');
   assert.deepEqual(

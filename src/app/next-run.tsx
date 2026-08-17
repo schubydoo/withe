@@ -23,5 +23,10 @@ export function NextRun({ atMs }: { atMs: number | null }) {
 
   if (atMs === null) return null;
   const remainingSeconds = Math.round((atMs - Date.now()) / 1000);
-  return <>next Renovate run {describeCountdown(remainingSeconds)}</>;
+  // The server renders with its clock and the browser hydrates with its own a
+  // moment later; when the two land on opposite sides of a rounding boundary the
+  // text differs ("in 34" vs "in 33 minutes"), which React reports as a hydration
+  // mismatch. The difference is a second of wall-clock, not a bug, so keep the
+  // server's text and let the first tick correct it.
+  return <span suppressHydrationWarning>next Renovate run {describeCountdown(remainingSeconds)}</span>;
 }
