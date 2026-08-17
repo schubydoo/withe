@@ -17,6 +17,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import { openDatabase } from '../../../../../db/client.ts';
 import { renovateRun, repo, source } from '../../../../../db/schema.ts';
+import { logFilename } from './filename.ts';
 import { GET } from './route.ts';
 
 const AUTH = { user: 'operator', pass: 'correct horse battery staple' };
@@ -38,7 +39,14 @@ function databaseWithOneRun(file = 'runs.db', sourceId = 'default'): string {
     .values({ id: 1, sourceAdapterId: sourceId, org: 'acme', name: 'widget', fullName: 'acme/widget', enabled: true })
     .run();
   db.insert(renovateRun)
-    .values({ id: 1, sourceAdapterId: sourceId, repoId: 1, externalJobId: 'job-1', status: 'success' })
+    .values({
+      id: 1,
+      sourceAdapterId: sourceId,
+      repoId: 1,
+      externalJobId: 'job-1',
+      status: 'success',
+      completedAt: new Date('2026-08-06T17:05:00.000Z'),
+    })
     .run();
   sqlite.close();
   return path;
@@ -148,8 +156,52 @@ test('a reachable log streams through with the right headers', async () => {
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8');
     assert.equal(response.headers.get('cache-control'), 'no-store');
+    // Opened directly, it shows rather than downloads: no attachment header.
+    assert.equal(response.headers.get('content-disposition'), null);
     assert.equal(await response.text(), lines);
+
+    // `?download` streams the same body under a named attachment.
+    const downloaded = await GET(new Request('https://withe.example/api/runs/1/log?download=1'), {
+      params: Promise.resolve({ id: '1' }),
+    });
+    assert.equal(downloaded.status, 200);
+    assert.equal(
+      downloaded.headers.get('content-disposition'),
+      'attachment; filename="renovate-acme-widget-2026-08-06-job-job-1.log"',
+    );
+    assert.equal(await downloaded.text(), lines);
+
+    // An explicit `?download=0` shows rather than downloads, so a value the
+    // reader would read as "off" is not treated as "on".
+    const notDownloaded = await GET(new Request('https://withe.example/api/runs/1/log?download=0'), {
+      params: Promise.resolve({ id: '1' }),
+    });
+    assert.equal(notDownloaded.headers.get('content-disposition'), null);
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
+});
+
+test('logFilename names the repo, date, and job, filesystem-safe', () => {
+  assert.equal(
+    logFilename({
+      repoFullName: 'acme/widget',
+      externalJobId: 'job 1/x',
+      at: new Date('2026-08-06T17:05:00.000Z'),
+    }),
+    'renovate-acme-widget-2026-08-06-job-job-1-x.log',
+  );
+  assert.equal(
+    logFilename({ repoFullName: 'acme/widget', externalJobId: 'j1', at: null }),
+    'renovate-acme-widget-undated-job-j1.log',
+  );
+  // The header claim: nothing a repository or job can be called reaches the
+  // `content-disposition` value as a quote or a line break.
+  const hostile = logFilename({
+    repoFullName: 'acme/"widget"\r\nx-injected: 1',
+    externalJobId: 'j1',
+    at: null,
+  });
+  assert.equal(hostile, 'renovate-acme-widget-x-injected-1-undated-job-j1.log');
+  assert.doesNotMatch(hostile, /["\r\n]/);
 });

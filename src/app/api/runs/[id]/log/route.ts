@@ -14,6 +14,7 @@ import { authGuard } from '../../../../../core/basic-auth.ts';
 import type { RenovateRun } from '../../../../../core/model.ts';
 import { openDatabase } from '../../../../../db/client.ts';
 import { runLocation } from '../../../../../db/queries.ts';
+import { logFilename } from './filename.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,13 +30,14 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const config = loadConfig();
+  const url = new URL(request.url);
 
   // The proxy layer already checked this. It is checked again here because
   // this is the one route that returns real repository content, and the
   // framework's own guidance treats that layer as a last resort rather than an
   // authorization boundary. Before the id is even read: an anonymous caller
   // learns nothing, not even whether a run exists.
-  const refusal = await authGuard(request, new URL(request.url).pathname, config.auth);
+  const refusal = await authGuard(request, url.pathname, config.auth);
   if (refusal) return refusal;
 
   const { id: raw } = await context.params;
@@ -70,16 +72,27 @@ export async function GET(
     externalJobId: location.externalJobId,
   };
 
+  // `?download` turns the same stream into a saved file. Without it, a browser
+  // opening the URL shows the log; with it, the browser saves it under a name
+  // that identifies the repository, run, and date without being opened. Either
+  // way the body is the whole log as the source served it, not the viewer's
+  // filtered subset (B-1). A bare `?download` is on; an explicit `=0`/`=false`
+  // is off, so the flag reads the way a hand-edited URL would expect.
+  const downloadParam = url.searchParams.get('download');
+  const download = downloadParam !== null && downloadParam !== '0' && downloadParam !== 'false';
+
   try {
     const body = await createAdapter(source).fetchLog(run);
-    return new Response(body, {
-      headers: {
-        // NDJSON rendered as text: a browser opening this directly should show
-        // it rather than download it.
-        'content-type': 'text/plain; charset=utf-8',
-        'cache-control': 'no-store',
-      },
-    });
+    const headers: Record<string, string> = {
+      // NDJSON rendered as text: a browser opening this directly should show
+      // it rather than download it.
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store',
+    };
+    if (download) {
+      headers['content-disposition'] = `attachment; filename="${logFilename(location)}"`;
+    }
+    return new Response(body, { headers });
   } catch (cause) {
     // Deliberately vague about the upstream. The message an adapter throws can
     // carry a URL, and this response goes to a browser.

@@ -293,6 +293,9 @@ export interface RunLocation {
   sourceAdapterId: string;
   repoFullName: string;
   externalJobId: string;
+  /** The run's instant — completion, else start, else queueing — for naming a
+   * downloaded log. Null when the run carries none of the three. */
+  at: Date | null;
 }
 
 /**
@@ -303,15 +306,27 @@ export interface RunLocation {
  * endpoint Withe was never meant to call.
  */
 export function runLocation(db: Db, id: number): RunLocation | null {
-  const [row] = db.all<RunLocation>(sql`
+  const [row] = db.all<{
+    sourceAdapterId: string;
+    repoFullName: string;
+    externalJobId: string;
+    at: number | null;
+  }>(sql`
     select rr.source_adapter_id as sourceAdapterId,
            r.full_name as repoFullName,
-           rr.external_job_id as externalJobId
+           rr.external_job_id as externalJobId,
+           coalesce(rr.completed_at, rr.started_at, rr.queued_at) as at
       from renovate_run rr join repo r on r.id = rr.repo_id
      where rr.id = ${id}
      limit 1
   `);
-  return row ?? null;
+  if (!row) return null;
+  return {
+    sourceAdapterId: row.sourceAdapterId,
+    repoFullName: row.repoFullName,
+    externalJobId: row.externalJobId,
+    at: seconds(row.at),
+  };
 }
 
 export interface TriageRow {

@@ -11,7 +11,8 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist, recomputeStalled } from './persist.ts';
-import { forges, lastSync, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runsForRepo, triage } from './queries.ts';
+import { forges, lastSync, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, triage } from './queries.ts';
+import { renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -459,5 +460,29 @@ test('migrationState counts the applied migrations and dates the newest', () => 
   assert.ok(state.applied >= 1, 'fresh() applies the committed migrations');
   assert.ok(state.newestAt instanceof Date);
   assert.ok(!Number.isNaN(state.newestAt.getTime()), 'drizzle stores this one in milliseconds');
+  sqlite.close();
+});
+
+test('runLocation returns null for a run id that does not exist', () => {
+  const { sqlite, db } = fresh();
+  assert.equal(runLocation(db, 999), null);
+  sqlite.close();
+});
+
+test('runLocation reports a null instant when the run has no timestamps', () => {
+  const { sqlite, db } = fresh();
+  db.insert(source).values({ id: SOURCE, kind: 'ce' }).run();
+  db.insert(repo)
+    .values({ id: 1, sourceAdapterId: SOURCE, org: 'acme', name: 'widget', fullName: 'acme/widget', enabled: true })
+    .run();
+  // A run with none of completed/started/queued set: coalesce yields null, and
+  // runLocation must carry that null through rather than build an invalid Date.
+  db.insert(renovateRun)
+    .values({ id: 1, sourceAdapterId: SOURCE, repoId: 1, externalJobId: 'j1', status: 'success' })
+    .run();
+
+  const location = runLocation(db, 1);
+  assert.ok(location);
+  assert.equal(location.at, null);
   sqlite.close();
 });
