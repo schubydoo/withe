@@ -29,6 +29,7 @@ concurrency:
 jobs:
   codeql:
     name: codeql analyze
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -51,6 +52,7 @@ jobs:
 
   gitleaks:
     name: secret scan
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -81,7 +83,9 @@ jobs:
 
   zizmor:
     name: workflow audit
-    if: github.event_name != 'pull_request' || github.event.action != 'synchronize'
+    if: >-
+      github.event_name != 'pull_request'
+      || (github.event.action != 'synchronize' && github.event.pull_request.draft == false)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -121,6 +125,7 @@ jobs:
 
   trivy:
     name: trivy (deps + Dockerfile)
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
