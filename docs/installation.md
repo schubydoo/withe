@@ -1,11 +1,13 @@
 # Installation
 
-One container, one volume, one published port. Build the image from the repository until a release
-is published:
+One container, one volume, one published port. The image is published to GHCR:
 
 ```bash
-docker build -t withe .
+docker pull ghcr.io/schubydoo/withe:latest
 ```
+
+To build from source instead, run `docker build -t withe .` and use `withe` in place of the image
+name below.
 
 ## Run it
 
@@ -20,7 +22,7 @@ docker run -d \
   -v withe-data:/data \
   -e WITHE_CE_URL=https://renovate.example.lan \
   -e WITHE_CE_TOKEN=your-server-secret \
-  withe
+  ghcr.io/schubydoo/withe:latest
 ```
 
 Open `http://127.0.0.1:8080`. If Renovate's API is not switched on, the preflight page names the
@@ -40,7 +42,7 @@ Every flag earns its place:
 ```yaml
 services:
   withe:
-    image: withe          # or build: . from the repository
+    image: ghcr.io/schubydoo/withe:latest   # or build: . from the repository
     container_name: withe
     restart: unless-stopped
     read_only: true
