@@ -74,6 +74,10 @@ export interface SourceMeta {
   platform: string | null;
   /** Browsable base URL, not the API endpoint. Null when it cannot be derived. */
   webBaseUrl: string | null;
+  /** The runner's cron, as reported. Null when the server does not report one. */
+  scheduleCron: string | null;
+  /** When that cron last scheduled. Null when the server does not report it. */
+  scheduleLastAt: Date | null;
 }
 
 export interface CollectResult {

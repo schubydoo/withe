@@ -14,6 +14,12 @@ export const source = sqliteTable('source', {
   webBaseUrl: text('web_base_url'),
   lastSyncAt: integer('last_sync_at', { mode: 'timestamp' }),
   lastSyncOutcome: text('last_sync_outcome', { enum: ['ok', 'partial', 'failed'] }),
+  /** The runner's own cron, as it reported it, so the next run can be estimated
+   * from the source rather than from a value Withe was told (B-5). */
+  scheduleCron: text('schedule_cron'),
+  /** When that cron last scheduled — the absolute instant the next run is
+   * projected from, which keeps the estimate free of the runner's timezone. */
+  scheduleLastAt: integer('schedule_last_at', { mode: 'timestamp' }),
 });
 
 export const repo = sqliteTable(
