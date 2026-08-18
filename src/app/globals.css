@@ -2,5 +2,8 @@
 
 /* Dark mode follows a `dark` class on <html>, which the script in the layout
    sets before first paint. That lets a page default to the operating system's
-   preference while still honouring a saved manual choice (B-3). */
+   preference while still honouring a saved manual choice (B-3). This overrides
+   Tailwind v4's built-in `dark` variant, which keys off `prefers-color-scheme`
+   directly; after this line `dark:` responds to the class alone, so the OS
+   preference reaches the page only through that script. */
 @custom-variant dark (&:where(.dark, .dark *));

@@ -218,7 +218,7 @@ function Row({
       aria-expanded={expanded}
       style={{ position: 'absolute', top, height: ROW }}
       className={`flex w-full items-center gap-3 whitespace-pre px-2 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
-        expanded ? 'bg-neutral-200 dark:bg-neutral-800' : ''
+        expanded ? 'bg-neutral-200 dark:bg-neutral-800 dark:ring-1 dark:ring-inset dark:ring-neutral-600' : ''
       }`}
     >
       <span className="w-12 shrink-0 text-right text-neutral-500 dark:text-neutral-400">{line.index + 1}</span>

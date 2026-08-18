@@ -27,7 +27,12 @@ export function ThemeToggle() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(THEME_KEY);
+    let stored: string | null = null;
+    try {
+      stored = localStorage.getItem(THEME_KEY);
+    } catch {
+      // A browser that refuses storage still follows the OS for this page.
+    }
     setPreference(isThemePreference(stored) ? stored : 'system');
     setMounted(true);
   }, []);
@@ -55,7 +60,7 @@ export function ThemeToggle() {
     <div
       role="group"
       aria-label="Colour theme"
-      className="fixed right-3 top-3 z-10 flex overflow-hidden rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs shadow-sm"
+      className="fixed right-3 bottom-3 z-10 flex overflow-hidden rounded border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-xs shadow-sm"
     >
       {OPTIONS.map((option) => {
         const active = mounted && preference === option.value;

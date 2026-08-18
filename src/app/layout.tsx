@@ -9,9 +9,12 @@ export const metadata: Metadata = {
   description: 'A dashboard for the Renovate you already run.',
 };
 
-// Runs before the first paint so the page opens in the saved theme with no
-// flash of the wrong one. It mirrors resolveDark in theme.ts; keep them in step.
-const THEME_SCRIPT = `(function(){try{var p=localStorage.getItem('withe-theme');var d=p==='dark'||((p===null||p==='system')&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
+// Runs before the first paint so the page opens in the saved theme with no flash
+// of the wrong one. It mirrors resolveDark in theme.ts, resolving every value the
+// same way the toggle does: 'dark' is dark, 'light' is light, and everything else
+// — 'system', a missing key, or an unrecognised value the toggle would normalise
+// to 'system' — follows the OS. Keep them in step.
+const THEME_SCRIPT = `(function(){try{var p=localStorage.getItem('withe-theme');var d=p==='dark'||(p!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);}catch(e){}})();`;
 
 export default function RootLayout({
   children,
