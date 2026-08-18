@@ -13,6 +13,7 @@
  * and renders what `bannerText` returns.
  */
 import { STALE_AFTER_INTERVALS } from '../core/health.ts';
+import { magnitude, plural } from './format.ts';
 
 /** Poll no faster than this, whatever the configured interval. */
 export const MIN_POLL_SECONDS = 15;
@@ -20,10 +21,6 @@ export const MIN_POLL_SECONDS = 15;
 /** Fall back to this when the server reports no interval (the database does not
  * exist yet, so it answered before any config-derived interval was known). */
 const NO_INTERVAL_FALLBACK_SECONDS = 60;
-
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'} old`;
-}
 
 /**
  * A data age as words that keep meaning as they grow: "less than a minute old",
@@ -34,11 +31,8 @@ function plural(n: number, word: string): string {
 export function describeAge(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   if (s < 60) return 'less than a minute old';
-  const minutes = Math.round(s / 60);
-  if (minutes < 60) return plural(minutes, 'minute');
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return plural(hours, 'hour');
-  return plural(Math.round(hours / 24), 'day');
+  const { value, unit } = magnitude(s);
+  return `${plural(value, unit)} old`;
 }
 
 /**

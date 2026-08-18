@@ -119,4 +119,8 @@ test('describeCountdown names the wait in words', () => {
   assert.equal(describeCountdown(2040, 300), 'in 34 minutes');
   assert.equal(describeCountdown(3600, 300), 'in about 1 hour');
   assert.equal(describeCountdown(7200, 300), 'in about 2 hours');
+  assert.equal(describeCountdown(47 * 3600, 300), 'in about 47 hours');
+  // The ladder rounds straight from 47 hours to 2 days (47.5h -> 48h -> 2d), so
+  // "1 day" never appears — the day rung the refactor rewrote is reached here.
+  assert.equal(describeCountdown(2 * 24 * 3600, 300), 'in about 2 days');
 });
