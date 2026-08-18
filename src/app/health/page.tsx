@@ -7,10 +7,11 @@
 import { existsSync, statSync } from 'node:fs';
 
 import { loadConfig } from '../../config/load.ts';
-import { assess } from '../../core/health.ts';
+import { assess, STALE_AFTER_INTERVALS } from '../../core/health.ts';
 import { openDatabase } from '../../db/client.ts';
 import { migrationState, sourceHealth, type MigrationState, type SourceHealth } from '../../db/queries.ts';
 import { ago } from '../format.ts';
+import { describeAge } from '../staleness.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -65,18 +66,19 @@ export default function HealthPage() {
       : health.status === 'stale'
         ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
         : 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-200';
-  const pulledAgo =
-    health.ageSeconds === null
-      ? 'moments ago'
-      : health.ageSeconds < 60
-        ? 'less than a minute ago'
-        : `${Math.round(health.ageSeconds / 60)} minutes ago`;
+  // The badge carries the state word (NFR-18); the summary adds the specifics.
+  const label = health.status === 'ok' ? 'Up to date' : health.status === 'stale' ? 'Behind' : 'Not started';
+  const behindMinutes = Math.round((intervalSeconds * STALE_AFTER_INTERVALS) / 60);
   const summary =
     health.status === 'ok'
-      ? `Up to date. Withe pulled from Renovate ${pulledAgo}.`
+      ? // ageSeconds is the freshest source's age, so name it as that — on a
+        // multi-source install one can lag while another is current.
+        `The freshest data from Renovate is ${describeAge(health.ageSeconds ?? 0)}.`
       : health.status === 'stale'
-        ? `Behind. Withe hasn't pulled from Renovate in over ${Math.round((intervalSeconds * 3) / 60)} minutes (${health.stale.join(', ')}) — the data below may be out of date.`
-        : "Not started. Withe hasn't pulled from Renovate yet — the preflight page says why.";
+        ? // Name only the sources that are behind; assess() turns stale when any
+          // one is, while the rest may have synced seconds ago.
+          `Not reached in over ${behindMinutes} minutes: ${health.stale.join(', ')}. The data below may be out of date.`
+        : "Withe hasn't pulled from Renovate yet — the preflight page says why.";
 
   return (
     <main className="mx-auto max-w-5xl p-8">
@@ -86,7 +88,7 @@ export default function HealthPage() {
         state of the repositories Renovate scans.
       </p>
       <p className="mt-3">
-        <span className={`rounded px-1.5 py-0.5 text-sm ${tone}`}>{health.status}</span>
+        <span className={`rounded px-1.5 py-0.5 text-sm ${tone}`}>{label}</span>
         <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-300">{summary}</span>
       </p>
 
