@@ -325,7 +325,7 @@ export default function Home() {
         </a>{' '}
         ·{' '}
         <a className="underline" href="/health">
-          health
+          Renovate health
         </a>
         {nextRun !== null && (
           <>

@@ -65,30 +65,44 @@ export default function HealthPage() {
       : health.status === 'stale'
         ? 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300'
         : 'bg-amber-100 dark:bg-amber-900 text-amber-900 dark:text-amber-200';
+  const pulledAgo =
+    health.ageSeconds === null
+      ? 'moments ago'
+      : health.ageSeconds < 60
+        ? 'less than a minute ago'
+        : `${Math.round(health.ageSeconds / 60)} minutes ago`;
   const summary =
     health.status === 'ok'
-      ? `Syncing. Freshest data is ${health.ageSeconds === null ? 'unknown' : `${Math.round(health.ageSeconds / 60)} minutes`} old.`
+      ? `Up to date. Withe last reached your Renovate server ${pulledAgo}.`
       : health.status === 'stale'
-        ? `Stale. Nothing has synced in over ${Math.round((intervalSeconds * 3) / 60)} minutes: ${health.stale.join(', ')}.`
-        : 'No source has synced yet. The preflight page says why.';
+        ? `Behind. Withe has not reached your Renovate server in over ${Math.round((intervalSeconds * 3) / 60)} minutes (${health.stale.join(', ')}), so the data below may be out of date.`
+        : 'Not started. Withe has not pulled from your Renovate server yet — the preflight page says why.';
 
   return (
     <main className="mx-auto max-w-5xl p-8">
-      <h1 className="text-2xl font-semibold">Health</h1>
+      <h1 className="text-2xl font-semibold">Renovate health</h1>
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+        Whether Withe is reaching your Renovate server and its data is current — not the
+        state of the repositories Renovate scans.
+      </p>
       <p className="mt-3">
         <span className={`rounded px-1.5 py-0.5 text-sm ${tone}`}>{health.status}</span>
         <span className="ml-2 text-sm text-neutral-600 dark:text-neutral-300">{summary}</span>
       </p>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Sources</h2>
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Renovate sources</h2>
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          The Renovate server(s) Withe pulls from. A failure here is Withe not reaching that
+          server — not an error Renovate hit while scanning your repositories.
+        </p>
         {sources.length === 0 ? (
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
             No source has been recorded yet. <a className="underline" href="/preflight">Check the setup</a>.
           </p>
         ) : (
           <table className="mt-2 w-full text-sm">
-            <caption className="sr-only">Every configured source, with its most recent sync.</caption>
+            <caption className="sr-only">Each Renovate server Withe pulls from, with its most recent sync.</caption>
             <thead>
               <tr className="border-b border-neutral-300 dark:border-neutral-700 text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 <th scope="col" className="py-2 pr-4 font-medium">Source</th>
@@ -96,7 +110,7 @@ export default function HealthPage() {
                 <th scope="col" className="py-2 pr-4 font-medium">Last attempt</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Duration</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Failures (24h)</th>
-                <th scope="col" className="py-2 font-medium">Last error</th>
+                <th scope="col" className="py-2 font-medium">Last reach error</th>
               </tr>
             </thead>
             <tbody>
