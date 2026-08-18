@@ -14,13 +14,6 @@
  */
 import { STALE_AFTER_INTERVALS } from '../core/health.ts';
 
-/** The `/api/health` fields the banner reads. Extra fields are ignored. */
-export interface HealthPayload {
-  status: string;
-  lastSyncAgeSeconds?: number | null;
-  syncIntervalSeconds?: number;
-}
-
 /** Poll no faster than this, whatever the configured interval. */
 export const MIN_POLL_SECONDS = 15;
 

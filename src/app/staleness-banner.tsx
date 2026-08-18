@@ -40,7 +40,11 @@ export function StalenessBanner() {
     let lastInterval: number | undefined;
 
     function reschedulePoll(interval: number | undefined) {
-      if (cancelled) return;
+      // Also stop when the tab is hidden: a poll already in flight when the tab
+      // was hidden reaches its `finally` after onVisibilityChange cleared the
+      // timer, and would otherwise reschedule and keep polling for the life of a
+      // hidden tab, with no further visibilitychange to stop it.
+      if (cancelled || document.visibilityState === 'hidden') return;
       if (pollTimer !== undefined) clearTimeout(pollTimer);
       pollTimer = setTimeout(poll, pollIntervalMs(interval));
     }
@@ -100,31 +104,32 @@ export function StalenessBanner() {
     };
   }, []);
 
-  if (snapshot === null) return null;
-
   const ageNow =
-    snapshot.ageSecondsAtPoll === null
+    snapshot === null || snapshot.ageSecondsAtPoll === null
       ? null
       : snapshot.ageSecondsAtPoll + (Date.now() - snapshot.polledAt) / 1000;
-  const text = bannerText(snapshot.status, ageNow, snapshot.intervalSeconds);
-  if (text === null) return null;
+  const text = snapshot === null ? null : bannerText(snapshot.status, ageNow, snapshot.intervalSeconds);
 
+  // The live region is always in the DOM, even before the first poll and while
+  // there is nothing to say. A `role="status"` region announces changes *inside*
+  // it; if the region and its text appeared together, assistive technology would
+  // stay silent. So the wrapper is permanent and only its content is conditional.
   return (
-    // Matches the exposure banner in the layout it sits under: a full-width bar
-    // whose text sits in the same centered, padded column (B-8), with the dark
-    // palette the rest of the app gained in B-3.
-    <div
-      role="status"
-      aria-live="polite"
-      className="border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-200"
-    >
-      <p className="mx-auto max-w-4xl px-8 py-2 text-sm">
-        {text}{' '}
-        <a className="underline" href="/health">
-          Health
-        </a>
-        .
-      </p>
+    <div role="status" aria-live="polite">
+      {text !== null && (
+        // Matches the exposure banner in the layout it sits under: a full-width
+        // bar whose text sits in the same centered, padded column (B-8), with the
+        // dark palette the rest of the app gained in B-3.
+        <div className="border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-200">
+          <p className="mx-auto max-w-4xl px-8 py-2 text-sm">
+            {text}{' '}
+            <a className="underline" href="/health">
+              Health
+            </a>
+            .
+          </p>
+        </div>
+      )}
     </div>
   );
 }
