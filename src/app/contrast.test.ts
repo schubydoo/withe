@@ -183,11 +183,23 @@ assert.ok(distinct.size > 0, 'the scan found no colour classes — the pairing r
 
 // Positive controls on the arithmetic above (test-quality rule 2). Every pair
 // test below is a "nothing is under 4.5:1" negative, and a typo in channel() —
-// the 2.4 exponent, the 0.03928 threshold, a coefficient — inflates all of them
-// at once, so they would still pass. These two pin the formula and the gate to
-// values independent of the palette, so neither needs touching when a colour does.
-test('ratio is calibrated: white on black is 21:1 by definition', () => {
-  assert.ok(Math.abs(ratio('#ffffff', '#000000') - 21) < 1e-6, 'the sRGB contrast formula is miscalibrated');
+// the 2.4 exponent, the 0.03928 threshold, a coefficient — inflates every ratio
+// at once, so they would all still pass. white-on-black (21:1) does not catch it:
+// channel(255) is 1 and channel(0) is 0 for any exponent or threshold, so that
+// ratio is a tautology. These pin each part of the formula to a value computed
+// from the sRGB definition, independent of the palette, so a mutation moves one.
+test('luminance is calibrated to the sRGB definition', () => {
+  // channel(255) == 1 exactly, so a pure primary's luminance IS its coefficient.
+  // Pins the three weights: a swapped or mistyped one moves exactly one of these.
+  assert.ok(Math.abs(luminance('#ff0000') - 0.2126) < 1e-6, 'red luminance coefficient is wrong');
+  assert.ok(Math.abs(luminance('#00ff00') - 0.7152) < 1e-6, 'green luminance coefficient is wrong');
+  assert.ok(Math.abs(luminance('#0000ff') - 0.0722) < 1e-6, 'blue luminance coefficient is wrong');
+  // A mid grey runs through the power curve: at exponent 1.4 this is ~0.41, not
+  // ~0.216, so it pins the 2.4 gamma.
+  assert.ok(Math.abs(luminance('#808080') - 0.2159) < 1e-3, 'the gamma exponent is wrong');
+  // A dark grey pins the 0.03928 linear-branch threshold: raising it to 0.3928
+  // takes the linear path instead of the curve and drops this to ~0.0079.
+  assert.ok(Math.abs(luminance('#1a1a1a') - 0.01032) < 1e-4, 'the linear-branch threshold is wrong');
 });
 
 test('the AA gate bites: a deliberately failing pair is caught', () => {
