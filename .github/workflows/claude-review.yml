@@ -37,8 +37,12 @@ name: Claude Code Review
 # SECURITY: the action itself only runs for users with write access and denies bots by
 # default. The `if:` below is narrower still — maintainer only, because this spends a
 # personal subscription quota — and cheaper, since it stops the job spinning up at all.
-# Advisory only: `contents: read` (Claude cannot push) and the instructions require a
-# COMMENT review, never REQUEST_CHANGES, so it can never gate a merge.
+# Advisory only: the instructions require a COMMENT review, never REQUEST_CHANGES, so
+# it can never gate a merge. Note the token Claude holds is the Claude App's own
+# installation token (minted from the OIDC exchange, not the job's GITHUB_TOKEN), so
+# the job's `contents: read` does not clamp it; its scope is whatever that App is
+# granted on this repo. The guarantee here rests on the COMMENT-review instruction,
+# not on a read-only token.
 
 on:
   issue_comment:
@@ -164,10 +168,13 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # No `github_token` override: with only claude_code_oauth_token set, the
-          # action uses the Claude GitHub App's own token, so the review and its
-          # comments post as claude[bot] (matching the sibling repos). An override
-          # would make them post as that token's identity instead. The CI-log tools
-          # still work — they draw on the job's `actions: read` permission below.
+          # action exchanges the job's OIDC token (id-token: write) for the Claude
+          # GitHub App's own installation token, so the review and its comments post
+          # as claude[bot] (matching the sibling repos). An override would make them
+          # post as that token's identity instead. The CI-log tools keep working
+          # through `additional_permissions: actions: read` below, which the action
+          # honours only on this token-exchange path — so deleting that input, not
+          # the job's permissions, is what would kill them.
           trigger_phrase: "@claude review"
           # NO `prompt:` — see the banner. Guidance goes through the system prompt.
           #
