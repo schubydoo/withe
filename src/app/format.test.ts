@@ -1,9 +1,23 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { ago, runWhen } from './format.ts';
+import { ago, magnitude, runWhen } from './format.ts';
 
 const MINUTE = 60_000;
+
+test('magnitude climbs the ladder minutes -> hours -> days at the same edges', () => {
+  assert.deepEqual(magnitude(5 * 60), { value: 5, unit: 'minute' });
+  assert.deepEqual(magnitude(59 * 60), { value: 59, unit: 'minute' });
+  assert.deepEqual(magnitude(60 * 60), { value: 1, unit: 'hour' }); // 60 minutes becomes an hour
+  assert.deepEqual(magnitude(47 * 3600), { value: 47, unit: 'hour' });
+  assert.deepEqual(magnitude(48 * 3600), { value: 2, unit: 'day' }); // 48 hours becomes days
+  assert.deepEqual(magnitude(10 * 86_400), { value: 10, unit: 'day' });
+});
+
+test('magnitude rounds each rung off the one below', () => {
+  assert.deepEqual(magnitude(90), { value: 2, unit: 'minute' }); // 1.5 min rounds up
+  assert.deepEqual(magnitude(89), { value: 1, unit: 'minute' });
+});
 
 test('ago names each bucket of distance', () => {
   const now = Date.now();

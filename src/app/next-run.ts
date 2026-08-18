@@ -11,6 +11,7 @@
  * hour, day, or weekday does need the runner's timezone to place, so this
  * returns null for those and the caller shows nothing rather than a wrong guess.
  */
+import { magnitude } from './format.ts';
 
 export interface Schedule {
   cron: string | null;
@@ -87,10 +88,6 @@ export function soonestNextRun(schedules: readonly Schedule[], nowMs: number, gr
   return soonest;
 }
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? '' : 's'}`;
-}
-
 /**
  * The countdown in words, or null to show nothing. `graceSeconds` bounds how far
  * past the estimate the run still reads as "due now": `lastScheduling` lags a
@@ -103,9 +100,8 @@ export function describeCountdown(remainingSeconds: number, graceSeconds: number
   if (remainingSeconds < -graceSeconds) return null;
   if (remainingSeconds <= 0) return 'due now';
   if (remainingSeconds < 60) return 'in less than a minute';
-  const minutes = Math.round(remainingSeconds / 60);
-  if (minutes < 60) return `in ${plural(minutes, 'minute')}`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 48) return `in about ${plural(hours, 'hour')}`;
-  return `in about ${plural(Math.round(hours / 24), 'day')}`;
+  const { value, unit } = magnitude(remainingSeconds);
+  // Minutes are exact; an hour or a day is a rounded estimate, so it is hedged.
+  const prefix = unit === 'minute' ? 'in' : 'in about';
+  return `${prefix} ${value} ${unit}${value === 1 ? '' : 's'}`;
 }
