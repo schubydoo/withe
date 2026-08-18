@@ -41,11 +41,43 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The GitHub runner reaches apt through a mirror list whose first entry,
+      # azure.archive.ubuntu.com, is intermittently unreachable. The two
+      # `--with-deps` installs below each run `apt-get update`, which otherwise
+      # retries that mirror until the 20-minute job timeout before falling back to
+      # archive.ubuntu.com (observed twice: runs timed out at 20:15 on this step).
+      # Drop the azure mirror and cap apt's retries and timeouts so it fails fast to
+      # the working mirror instead of hanging.
+      - name: Make apt fail fast off the flaky mirror
+        run: |
+          # azure.archive.ubuntu.com is the runner's priority:1 in-datacentre apt
+          # mirror — fast when healthy, but intermittently unreachable, and the
+          # `--with-deps` installs below retry it until the job timeout. Probe it,
+          # and only drop it from the mirror list when it is actually down, so a
+          # healthy run keeps the fast mirror. The apt.conf cap below is the safety
+          # net for an azure that dies mid-run, after this probe passed.
+          if ! curl --max-time 5 -sfI http://azure.archive.ubuntu.com/ubuntu/dists/noble/InRelease >/dev/null 2>&1; then
+            if sudo sed -i '\#azure.archive.ubuntu.com#d' /etc/apt/apt-mirrors.txt 2>/dev/null; then
+              echo "::warning::azure apt mirror unreachable — dropped it from the mirror list for this run"
+            else
+              echo "::warning::azure apt mirror unreachable and /etc/apt/apt-mirrors.txt absent — mirror hardening skipped"
+            fi
+          fi
+          # Retries 2 (down from apt's default 3) with short timeouts: a dead mirror
+          # fails over in well under a minute, while a spare attempt still covers a
+          # transient 5xx or a truncated .deb during the WebKit/Firefox dep install.
+          printf 'Acquire::Retries "2";\nAcquire::http::Timeout "15";\nAcquire::https::Timeout "15";\n' \
+            | sudo tee /etc/apt/apt.conf.d/99-fail-fast >/dev/null
+
       # agent-browser drives the functional flows and the a11y audit (Chromium).
       # It bundles Chromium, so lockfile-pinning it would pull the browser into
       # every CI job that runs `npm ci`; accept the version-pinned ad-hoc global
       # install here rather than bloat the whole matrix (zizmor: adhoc-packages).
       - name: Install agent-browser and its browser
+        # Bound the two steps that have demonstrably hung, so any future stall —
+        # a different dead mirror, a slow dep, an npm blip — fails this named step
+        # in minutes rather than burning the whole 20-minute job timeout.
+        timeout-minutes: 6
         run: | # zizmor: ignore[adhoc-packages]
           npm i -g agent-browser@0.33.2
           agent-browser install --with-deps
@@ -53,6 +85,7 @@ jobs:
       # Playwright drives the cross-browser smoke; --with-deps installs the
       # system libraries WebKit and Firefox need, which a bare runner lacks.
       - name: Install Playwright browsers
+        timeout-minutes: 6
         run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Flows and accessibility (agent-browser)
