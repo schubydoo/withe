@@ -24,13 +24,13 @@ const ROW = 22;
 const OVERSCAN = 20;
 
 const TONE: Record<LevelName, string> = {
-  trace: 'text-neutral-500',
-  debug: 'text-neutral-500',
-  info: 'text-neutral-800',
-  warn: 'text-amber-700',
-  error: 'text-red-700',
-  fatal: 'text-red-800',
-  raw: 'text-purple-700',
+  trace: 'text-neutral-600 dark:text-neutral-400',
+  debug: 'text-neutral-600 dark:text-neutral-400',
+  info: 'text-neutral-800 dark:text-neutral-200',
+  warn: 'text-amber-800 dark:text-amber-300',
+  error: 'text-red-700 dark:text-red-300',
+  fatal: 'text-red-800 dark:text-red-300',
+  raw: 'text-purple-800 dark:text-purple-300',
 };
 
 const ALL_LEVELS: LevelName[] = [...new Set(Object.values(LEVELS))];
@@ -115,7 +115,7 @@ export function LogViewer({ runId }: { runId: number }) {
 
   if (state === 'error') {
     return (
-      <p className="mt-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+      <p className="mt-4 rounded border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-800 dark:text-red-300">
         {failure}
       </p>
     );
@@ -131,7 +131,7 @@ export function LogViewer({ runId }: { runId: number }) {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search every field"
-            className="w-64 rounded border border-neutral-300 px-2 py-1"
+            className="w-64 rounded border border-neutral-300 dark:border-neutral-700 px-2 py-1"
           />
         </label>
 
@@ -152,7 +152,9 @@ export function LogViewer({ runId }: { runId: number }) {
                   )
                 }
                 className={`rounded px-2 py-0.5 text-xs ${
-                  on ? 'bg-neutral-800 text-white' : 'bg-neutral-100 text-neutral-700'
+                  on
+                    ? 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-neutral-900'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300'
                 }`}
               >
                 {level}
@@ -161,7 +163,7 @@ export function LogViewer({ runId }: { runId: number }) {
           })}
         </fieldset>
 
-        <span className="text-neutral-500">
+        <span className="text-neutral-600 dark:text-neutral-400">
           {visible.length === parsed.lines.length
             ? `${parsed.lines.length} lines`
             : `${visible.length} of ${parsed.lines.length} lines`}
@@ -175,7 +177,7 @@ export function LogViewer({ runId }: { runId: number }) {
         ref={viewport}
         onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
         style={{ height }}
-        className="mt-3 overflow-auto rounded border border-neutral-200 bg-neutral-50 font-mono text-xs"
+        className="mt-3 overflow-auto rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 font-mono text-xs"
         role="log"
         aria-label="Run log"
       >
@@ -215,11 +217,11 @@ function Row({
       onClick={onToggle}
       aria-expanded={expanded}
       style={{ position: 'absolute', top, height: ROW }}
-      className={`flex w-full items-center gap-3 whitespace-pre px-2 text-left hover:bg-neutral-100 ${
-        expanded ? 'bg-neutral-200' : ''
+      className={`flex w-full items-center gap-3 whitespace-pre px-2 text-left hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+        expanded ? 'bg-neutral-200 dark:bg-neutral-800 dark:ring-1 dark:ring-inset dark:ring-neutral-600' : ''
       }`}
     >
-      <span className="w-12 shrink-0 text-right text-neutral-500">{line.index + 1}</span>
+      <span className="w-12 shrink-0 text-right text-neutral-600 dark:text-neutral-400">{line.index + 1}</span>
       <span className={`w-12 shrink-0 uppercase ${TONE[line.level]}`}>{line.level}</span>
       <span className={TONE[line.level]}>{line.message}</span>
     </button>
@@ -229,7 +231,7 @@ function Row({
 function Detail({ line }: { line: LogLine | null }) {
   if (!line) return null;
   return (
-    <pre className="mt-3 max-h-96 overflow-auto rounded border border-neutral-200 bg-white p-3 text-xs">
+    <pre className="mt-3 max-h-96 overflow-auto rounded border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-3 text-xs">
       {line.entry ? JSON.stringify(line.entry, null, 2) : line.raw}
     </pre>
   );

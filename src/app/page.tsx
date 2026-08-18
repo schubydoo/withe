@@ -64,7 +64,7 @@ function Maybe({ href, children, title }: { href: string | null; children: React
   if (!href) return <>{children}</>;
   return (
     <a
-      className="underline decoration-neutral-300 hover:decoration-neutral-600"
+      className="underline decoration-neutral-300 dark:decoration-neutral-700 hover:decoration-neutral-600"
       href={href}
       title={title}
       target="_blank"
@@ -88,20 +88,20 @@ function Group({
 }) {
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {title} <span className="font-normal">({rows.length})</span>
       </h2>
       {rows.length === 0 ? (
-        <p className="mt-2 text-sm text-neutral-500">{empty}</p>
+        <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">{empty}</p>
       ) : (
         <table className="mt-2 w-full text-sm">
           <tbody>
             {rows.map((row) => (
               <tr
                 key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
-                className="border-t border-neutral-200"
+                className="border-t border-neutral-200 dark:border-neutral-800"
               >
-                <td className="py-1 pr-4 text-neutral-500">
+                <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">
                   <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
                     {row.repoFullName}
                   </Maybe>
@@ -109,10 +109,10 @@ function Group({
                 <td className="py-1 pr-4 font-medium">
                   {row.dependencyName}
                   {row.packageFileCount > 1 && (
-                    <span className="ml-1 text-neutral-500">×{row.packageFileCount} files</span>
+                    <span className="ml-1 text-neutral-500 dark:text-neutral-400">×{row.packageFileCount} files</span>
                   )}
                 </td>
-                <td className="py-1 pr-4 tabular-nums text-neutral-600">
+                <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
                   <Maybe
                     href={
                       dependencyLink(row.datasource, row.packageName, row.currentVersion, row.targetVersion)
@@ -128,8 +128,8 @@ function Group({
                     {row.currentVersion} → {row.targetVersion}
                   </Maybe>
                 </td>
-                <td className="py-1 pr-4 text-neutral-500">{row.updateType}</td>
-                <td className="py-1 text-neutral-500">
+                <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
+                <td className="py-1 text-neutral-500 dark:text-neutral-400">
                   {row.prNumber === null ? '' : (
                     <Maybe
                       href={pullRequestUrl(
@@ -170,21 +170,21 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
 
   return (
     <section className="mt-8">
-      <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         Lock file refreshes <span className="font-normal">({rows.length})</span>
       </h2>
       {rows.length === 0 ? (
-        <p className="mt-2 text-sm text-neutral-500">No lock-file refreshes pending.</p>
+        <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">No lock-file refreshes pending.</p>
       ) : (
         <>
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Across {repos} {repos === 1 ? 'repository' : 'repositories'}, covering {manifests}{' '}
             {manifests === 1 ? 'manifest' : 'manifests'}. Each refreshes every transitive pin on its
             branch, so it names no dependency.
           </p>
           <table className="mt-2 w-full text-sm">
             <thead>
-              <tr className="text-left text-xs uppercase tracking-wide text-neutral-500">
+              <tr className="text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 <th scope="col" className="py-1 pr-4 font-medium">Repository</th>
                 <th scope="col" className="py-1 pr-4 font-medium">Branch</th>
                 <th scope="col" className="py-1 pr-4 font-medium">Manifests</th>
@@ -193,15 +193,15 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
             </thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={`${row.repoFullName}/${row.branchName}`} className="border-t border-neutral-200">
-                  <td className="py-1 pr-4 text-neutral-500">
+                <tr key={`${row.repoFullName}/${row.branchName}`} className="border-t border-neutral-200 dark:border-neutral-800">
+                  <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">
                     <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
                       {row.repoFullName}
                     </Maybe>
                   </td>
                   <td className="py-1 pr-4 font-medium">{row.branchName}</td>
-                  <td className="py-1 pr-4 tabular-nums text-neutral-600">{row.packageFileCount}</td>
-                  <td className="py-1 text-neutral-500">
+                  <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">{row.packageFileCount}</td>
+                  <td className="py-1 text-neutral-500 dark:text-neutral-400">
                     {row.prNumber === null ? '' : (
                       <Maybe
                         href={pullRequestUrl(
@@ -228,7 +228,7 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
 function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRow[] }) {
   if (failing.length === 0 && stalled.length === 0) {
     return (
-      <p className="mt-4 rounded border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-900">
+      <p className="mt-4 rounded border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950 px-3 py-2 text-sm text-green-900 dark:text-green-200">
         Nothing is broken. Every repository&rsquo;s most recent run succeeded.
       </p>
     );
@@ -241,8 +241,8 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
     .sort((a, b) => a.getTime() - b.getTime())[0];
 
   return (
-    <section className="mt-4 rounded border border-red-200 bg-red-50 p-4">
-      <h2 className="text-lg font-medium text-red-900">
+    <section className="mt-4 rounded border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 p-4">
+      <h2 className="text-lg font-medium text-red-900 dark:text-red-200">
         {failing.length > 0 && (
           <>
             {failing.length} {failing.length === 1 ? 'repository is' : 'repositories are'} failing
@@ -263,7 +263,7 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
             <a className="font-medium underline" href={link(row)}>
               {row.fullName}
             </a>
-            <span className="ml-2 text-neutral-700">
+            <span className="ml-2 text-neutral-700 dark:text-neutral-300">
               {row.lastRunStatus !== null && row.lastRunStatus !== 'success'
                 ? `failing for ${age(row.failingSince)}`
                 : // A repository with no runs at all is a different problem
@@ -274,7 +274,7 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
                   : `no successful run in ${age(row.lastRunAt)}`}
             </span>
             {row.lastError && (
-              <p className="mt-0.5 max-w-2xl text-xs text-red-800">{row.lastError}</p>
+              <p className="mt-0.5 max-w-2xl text-xs text-red-800 dark:text-red-300">{row.lastError}</p>
             )}
           </li>
         ))}
@@ -309,7 +309,7 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Withe</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {repos.length} repositories · {updates.length + locks.length} pending updates ·{' '}
         <a className="underline" href="/repos">
           all repositories
@@ -321,7 +321,7 @@ export default function Home() {
       </p>
 
       {(stale || sync.lastSyncAt === null) && (
-        <p className="mt-4 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+        <p className="mt-4 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
           {sync.lastSyncAt === null
             ? 'Withe has never completed a sync. Everything below is empty rather than wrong.'
             : `Last successful sync ${age(sync.lastSyncAt)} ago, against a ${intervalSeconds}-second interval. Everything below may be out of date.`}{' '}
@@ -345,7 +345,7 @@ export default function Home() {
 
       <Locks rows={locks} forge={forge} />
 
-      <section className="mt-8 text-sm text-neutral-500">
+      <section className="mt-8 text-sm text-neutral-500 dark:text-neutral-400">
         <p>A repository counts as stalled after {stalledAfterDays} days with no successful run.</p>
       </section>
     </main>

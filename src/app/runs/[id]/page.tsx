@@ -36,14 +36,14 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
   return (
     <main className="mx-auto max-w-6xl p-8">
       <h1 className="text-2xl font-semibold">{location.repoFullName}</h1>
-      <p className="mt-1 text-sm text-neutral-500">
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {run.status} · {run.reason ?? 'no reason recorded'} ·{' '}
         {runWhen(run) ?? 'not started'}
         {run.runnerVersion && ` · Renovate ${run.runnerVersion}`}
       </p>
 
       {run.error && (
-        <p className="mt-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p className="mt-3 rounded border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950 px-3 py-2 text-sm text-red-800 dark:text-red-300">
           {run.error}
         </p>
       )}
@@ -60,7 +60,7 @@ export default async function RunDetail({ params }: { params: Promise<{ id: stri
       {run.logAvailable ? (
         <LogViewer runId={id} />
       ) : (
-        <p className="mt-4 rounded border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+        <p className="mt-4 rounded border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900 px-3 py-2 text-sm text-neutral-600 dark:text-neutral-300">
           The Renovate server no longer holds this run&rsquo;s log. Withe keeps run history
           indefinitely; logs are fetched on demand and are never stored.
         </p>
