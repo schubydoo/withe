@@ -13,7 +13,7 @@
  * and renders what `bannerText` returns.
  */
 import { STALE_AFTER_INTERVALS } from '../core/health.ts';
-import { magnitude } from './format.ts';
+import { magnitude, plural } from './format.ts';
 
 /** Poll no faster than this, whatever the configured interval. */
 export const MIN_POLL_SECONDS = 15;
@@ -32,7 +32,7 @@ export function describeAge(seconds: number): string {
   const s = Math.max(0, Math.floor(seconds));
   if (s < 60) return 'less than a minute old';
   const { value, unit } = magnitude(s);
-  return `${value} ${unit}${value === 1 ? '' : 's'} old`;
+  return `${plural(value, unit)} old`;
 }
 
 /**

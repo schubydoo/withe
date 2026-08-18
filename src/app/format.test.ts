@@ -5,12 +5,15 @@ import { ago, magnitude, runWhen } from './format.ts';
 
 const MINUTE = 60_000;
 
-test('magnitude climbs the ladder minutes -> hours -> days at the same edges', () => {
+test('magnitude climbs the ladder minutes -> hours -> days, on the rounded edge', () => {
   assert.deepEqual(magnitude(5 * 60), { value: 5, unit: 'minute' });
-  assert.deepEqual(magnitude(59 * 60), { value: 59, unit: 'minute' });
-  assert.deepEqual(magnitude(60 * 60), { value: 1, unit: 'hour' }); // 60 minutes becomes an hour
+  // The rung flips when the *rounded* count reaches the next unit's bound, so
+  // the minute->hour edge is 59.5 minutes and the hour->day edge is 47.5 hours,
+  // not a clean 60 or 48.
+  assert.deepEqual(magnitude(59 * 60 + 29), { value: 59, unit: 'minute' }); // 59.48m rounds to 59
+  assert.deepEqual(magnitude(59 * 60 + 30), { value: 1, unit: 'hour' }); // 59.5m rounds to 60 -> 1h
   assert.deepEqual(magnitude(47 * 3600), { value: 47, unit: 'hour' });
-  assert.deepEqual(magnitude(48 * 3600), { value: 2, unit: 'day' }); // 48 hours becomes days
+  assert.deepEqual(magnitude(171_000), { value: 2, unit: 'day' }); // 47.5h rounds to 48h -> 2 days
   assert.deepEqual(magnitude(10 * 86_400), { value: 10, unit: 'day' });
 });
 

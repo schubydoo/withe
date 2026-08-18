@@ -33,6 +33,15 @@ export function magnitude(seconds: number): Magnitude {
 const SHORT: Record<Magnitude['unit'], string> = { minute: 'm', hour: 'h', day: 'd' };
 
 /**
+ * The value with its unit, pluralized: "1 minute", "3 hours", "2 days". The
+ * words a caller wraps around it — a " old" suffix, an "in about " prefix —
+ * stay at the call site; this is only the shared count-and-noun.
+ */
+export function plural(value: number, unit: Magnitude['unit']): string {
+  return `${value} ${unit}${value === 1 ? '' : 's'}`;
+}
+
+/**
  * A past instant as a distance: "just now", "5m ago", "3h ago", "2d ago".
  * `ifNever` is the word for an instant that never happened. The pages disagree
  * on that word ("never" on /health, "—" on /repos), so the choice stays at the
@@ -40,9 +49,10 @@ const SHORT: Record<Magnitude['unit'], string> = { minute: 'm', hour: 'h', day: 
  */
 export function ago(when: Date | null, ifNever: string): string {
   if (!when) return ifNever;
-  const seconds = (Date.now() - when.getTime()) / 1000;
-  if (Math.round(seconds / 60) < 1) return 'just now';
-  const { value, unit } = magnitude(seconds);
+  const { value, unit } = magnitude((Date.now() - when.getTime()) / 1000);
+  // The sub-minute edge follows the ladder's own rounding rather than a second
+  // copy of it, so the two cannot drift if magnitude's rounding ever changes.
+  if (unit === 'minute' && value < 1) return 'just now';
   return `${value}${SHORT[unit]} ago`;
 }
 

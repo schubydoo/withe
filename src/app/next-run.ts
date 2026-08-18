@@ -11,7 +11,7 @@
  * hour, day, or weekday does need the runner's timezone to place, so this
  * returns null for those and the caller shows nothing rather than a wrong guess.
  */
-import { magnitude } from './format.ts';
+import { magnitude, plural } from './format.ts';
 
 export interface Schedule {
   cron: string | null;
@@ -103,5 +103,5 @@ export function describeCountdown(remainingSeconds: number, graceSeconds: number
   const { value, unit } = magnitude(remainingSeconds);
   // Minutes are exact; an hour or a day is a rounded estimate, so it is hedged.
   const prefix = unit === 'minute' ? 'in' : 'in about';
-  return `${prefix} ${value} ${unit}${value === 1 ? '' : 's'}`;
+  return `${prefix} ${plural(value, unit)}`;
 }
