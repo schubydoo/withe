@@ -67,8 +67,11 @@ base = "main"
 [workflows.steps.title]
 template = "chore: prepare release $version"
 
+# `$changelog` folds in the release notes knope generated from the `.changeset/`
+# fragments for this version, so a reviewer sees what the release contains in the
+# PR body rather than only in the diff.
 [workflows.steps.body]
-template = "Automated release PR. Merging it tags `v$version`, which fires release.yml (the multi-arch image build). Do not hand-edit the changelog — it is generated from `.changeset/`."
+template = "Automated release PR. Merging it tags `v$version`, which fires release.yml (the multi-arch image build). Do not hand-edit `CHANGELOG.md` — it is generated from `.changeset/`.\n\n---\n\n$changelog"
 
 # --- release: create the tag + GitHub Release (run when the release PR merges) -
 [[workflows]]
