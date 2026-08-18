@@ -1,13 +1,26 @@
 /**
- * The palette meets WCAG 2.1 AA, checked rather than assumed (B-3, NFR-18).
+ * The palette meets WCAG 2.1 AA, read from the components rather than assumed
+ * (B-3, NFR-18).
  *
  * "Amber on light is not amber on dark": the status colours are the risk this
- * guards. Each pair below is a foreground the app renders on a background it
- * renders it on, in one theme or the other. The sRGB values are the Tailwind
- * palette anchors; the ratio is computed the way WCAG defines it, so a future
- * palette change that dips below 4.5:1 fails here instead of in the wild.
+ * guards. Earlier this file listed the foreground/background pairs by hand, so a
+ * colour change in a `.tsx` left every test green and only editing the test could
+ * fail it. Instead, scan `src/app/**` for the colour utility classes the app
+ * actually renders, pair each text colour with the background it sits on, and
+ * check the ratio the way WCAG defines it. A future class that dips below 4.5:1 —
+ * or names a shade with no anchor here — fails in this test, not in the wild.
+ *
+ * Pairing rule, per element `className`:
+ *   - a text colour written beside a background colour (a badge, the banner) is
+ *     read on that background;
+ *   - a text colour with no background beside it floats on the page background
+ *     (`PAGE`), unless the file paints its own surface (`SURFACE`).
+ * `hover:`/`focus:` backgrounds are transient and are not treated as the surface.
  */
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 const AA_NORMAL = 4.5;
@@ -32,68 +45,133 @@ function ratio(fg: string, bg: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-// Tailwind palette anchors used by the app.
-const C = {
+// Tailwind palette anchors (token → sRGB hex) for every shade the app renders.
+// A class naming a token absent here fails the coverage test below with its name,
+// which is the prompt to add the anchor rather than a silent skip.
+const PALETTE: Record<string, string> = {
   white: '#ffffff',
-  n100: '#f5f5f5',
-  n300: '#d4d4d4',
-  n400: '#a3a3a3',
-  n500: '#737373',
-  n600: '#525252',
-  n900: '#171717',
-  n950: '#0a0a0a',
-  red100: '#fee2e2',
-  red300: '#fca5a5',
-  red800: '#991b1b',
-  red900: '#7f1d1d',
-  amber50: '#fffbeb',
-  amber100: '#fef3c7',
-  amber200: '#fde68a',
-  amber300: '#fcd34d',
-  amber900: '#78350f',
-  amber950: '#451a03',
-  green100: '#dcfce7',
-  green300: '#86efac',
-  green800: '#166534',
-  green900: '#14532d',
-  blue100: '#dbeafe',
-  blue300: '#93c5fd',
-  blue800: '#1e40af',
-  blue900: '#1e3a8a',
-  purple300: '#d8b4fe',
+  'neutral-50': '#fafafa',
+  'neutral-100': '#f5f5f5',
+  'neutral-200': '#e5e5e5',
+  'neutral-300': '#d4d4d4',
+  'neutral-400': '#a3a3a3',
+  'neutral-500': '#737373',
+  'neutral-600': '#525252',
+  'neutral-700': '#404040',
+  'neutral-800': '#262626',
+  'neutral-900': '#171717',
+  'neutral-950': '#0a0a0a',
+  'red-50': '#fef2f2',
+  'red-100': '#fee2e2',
+  'red-200': '#fecaca',
+  'red-300': '#fca5a5',
+  'red-700': '#b91c1c',
+  'red-800': '#991b1b',
+  'red-900': '#7f1d1d',
+  'red-950': '#450a0a',
+  'amber-50': '#fffbeb',
+  'amber-100': '#fef3c7',
+  'amber-200': '#fde68a',
+  'amber-300': '#fcd34d',
+  'amber-700': '#b45309',
+  'amber-800': '#92400e',
+  'amber-900': '#78350f',
+  'amber-950': '#451a03',
+  'green-50': '#f0fdf4',
+  'green-100': '#dcfce7',
+  'green-200': '#bbf7d0',
+  'green-300': '#86efac',
+  'green-700': '#15803d',
+  'green-800': '#166534',
+  'green-900': '#14532d',
+  'green-950': '#052e16',
+  'blue-100': '#dbeafe',
+  'blue-300': '#93c5fd',
+  'blue-800': '#1e40af',
+  'blue-900': '#1e3a8a',
+  'purple-300': '#d8b4fe',
+  'purple-700': '#9333ea',
 };
 
-const PAIRS: { name: string; fg: string; bg: string }[] = [
-  // Light theme, page background white.
-  { name: 'light body', fg: C.n900, bg: C.white },
-  { name: 'light strong-muted', fg: C.n600, bg: C.white },
-  { name: 'light muted', fg: C.n500, bg: C.white },
-  // The exposure banner is the one amber-50 surface; the status badges below it
-  // sit on -100 (light) / -900 (dark), a step darker/lighter than the banner.
-  { name: 'light exposure banner', fg: C.amber900, bg: C.amber50 },
-  { name: 'light amber badge', fg: C.amber900, bg: C.amber100 },
-  { name: 'light red badge', fg: C.red800, bg: C.red100 },
-  { name: 'light green badge', fg: C.green800, bg: C.green100 },
-  { name: 'light blue badge', fg: C.blue800, bg: C.blue100 },
-  // Dark theme, page background neutral-950.
-  { name: 'dark body', fg: C.n100, bg: C.n950 },
-  { name: 'dark strong-muted', fg: C.n300, bg: C.n950 },
-  { name: 'dark muted', fg: C.n400, bg: C.n950 },
-  { name: 'dark exposure banner', fg: C.amber200, bg: C.amber950 },
-  { name: 'dark amber badge', fg: C.amber200, bg: C.amber900 },
-  { name: 'dark red badge', fg: C.red300, bg: C.red900 },
-  { name: 'dark green badge', fg: C.green300, bg: C.green900 },
-  { name: 'dark blue badge', fg: C.blue300, bg: C.blue900 },
-  // Dark log levels render inside the viewport, whose background is neutral-900,
-  // not the page's neutral-950.
-  { name: 'dark log warn', fg: C.amber300, bg: C.n900 },
-  { name: 'dark log error', fg: C.red300, bg: C.n900 },
-  { name: 'dark log raw', fg: C.purple300, bg: C.n900 },
+// The background <body> paints per theme (layout.tsx: `bg-white dark:bg-neutral-950`).
+const PAGE: Record<'light' | 'dark', string> = { light: 'white', dark: 'neutral-950' };
+
+// Files that paint their own surface, so their floating text is not on the page
+// background. Keyed by a path suffix. The log viewer wraps its lines in a
+// neutral-50 / neutral-900 panel.
+const SURFACE: { suffix: string; light: string; dark: string }[] = [
+  { suffix: 'runs/[id]/log-viewer.tsx', light: 'neutral-50', dark: 'neutral-900' },
 ];
 
-for (const pair of PAIRS) {
-  test(`${pair.name} meets WCAG AA`, () => {
-    const r = ratio(pair.fg, pair.bg);
-    assert.ok(r >= AA_NORMAL, `${pair.name}: ${r.toFixed(2)}:1 is below ${AA_NORMAL}:1`);
+const here = fileURLToPath(new URL('.', import.meta.url));
+
+function surfaceFor(file: string, theme: 'light' | 'dark'): string {
+  const override = SURFACE.find((s) => file.endsWith(s.suffix));
+  return override ? override[theme] : PAGE[theme];
+}
+
+function tsxFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...tsxFiles(full));
+    else if (entry.name.endsWith('.tsx') && !entry.name.endsWith('.test.tsx')) out.push(full);
+  }
+  return out;
+}
+
+// A colour token: `white`, or a family with a shade (`neutral-500`, `red-300`).
+const COLOR = 'white|black|(?:neutral|red|amber|green|blue|purple)-\\d{2,3}';
+// Class utilities we read. Only the base (no variant) and `dark:` scopes matter;
+// `hover:`/`focus:`/`group-*` backgrounds are transient, so they are left out by
+// requiring the token to start the string (no other `x:` prefix before it).
+const TEXT = new RegExp(`(?:^|\\s)(dark:)?text-(${COLOR})(?=\\s|$)`, 'g');
+const BG = new RegExp(`(?:^|\\s)(dark:)?bg-(${COLOR})(?=\\s|$)`, 'g');
+
+interface Pair {
+  theme: 'light' | 'dark';
+  fg: string;
+  bg: string;
+}
+
+// Every string literal in the file is a candidate class list. Non-class strings
+// carry no `text-<colour>` token, so they contribute nothing; ternary arms and
+// lookup-table values (the log-level TONE map) are separate literals and are each
+// read on their own.
+function pairsFromFile(file: string): Pair[] {
+  const src = readFileSync(file, 'utf8');
+  const literals = src.match(/(['"`])(?:\\.|(?!\1)[^\\])*\1/g) ?? [];
+  const pairs: Pair[] = [];
+  for (const raw of literals) {
+    const cls = raw.slice(1, -1).replace(/\$\{[^}]*\}/g, ' ');
+    for (const theme of ['light', 'dark'] as const) {
+      const want = theme === 'dark';
+      const bg = [...cls.matchAll(BG)].find((m) => Boolean(m[1]) === want)?.[2];
+      const texts = [...cls.matchAll(TEXT)]
+        .filter((m) => Boolean(m[1]) === want)
+        .map((m) => m[2])
+        .filter((c): c is string => c !== undefined);
+      for (const fg of texts) pairs.push({ theme, fg, bg: bg ?? surfaceFor(file, theme) });
+    }
+  }
+  return pairs;
+}
+
+const all = tsxFiles(here).flatMap(pairsFromFile);
+// One test per distinct pair; a Set keeps the output readable when a colour is
+// used many times.
+const distinct = new Map<string, Pair>();
+for (const p of all) distinct.set(`${p.theme}:${p.fg}:${p.bg}`, p);
+
+assert.ok(distinct.size > 0, 'the scan found no colour classes — the pairing regex or the path is wrong');
+
+for (const p of distinct.values()) {
+  test(`${p.theme}: text-${p.fg} on ${p.bg} meets WCAG AA`, () => {
+    const fgHex = PALETTE[p.fg];
+    const bgHex = PALETTE[p.bg];
+    assert.ok(fgHex, `no palette anchor for text colour '${p.fg}' — add it to PALETTE`);
+    assert.ok(bgHex, `no palette anchor for background '${p.bg}' — add it to PALETTE`);
+    const r = ratio(fgHex, bgHex);
+    assert.ok(r >= AA_NORMAL, `${p.theme} text-${p.fg} on ${p.bg}: ${r.toFixed(2)}:1 is below ${AA_NORMAL}:1`);
   });
 }
