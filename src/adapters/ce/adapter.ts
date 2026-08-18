@@ -253,10 +253,21 @@ export class CeAdapter implements SourceAdapter {
   private async forge(): Promise<SourceMeta | undefined> {
     const status = await this.client.GET('/system/v1/status');
     if (status.error || !status.data) return undefined;
-    const data = status.data as { platform?: string; endpoint?: string };
+    const data = status.data as {
+      platform?: string;
+      endpoint?: string;
+      scheduler?: { allJobs?: { cron?: string; lastScheduling?: string } };
+    };
     const platform = data.platform ?? null;
     const webBaseUrl = webBaseFrom(platform, data.endpoint ?? null);
-    return webBaseUrl || platform ? { platform, webBaseUrl } : undefined;
+    const job = data.scheduler?.allJobs;
+    const scheduleCron = job?.cron ?? null;
+    const scheduleLastAt = job?.lastScheduling ? new Date(job.lastScheduling) : null;
+    // Any one of these is worth keeping; a server that reports only a schedule
+    // must not be dropped for having no browsable forge URL.
+    return platform || webBaseUrl || scheduleCron
+      ? { platform, webBaseUrl, scheduleCron, scheduleLastAt }
+      : undefined;
   }
 
   private async collectUpdates(repo: Repo, run: RenovateRun): Promise<Update[]> {

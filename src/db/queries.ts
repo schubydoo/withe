@@ -403,6 +403,23 @@ export function forges(db: Db): Map<string, ForgeInfo> {
   return new Map(rows.map((r) => [r.id, { platform: r.platform, webBaseUrl: r.webBaseUrl }]));
 }
 
+export interface SourceSchedule {
+  cron: string | null;
+  lastScheduling: Date | null;
+}
+
+/** Each source's reported cron and its last scheduling instant, for estimating
+ * when the next Renovate run is due (B-5). */
+export function schedules(db: Db): SourceSchedule[] {
+  const rows = db.all<{ cron: string | null; lastScheduling: number | null }>(sql`
+    select schedule_cron as cron, schedule_last_at as lastScheduling from source
+  `);
+  return rows.map((r) => ({
+    cron: r.cron,
+    lastScheduling: r.lastScheduling ? new Date(r.lastScheduling * 1000) : null,
+  }));
+}
+
 export interface SourceHealth {
   sourceAdapterId: string;
   kind: string;

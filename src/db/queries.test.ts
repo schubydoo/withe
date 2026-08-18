@@ -448,7 +448,12 @@ test('forges reports what each source said about its forge, or nulls', () => {
   const { sqlite, db } = fresh();
   persist(db, SOURCE, 'ce', {
     ...FLEET,
-    meta: { platform: 'github', webBaseUrl: 'https://github.example' },
+    meta: {
+      platform: 'github',
+      webBaseUrl: 'https://github.example',
+      scheduleCron: null,
+      scheduleLastAt: null,
+    },
   }, new Date());
   persist(db, 'quiet', 'ce', { repos: [], runs: [], updates: [], warnings: [] }, new Date());
 

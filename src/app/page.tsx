@@ -10,12 +10,15 @@ import {
   forges,
   lockFileRefreshes,
   pendingUpdates,
+  schedules,
   triage,
   type ForgeInfo,
   type LockFileRefreshRow,
   type PendingUpdateRow,
   type TriageRow,
 } from '../db/queries.ts';
+import { soonestNextRun } from './next-run.ts';
+import { NextRun } from './next-run.tsx';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +39,8 @@ function read() {
       locks: lockFileRefreshes(db),
       repos: triage(db),
       forge: forges(db),
+      schedule: schedules(db),
+      intervalSeconds: config.syncIntervalSeconds,
       stalledAfterDays: config.stalledAfterDays,
     };
   } finally {
@@ -281,7 +286,9 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
 }
 
 export default function Home() {
-  const { updates, locks, repos, forge, stalledAfterDays } = read();
+  const { updates, locks, repos, forge, schedule, intervalSeconds, stalledAfterDays } = read();
+  const graceMs = intervalSeconds * 1000;
+  const nextRun = soonestNextRun(schedule, Date.now(), graceMs);
 
   if (repos.length === 0) redirect('/preflight');
 
@@ -312,6 +319,12 @@ export default function Home() {
         <a className="underline" href="/health">
           health
         </a>
+        {nextRun !== null && (
+          <>
+            {' '}
+            · <NextRun atMs={nextRun.getTime()} graceMs={graceMs} />
+          </>
+        )}
       </p>
 
       <Trouble failing={failing} stalled={stalled} />

@@ -41,13 +41,22 @@ export function persist(
         lastSyncOutcome: outcome,
         platform: meta?.platform ?? null,
         webBaseUrl: meta?.webBaseUrl ?? null,
+        scheduleCron: meta?.scheduleCron ?? null,
+        scheduleLastAt: meta?.scheduleLastAt ?? null,
       })
       .onConflictDoUpdate({
         target: source.id,
         set: {
           lastSyncAt: finishedAt,
           lastSyncOutcome: outcome,
-          ...(meta ? { platform: meta.platform, webBaseUrl: meta.webBaseUrl } : {}),
+          ...(meta
+            ? {
+                platform: meta.platform,
+                webBaseUrl: meta.webBaseUrl,
+                scheduleCron: meta.scheduleCron,
+                scheduleLastAt: meta.scheduleLastAt,
+              }
+            : {}),
         },
       })
       .run();

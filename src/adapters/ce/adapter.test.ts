@@ -288,7 +288,28 @@ test('the status endpoint, when it answers, names the forge', async () => {
   };
   const result = await adapter().collect();
 
-  assert.deepEqual(result.meta, { platform: 'github', webBaseUrl: 'https://github.com' });
+  assert.deepEqual(result.meta, {
+    platform: 'github',
+    webBaseUrl: 'https://github.com',
+    scheduleCron: null,
+    scheduleLastAt: null,
+  });
+});
+
+test('the status endpoint carries the schedule when the server reports one', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: {
+      platform: 'github',
+      endpoint: 'https://api.github.com/',
+      scheduler: { allJobs: { cron: '0 * * * *', lastScheduling: '2026-08-17T10:00:00.000Z' } },
+    },
+  };
+  const result = await adapter().collect();
+
+  assert.equal(result.meta?.scheduleCron, '0 * * * *');
+  assert.deepEqual(result.meta?.scheduleLastAt, new Date('2026-08-17T10:00:00.000Z'));
 });
 
 test("the newest finished run's log names the pending updates", async () => {
