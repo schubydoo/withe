@@ -73,16 +73,16 @@ export default function HealthPage() {
         : `${Math.round(health.ageSeconds / 60)} minutes ago`;
   const summary =
     health.status === 'ok'
-      ? `Up to date. Withe last reached your Renovate server ${pulledAgo}.`
+      ? `Up to date. Withe pulled from Renovate ${pulledAgo}.`
       : health.status === 'stale'
-        ? `Behind. Withe has not reached your Renovate server in over ${Math.round((intervalSeconds * 3) / 60)} minutes (${health.stale.join(', ')}), so the data below may be out of date.`
-        : 'Not started. Withe has not pulled from your Renovate server yet — the preflight page says why.';
+        ? `Behind. Withe hasn't pulled from Renovate in over ${Math.round((intervalSeconds * 3) / 60)} minutes (${health.stale.join(', ')}) — the data below may be out of date.`
+        : "Not started. Withe hasn't pulled from Renovate yet — the preflight page says why.";
 
   return (
     <main className="mx-auto max-w-5xl p-8">
       <h1 className="text-2xl font-semibold">Renovate health</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        Whether Withe is reaching your Renovate server and its data is current — not the
+        Whether Withe is reaching your Renovate server and staying current — not the
         state of the repositories Renovate scans.
       </p>
       <p className="mt-3">
@@ -110,7 +110,7 @@ export default function HealthPage() {
                 <th scope="col" className="py-2 pr-4 font-medium">Last attempt</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Duration</th>
                 <th scope="col" className="py-2 pr-4 font-medium">Failures (24h)</th>
-                <th scope="col" className="py-2 font-medium">Last reach error</th>
+                <th scope="col" className="py-2 font-medium">Last error</th>
               </tr>
             </thead>
             <tbody>
