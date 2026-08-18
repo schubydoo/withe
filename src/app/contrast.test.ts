@@ -165,6 +165,21 @@ for (const p of all) distinct.set(`${p.theme}:${p.fg}:${p.bg}`, p);
 
 assert.ok(distinct.size > 0, 'the scan found no colour classes — the pairing regex or the path is wrong');
 
+// Positive controls on the arithmetic above (test-quality rule 2). Every pair
+// test below is a "nothing is under 4.5:1" negative, and a typo in channel() —
+// the 2.4 exponent, the 0.03928 threshold, a coefficient — inflates all of them
+// at once, so they would still pass. These two pin the formula and the gate to
+// values independent of the palette, so neither needs touching when a colour does.
+test('ratio is calibrated: white on black is 21:1 by definition', () => {
+  assert.ok(Math.abs(ratio('#ffffff', '#000000') - 21) < 1e-6, 'the sRGB contrast formula is miscalibrated');
+});
+
+test('the AA gate bites: a deliberately failing pair is caught', () => {
+  // neutral-400 on neutral-500, a pair the app never renders: ~1.9:1.
+  const r = ratio('#a3a3a3', '#737373');
+  assert.ok(r < AA_NORMAL, `expected the control pair to fail, got ${r.toFixed(2)}:1`);
+});
+
 for (const p of distinct.values()) {
   test(`${p.theme}: text-${p.fg} on ${p.bg} meets WCAG AA`, () => {
     const fgHex = PALETTE[p.fg];
