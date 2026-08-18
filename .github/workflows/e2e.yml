@@ -25,7 +25,10 @@ jobs:
     name: stub-backed flows + cross-browser smoke
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The backstop, kept above the sum of the two browser-install step caps below
+    # (8 + 18) plus the ~5-minute preamble, so on a single slow install the named
+    # step cap fires first with the culprit in its name, not this generic timeout.
+    timeout-minutes: 32
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -74,10 +77,11 @@ jobs:
       # every CI job that runs `npm ci`; accept the version-pinned ad-hoc global
       # install here rather than bloat the whole matrix (zizmor: adhoc-packages).
       - name: Install agent-browser and its browser
-        # Bound the two steps that have demonstrably hung, so any future stall —
-        # a different dead mirror, a slow dep, an npm blip — fails this named step
-        # in minutes rather than burning the whole 20-minute job timeout.
-        timeout-minutes: 6
+        # Bound the two steps that have demonstrably hung, so a stall fails this
+        # named step in minutes rather than burning the whole job timeout. This
+        # step downloads Chromium and its deps too — measured 66.9 MB in 2m52s on
+        # a cold runner — so it is not free; 8 minutes leaves margin over that.
+        timeout-minutes: 8
         run: | # zizmor: ignore[adhoc-packages]
           npm i -g agent-browser@0.33.2
           agent-browser install --with-deps
@@ -85,7 +89,13 @@ jobs:
       # Playwright drives the cross-browser smoke; --with-deps installs the
       # system libraries WebKit and Firefox need, which a bare runner lacks.
       - name: Install Playwright browsers
-        timeout-minutes: 6
+        # Higher than the agent-browser step: this one apt-fetches the WebKit and
+        # Firefox system libraries and then the browser bundles. The 6-minute cap
+        # it first hit was spent on the apt fetch alone, at a degraded ~300 kB/s
+        # (109 MB in 6m04s) — the variable is mirror throughput, not package count.
+        # 18 minutes covers a slow mirror; if this recurs, caching the browsers is
+        # the durable fix. Under the job cap above, so this named step fires first.
+        timeout-minutes: 18
         run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Flows and accessibility (agent-browser)
