@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { dependencyLink, pullRequestUrl, repoUrl, webBaseFrom } from './links.ts';
+import { dependencyLink, fillCompareTemplate, pullRequestUrl, repoUrl, webBaseFrom } from './links.ts';
 
 test('a browsable base is derived from the API endpoint, not assumed', () => {
   assert.equal(webBaseFrom('github', 'https://api.github.com/'), 'https://github.com');
@@ -123,4 +123,46 @@ test('a path that would resolve elsewhere is refused outright', () => {
 
   // And the ordinary case still works.
   assert.equal(repoUrl('https://github.com', 'acme/widget'), 'https://github.com/acme/widget');
+});
+
+const OCTO = 'https://octochangelog.com/compare?repo={repo}&from={from}&to={to}';
+
+test('a compare-url template redirects the compare links, URL-encoded', () => {
+  assert.deepEqual(dependencyLink('github-tags', 'renovatebot/renovate', '1.0.0', '2.0.0', OCTO), {
+    href: 'https://octochangelog.com/compare?repo=renovatebot%2Frenovate&from=1.0.0&to=2.0.0',
+    kind: 'compare',
+  });
+  assert.deepEqual(dependencyLink('gitlab-tags', 'acme/tool', '1.0.0', '2.0.0', OCTO), {
+    href: 'https://octochangelog.com/compare?repo=acme%2Ftool&from=1.0.0&to=2.0.0',
+    kind: 'compare',
+  });
+});
+
+test('the template touches only compares, not package links', () => {
+  // No version range: a package link, left alone.
+  assert.equal(
+    dependencyLink('github-tags', 'astral-sh/uv', null, null, OCTO)?.href,
+    'https://github.com/astral-sh/uv',
+  );
+  // A non-forge datasource has no compare, so the template does not apply.
+  assert.equal(
+    dependencyLink('npm', 'typescript', '5.0.0', '5.1.0', OCTO)?.href,
+    'https://www.npmjs.com/package/typescript',
+  );
+});
+
+test('a broken template falls back to the forge compare, never a bad href', () => {
+  assert.equal(fillCompareTemplate('not a url', 'a/b', '1', '2'), null);
+  assert.equal(fillCompareTemplate('javascript:alert(1)', 'a/b', '1', '2'), null);
+  assert.equal(
+    dependencyLink('github-tags', 'a/b', '1.0.0', '2.0.0', 'not a url')?.href,
+    'https://github.com/a/b/compare/1.0.0...2.0.0',
+  );
+});
+
+test('fillCompareTemplate encodes each placeholder', () => {
+  assert.equal(
+    fillCompareTemplate('https://x.example/{repo}/{from}/{to}', 'a/b', 'v1.0', 'v2.0'),
+    'https://x.example/a%2Fb/v1.0/v2.0',
+  );
 });

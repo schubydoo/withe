@@ -11,6 +11,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
 
 import type { SourceConfig, SourceKind } from '../adapters/types.ts';
+import { fillCompareTemplate } from '../core/links.ts';
 import { bindAddress, exposureWarning, inContainer, systemProbe, type ContainerProbe, type Env } from './exposure.ts';
 
 export class ConfigError extends Error {
@@ -31,6 +32,9 @@ export interface WitheConfig {
   stalledAfterDays: number;
   /** Unset means keep run history indefinitely (PRD Section 6.3.1). */
   retentionDays: number | null;
+  /** An operator's compare-link template (B-6), or null to use the forge's own.
+   * Placeholders {repo}, {from}, {to} are filled URL-encoded. */
+  compareUrl: string | null;
   auth: { user: string; pass: string } | null;
   tls: { cert: string; key: string } | null;
   /** True when Withe is running in a container, which decides `bind`. */
@@ -93,6 +97,7 @@ export function loadConfig(env: Env = process.env, probe: ContainerProbe = syste
     syncIntervalSeconds: positive(env, 'WITHE_SYNC_INTERVAL_SECONDS', DEFAULTS.syncIntervalSeconds),
     stalledAfterDays: positive(env, 'WITHE_STALLED_AFTER_DAYS', DEFAULTS.stalledAfterDays),
     retentionDays: env.WITHE_RETENTION_DAYS ? positive(env, 'WITHE_RETENTION_DAYS', 0) : null,
+    compareUrl: compareUrlFrom(env, warnings),
     auth,
     tls,
     container,
@@ -209,6 +214,34 @@ function readSource(entry: RawSource, index: number, env: Env, seen: Set<string>
   }
 
   return config;
+}
+
+function compareUrlFrom(env: Env, warnings: string[]): string | null {
+  const raw = env.WITHE_COMPARE_URL;
+  if (!raw || raw.trim() === '') return null;
+  const template = raw.trim();
+  // A template that names no placeholder — or misspells all of them — passes the
+  // http(s) check below (it is a valid URL) but would send every dependency to
+  // the same page. Catch that first, since the URL check cannot.
+  if (!/\{(repo|from|to)\}/.test(template)) {
+    warnings.push(
+      'WITHE_COMPARE_URL names none of the placeholders {repo}, {from}, {to}, so every ' +
+        'compare link would point at the same page. Ignoring it; compare links use the forge.',
+    );
+    return null;
+  }
+  // Prove it makes a real address before trusting it, with sample values. A
+  // broken preference falls back to the forge's own compare link rather than
+  // taking the page down.
+  if (fillCompareTemplate(template, 'owner/repo', '1.0.0', '2.0.0') === null) {
+    warnings.push(
+      'WITHE_COMPARE_URL is not a usable http(s) template, so compare links use the forge. ' +
+        'Use the placeholders {repo}, {from}, {to}, for example ' +
+        'https://octochangelog.com/compare?repo={repo}&from={from}&to={to}',
+    );
+    return null;
+  }
+  return template;
 }
 
 function authFrom(env: Env): WitheConfig['auth'] {

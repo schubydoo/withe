@@ -40,6 +40,7 @@ function read() {
       repos: triage(db),
       forge: forges(db),
       schedule: schedules(db),
+      compareUrl: config.compareUrl,
       intervalSeconds: config.syncIntervalSeconds,
       stalledAfterDays: config.stalledAfterDays,
     };
@@ -82,11 +83,13 @@ function Group({
   rows,
   empty,
   forge,
+  compareUrl,
 }: {
   title: string;
   rows: PendingUpdateRow[];
   empty: string;
   forge: Map<string, ForgeInfo>;
+  compareUrl: string | null;
 }) {
   return (
     <section className="mt-8">
@@ -98,55 +101,60 @@ function Group({
       ) : (
         <table className="mt-2 w-full text-sm">
           <tbody>
-            {rows.map((row) => (
-              <tr
-                key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
-                className="border-t border-neutral-200 dark:border-neutral-800"
-              >
-                <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">
-                  <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
-                    {row.repoFullName}
-                  </Maybe>
-                </td>
-                <td className="py-1 pr-4 font-medium">
-                  {row.dependencyName}
-                  {row.packageFileCount > 1 && (
-                    <span className="ml-1 text-neutral-500 dark:text-neutral-400">×{row.packageFileCount} files</span>
-                  )}
-                </td>
-                <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
-                  <Maybe
-                    href={
-                      dependencyLink(row.datasource, row.packageName, row.currentVersion, row.targetVersion)
-                        ?.href ?? null
-                    }
-                    title={
-                      dependencyLink(row.datasource, row.packageName, row.currentVersion, row.targetVersion)
-                        ?.kind === 'compare'
-                        ? 'Compare these two versions upstream'
-                        : 'Open the package page'
-                    }
-                  >
-                    {row.currentVersion} → {row.targetVersion}
-                  </Maybe>
-                </td>
-                <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
-                <td className="py-1 text-neutral-500 dark:text-neutral-400">
-                  {row.prNumber === null ? '' : (
-                    <Maybe
-                      href={pullRequestUrl(
-                        info(forge, row).webBaseUrl,
-                        info(forge, row).platform,
-                        row.repoFullName,
-                        row.prNumber,
-                      )}
-                    >
-                      PR #{row.prNumber}
+            {rows.map((row) => {
+              const link = dependencyLink(
+                row.datasource,
+                row.packageName,
+                row.currentVersion,
+                row.targetVersion,
+                compareUrl,
+              );
+              return (
+                <tr
+                  key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
+                  className="border-t border-neutral-200 dark:border-neutral-800"
+                >
+                  <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">
+                    <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
+                      {row.repoFullName}
                     </Maybe>
-                  )}
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="py-1 pr-4 font-medium">
+                    {row.dependencyName}
+                    {row.packageFileCount > 1 && (
+                      <span className="ml-1 text-neutral-500 dark:text-neutral-400">×{row.packageFileCount} files</span>
+                    )}
+                  </td>
+                  <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
+                    <Maybe
+                      href={link?.href ?? null}
+                      title={
+                        link?.kind === 'compare'
+                          ? 'Compare these two versions upstream'
+                          : 'Open the package page'
+                      }
+                    >
+                      {row.currentVersion} → {row.targetVersion}
+                    </Maybe>
+                  </td>
+                  <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
+                  <td className="py-1 text-neutral-500 dark:text-neutral-400">
+                    {row.prNumber === null ? '' : (
+                      <Maybe
+                        href={pullRequestUrl(
+                          info(forge, row).webBaseUrl,
+                          info(forge, row).platform,
+                          row.repoFullName,
+                          row.prNumber,
+                        )}
+                      >
+                        PR #{row.prNumber}
+                      </Maybe>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
@@ -286,7 +294,7 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
 }
 
 export default function Home() {
-  const { updates, locks, repos, forge, schedule, intervalSeconds, stalledAfterDays } = read();
+  const { updates, locks, repos, forge, schedule, compareUrl, intervalSeconds, stalledAfterDays } = read();
   const graceMs = intervalSeconds * 1000;
   const nextRun = soonestNextRun(schedule, Date.now(), graceMs);
 
@@ -333,10 +341,23 @@ export default function Home() {
         title="Held for your review"
         rows={held}
         forge={forge}
+        compareUrl={compareUrl}
         empty="Nothing is waiting on a decision. Majors and 0.x minors appear here."
       />
-      <Group title="Open pull requests" rows={open} forge={forge} empty="No update has an open pull request." />
-      <Group title="Queued, no pull request yet" rows={queued} forge={forge} empty="Nothing is queued." />
+      <Group
+        title="Open pull requests"
+        rows={open}
+        forge={forge}
+        compareUrl={compareUrl}
+        empty="No update has an open pull request."
+      />
+      <Group
+        title="Queued, no pull request yet"
+        rows={queued}
+        forge={forge}
+        compareUrl={compareUrl}
+        empty="Nothing is queued."
+      />
 
       <Locks rows={locks} forge={forge} />
 

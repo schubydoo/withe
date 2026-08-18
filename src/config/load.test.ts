@@ -53,6 +53,7 @@ test('every documented variable is read, with its documented default', () => {
   assert.equal(config.syncIntervalSeconds, 300);
   assert.equal(config.stalledAfterDays, 7);
   assert.equal(config.retentionDays, null);
+  assert.equal(config.compareUrl, null);
   assert.equal(config.auth, null);
   assert.equal(config.tls, null);
   assert.equal(config.bind, '127.0.0.1');
@@ -72,16 +73,38 @@ test('every documented variable can be overridden', () => {
     WITHE_TLS_KEY: '/certs/k.pem',
     WITHE_BIND: '0.0.0.0',
     WITHE_PORT: '8080',
+    WITHE_COMPARE_URL: 'https://octochangelog.com/compare?repo={repo}&from={from}&to={to}',
   }, HOST);
 
   assert.equal(config.dbPath, '/tmp/x.db');
   assert.equal(config.syncIntervalSeconds, 60);
   assert.equal(config.stalledAfterDays, 3);
   assert.equal(config.retentionDays, 90);
+  assert.equal(config.compareUrl, 'https://octochangelog.com/compare?repo={repo}&from={from}&to={to}');
   assert.deepEqual(config.auth, { user: 'me', pass: 'pw' });
   assert.deepEqual(config.tls, { cert: '/certs/c.pem', key: '/certs/k.pem' });
   assert.equal(config.bind, '0.0.0.0');
   assert.equal(config.port, 8080);
+});
+
+test('a compare-url template that is not http(s) is refused, with a warning', () => {
+  const config = loadConfig(
+    { WITHE_CONFIG: NO_FILE, WITHE_COMPARE_URL: 'javascript:alert(1)' },
+    HOST,
+  );
+  assert.equal(config.compareUrl, null);
+  assert.ok(config.warnings.some((w) => /WITHE_COMPARE_URL/.test(w)));
+});
+
+test('a compare-url template that names no placeholder is refused, with a warning', () => {
+  // A valid URL with no {repo}/{from}/{to} passes the http(s) check but would
+  // send every dependency to the same page, so it is caught separately.
+  const config = loadConfig(
+    { WITHE_CONFIG: NO_FILE, WITHE_COMPARE_URL: 'https://example.com/diff' },
+    HOST,
+  );
+  assert.equal(config.compareUrl, null);
+  assert.ok(config.warnings.some((w) => /placeholders/.test(w)));
 });
 
 test('a config file wins, and the flat variables are ignored with a warning', () => {
