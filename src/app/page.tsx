@@ -40,6 +40,7 @@ function read() {
       repos: triage(db),
       forge: forges(db),
       schedule: schedules(db),
+      intervalSeconds: config.syncIntervalSeconds,
       stalledAfterDays: config.stalledAfterDays,
     };
   } finally {
@@ -285,8 +286,9 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
 }
 
 export default function Home() {
-  const { updates, locks, repos, forge, schedule, stalledAfterDays } = read();
-  const nextRun = soonestNextRun(schedule);
+  const { updates, locks, repos, forge, schedule, intervalSeconds, stalledAfterDays } = read();
+  const graceMs = intervalSeconds * 1000;
+  const nextRun = soonestNextRun(schedule, Date.now(), graceMs);
 
   if (repos.length === 0) redirect('/preflight');
 
@@ -320,7 +322,7 @@ export default function Home() {
         {nextRun !== null && (
           <>
             {' '}
-            · <NextRun atMs={nextRun.getTime()} />
+            · <NextRun atMs={nextRun.getTime()} graceMs={graceMs} />
           </>
         )}
       </p>

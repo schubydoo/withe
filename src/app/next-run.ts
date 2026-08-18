@@ -67,12 +67,22 @@ export function nextRunAt(schedule: Schedule): Date | null {
   return new Date(schedule.lastScheduling.getTime() + period * 1000);
 }
 
-/** The soonest next run across sources, or null when none can be estimated. */
-export function soonestNextRun(schedules: readonly Schedule[]): Date | null {
+/**
+ * The soonest next run across sources, or null when none can be estimated.
+ *
+ * An estimate already more than `graceMs` in the past is ignored rather than
+ * chosen. `lastScheduling` lags a sync by up to one interval, and a source
+ * dropped from the config keeps its last schedule forever (nothing prunes the
+ * `source` table), so without this one ancient estimate would win the minimum
+ * and pin the header past-due while the live sources are fine. `nowMs` is passed
+ * so this stays pure and testable.
+ */
+export function soonestNextRun(schedules: readonly Schedule[], nowMs: number, graceMs: number): Date | null {
   let soonest: Date | null = null;
   for (const schedule of schedules) {
     const at = nextRunAt(schedule);
-    if (at && (soonest === null || at.getTime() < soonest.getTime())) soonest = at;
+    if (!at || at.getTime() < nowMs - graceMs) continue;
+    if (soonest === null || at.getTime() < soonest.getTime()) soonest = at;
   }
   return soonest;
 }
@@ -82,12 +92,16 @@ function plural(n: number, word: string): string {
 }
 
 /**
- * The countdown in words: "in 34 minutes", "in about 2 hours", or "overdue" once
- * the estimate has passed. The label names what it counts down to — a Renovate
- * run, not a pull request, which the preset's own schedule governs.
+ * The countdown in words, or null to show nothing. `graceSeconds` bounds how far
+ * past the estimate the run still reads as "due now": `lastScheduling` lags a
+ * sync by up to that, so a moment past the estimate is that lag, not a stuck run.
+ * Beyond the grace the estimate is too stale to trust — the page has not
+ * re-fetched it — so this returns null rather than an indefinite "overdue"; the
+ * staleness banner (B-9) is the authority on a genuinely stuck scheduler.
  */
-export function describeCountdown(remainingSeconds: number): string {
-  if (remainingSeconds <= 0) return 'overdue';
+export function describeCountdown(remainingSeconds: number, graceSeconds: number): string | null {
+  if (remainingSeconds < -graceSeconds) return null;
+  if (remainingSeconds <= 0) return 'due now';
   if (remainingSeconds < 60) return 'in less than a minute';
   const minutes = Math.round(remainingSeconds / 60);
   if (minutes < 60) return `in ${plural(minutes, 'minute')}`;
