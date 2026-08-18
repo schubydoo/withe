@@ -110,49 +110,49 @@ function Group({
                 compareUrl,
               );
               return (
-              <tr
-                key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
-                className="border-t border-neutral-200 dark:border-neutral-800"
-              >
-                <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">
-                  <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
-                    {row.repoFullName}
-                  </Maybe>
-                </td>
-                <td className="py-1 pr-4 font-medium">
-                  {row.dependencyName}
-                  {row.packageFileCount > 1 && (
-                    <span className="ml-1 text-neutral-500 dark:text-neutral-400">×{row.packageFileCount} files</span>
-                  )}
-                </td>
-                <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
-                  <Maybe
-                    href={link?.href ?? null}
-                    title={
-                      link?.kind === 'compare'
-                        ? 'Compare these two versions upstream'
-                        : 'Open the package page'
-                    }
-                  >
-                    {row.currentVersion} → {row.targetVersion}
-                  </Maybe>
-                </td>
-                <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
-                <td className="py-1 text-neutral-500 dark:text-neutral-400">
-                  {row.prNumber === null ? '' : (
-                    <Maybe
-                      href={pullRequestUrl(
-                        info(forge, row).webBaseUrl,
-                        info(forge, row).platform,
-                        row.repoFullName,
-                        row.prNumber,
-                      )}
-                    >
-                      PR #{row.prNumber}
+                <tr
+                  key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
+                  className="border-t border-neutral-200 dark:border-neutral-800"
+                >
+                  <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">
+                    <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
+                      {row.repoFullName}
                     </Maybe>
-                  )}
-                </td>
-              </tr>
+                  </td>
+                  <td className="py-1 pr-4 font-medium">
+                    {row.dependencyName}
+                    {row.packageFileCount > 1 && (
+                      <span className="ml-1 text-neutral-500 dark:text-neutral-400">×{row.packageFileCount} files</span>
+                    )}
+                  </td>
+                  <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
+                    <Maybe
+                      href={link?.href ?? null}
+                      title={
+                        link?.kind === 'compare'
+                          ? 'Compare these two versions upstream'
+                          : 'Open the package page'
+                      }
+                    >
+                      {row.currentVersion} → {row.targetVersion}
+                    </Maybe>
+                  </td>
+                  <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
+                  <td className="py-1 text-neutral-500 dark:text-neutral-400">
+                    {row.prNumber === null ? '' : (
+                      <Maybe
+                        href={pullRequestUrl(
+                          info(forge, row).webBaseUrl,
+                          info(forge, row).platform,
+                          row.repoFullName,
+                          row.prNumber,
+                        )}
+                      >
+                        PR #{row.prNumber}
+                      </Maybe>
+                    )}
+                  </td>
+                </tr>
               );
             })}
           </tbody>

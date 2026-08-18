@@ -33,11 +33,19 @@ WITHE_COMPARE_URL=https://octochangelog.com/compare?repo={repo}&from={from}&to={
 ```
 
 The placeholders `{repo}`, `{from}`, and `{to}` are filled URL-encoded, so a
-query-string template escapes correctly (`{repo}` becomes `owner%2Frepo`). Only
-the forge-backed compare links are redirected — github and gitlab sources with
-two known versions; package links stay as they are. A template that does not
-form an `http` or `https` address is ignored with a startup warning, and the
-forge link is used.
+query-string template escapes correctly (`{repo}` becomes `owner%2Frepo`). That
+encoding suits a query string; a path-style template that needs a literal slash
+in the repository path is not supported, because `{repo}` is always escaped.
+
+The template replaces the compare links for **every** forge — both GitHub and
+GitLab sources with two known versions (package links stay as they are). It
+carries no way to say which forge a link is for, so a service that understands
+only one — octochangelog resolves GitHub repositories only — will turn the
+others' compare links into ones it cannot open. Use a forge-specific service
+only where every dependency lives on that forge.
+
+A template that names none of the placeholders, or that does not form an `http`
+or `https` address, is ignored with a startup warning and the forge link is used.
 
 ## Config file (many sources)
 

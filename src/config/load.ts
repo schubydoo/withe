@@ -220,6 +220,16 @@ function compareUrlFrom(env: Env, warnings: string[]): string | null {
   const raw = env.WITHE_COMPARE_URL;
   if (!raw || raw.trim() === '') return null;
   const template = raw.trim();
+  // A template that names no placeholder — or misspells all of them — passes the
+  // http(s) check below (it is a valid URL) but would send every dependency to
+  // the same page. Catch that first, since the URL check cannot.
+  if (!/\{(repo|from|to)\}/.test(template)) {
+    warnings.push(
+      'WITHE_COMPARE_URL names none of the placeholders {repo}, {from}, {to}, so every ' +
+        'compare link would point at the same page. Ignoring it; compare links use the forge.',
+    );
+    return null;
+  }
   // Prove it makes a real address before trusting it, with sample values. A
   // broken preference falls back to the forge's own compare link rather than
   // taking the page down.

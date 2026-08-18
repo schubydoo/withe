@@ -96,6 +96,17 @@ test('a compare-url template that is not http(s) is refused, with a warning', ()
   assert.ok(config.warnings.some((w) => /WITHE_COMPARE_URL/.test(w)));
 });
 
+test('a compare-url template that names no placeholder is refused, with a warning', () => {
+  // A valid URL with no {repo}/{from}/{to} passes the http(s) check but would
+  // send every dependency to the same page, so it is caught separately.
+  const config = loadConfig(
+    { WITHE_CONFIG: NO_FILE, WITHE_COMPARE_URL: 'https://example.com/diff' },
+    HOST,
+  );
+  assert.equal(config.compareUrl, null);
+  assert.ok(config.warnings.some((w) => /placeholders/.test(w)));
+});
+
 test('a config file wins, and the flat variables are ignored with a warning', () => {
   const path = file(`
 sources:
