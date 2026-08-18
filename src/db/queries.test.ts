@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 
+import { sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import type { CollectResult } from '../adapters/types.ts';
@@ -11,7 +12,7 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist, recomputeStalled } from './persist.ts';
-import { forges, lastSync, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, triage } from './queries.ts';
+import { forges, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, triage } from './queries.ts';
 import { renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
@@ -106,9 +107,13 @@ test('a sync writes every entity and records when it happened', () => {
   const counts = persist(db, SOURCE, 'ce', FLEET, new Date('2026-08-06T17:00:00Z'));
 
   assert.deepEqual(counts, { repos: 3, runs: 4, updates: 5 });
-  const sync = lastSync(db);
-  assert.ok(sync.lastSyncAt instanceof Date, 'the first sync must record its time, not only later ones');
-  assert.equal(sync.outcome, 'ok');
+  // Read the recorded sync straight from the row: persist must stamp the time and
+  // outcome on the source, not only count what it wrote.
+  const [recorded] = db.all<{ lastSyncAt: number | null; outcome: string | null }>(sql`
+    select last_sync_at as lastSyncAt, last_sync_outcome as outcome from source limit 1
+  `);
+  assert.ok(recorded && recorded.lastSyncAt !== null, 'the first sync must record its time, not only later ones');
+  assert.equal(recorded?.outcome, 'ok');
   sqlite.close();
 });
 

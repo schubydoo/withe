@@ -8,7 +8,6 @@ import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from '../db/client.ts';
 import {
   forges,
-  lastSync,
   lockFileRefreshes,
   pendingUpdates,
   triage,
@@ -37,8 +36,6 @@ function read() {
       locks: lockFileRefreshes(db),
       repos: triage(db),
       forge: forges(db),
-      sync: lastSync(db),
-      intervalSeconds: config.syncIntervalSeconds,
       stalledAfterDays: config.stalledAfterDays,
     };
   } finally {
@@ -284,7 +281,7 @@ function Trouble({ failing, stalled }: { failing: TriageRow[]; stalled: TriageRo
 }
 
 export default function Home() {
-  const { updates, locks, repos, forge, sync, intervalSeconds, stalledAfterDays } = read();
+  const { updates, locks, repos, forge, stalledAfterDays } = read();
 
   if (repos.length === 0) redirect('/preflight');
 
@@ -301,11 +298,8 @@ export default function Home() {
   const open = rest.filter((u) => u.prNumber !== null);
   const queued = rest.filter((u) => u.prNumber === null);
 
-  // Two missed cycles is late enough to mean something and rare enough not to
-  // cry wolf during a slow sync.
-  const stale =
-    sync.lastSyncAt !== null && Date.now() - sync.lastSyncAt.getTime() > intervalSeconds * 2000;
-
+  // Staleness is shown by the banner in the layout, on every page and from the
+  // one threshold in core/health.ts, rather than computed once here at render.
   return (
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Withe</h1>
@@ -319,18 +313,6 @@ export default function Home() {
           health
         </a>
       </p>
-
-      {(stale || sync.lastSyncAt === null) && (
-        <p className="mt-4 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
-          {sync.lastSyncAt === null
-            ? 'Withe has never completed a sync. Everything below is empty rather than wrong.'
-            : `Last successful sync ${age(sync.lastSyncAt)} ago, against a ${intervalSeconds}-second interval. Everything below may be out of date.`}{' '}
-          <a className="underline" href="/preflight">
-            Check the connection
-          </a>
-          .
-        </p>
-      )}
 
       <Trouble failing={failing} stalled={stalled} />
 

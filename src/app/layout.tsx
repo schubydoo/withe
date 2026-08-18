@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { exposureWarning } from '../config/exposure.ts';
 import { loadConfig } from '../config/load.ts';
+import { StalenessBanner } from './staleness-banner.tsx';
 import { ThemeToggle } from './theme-toggle.tsx';
 
 export const metadata: Metadata = {
@@ -41,6 +42,7 @@ export default function RootLayout({
             <p className="mx-auto max-w-4xl px-8 py-2 text-sm">{warning}</p>
           </div>
         )}
+        <StalenessBanner />
         {children}
       </body>
     </html>

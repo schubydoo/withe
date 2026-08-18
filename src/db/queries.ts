@@ -119,22 +119,6 @@ export function repoHealth(db: Db): RepoHealthRow[] {
   }));
 }
 
-export interface SyncSummary {
-  lastSyncAt: Date | null;
-  outcome: string | null;
-}
-
-export function lastSync(db: Db): SyncSummary {
-  const [row] = db.all<{ lastSyncAt: number | null; outcome: string | null }>(sql`
-    select last_sync_at as lastSyncAt, last_sync_outcome as outcome
-      from source order by last_sync_at desc limit 1
-  `);
-  return {
-    lastSyncAt: row?.lastSyncAt ? new Date(row.lastSyncAt * 1000) : null,
-    outcome: row?.outcome ?? null,
-  };
-}
-
 export interface InventoryRow {
   sourceAdapterId: string;
   org: string;
