@@ -618,6 +618,10 @@
 </code></pre></div>
 <p>To build from source instead, run <code>docker build -t withe .</code> and use <code>withe</code> in place of the image
 name below.</p>
+<p><strong>Nightly builds.</strong> To dogfood unreleased changes, pull <code>ghcr.io/schubydoo/withe:nightly</code> — a signed
+multi-arch image rebuilt from <code>main</code> each night. Pin a specific night with the dated
+<code>nightly-YYYYMMDD</code> tag. Nightlies are for testing; <code>latest</code> and the <code>v*</code> tags stay reserved for
+stable releases.</p>
 <h2 id="run-it">Run it<a class="headerlink" href="#run-it" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span><span class="se">\</span>
 <a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span>--name<span class="w"> </span>withe<span class="w"> </span><span class="se">\</span>
