@@ -16,7 +16,9 @@ name: Nightly
 
 on:
   schedule:
-    - cron: "0 4 * * *" # 04:00 UTC daily
+    - cron: "13 3 * * *" # 03:13 UTC daily — off the top of the hour (repo convention;
+    # the on-the-hour slot is the most contended on GitHub's scheduler) and clear
+    # of the other crons (security 04:37, osv 05:27, client 06:17, scorecard 07:18).
   workflow_dispatch: {}
 
 permissions:
@@ -27,33 +29,47 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # A scheduled build only when main has a commit in the last day; a manual
-  # dispatch always builds. The default shallow checkout carries HEAD, whose
-  # commit date is all this heuristic needs.
+  # Decide whether to build: main only, and only when its HEAD differs from the
+  # commit the last successful nightly published. Comparing commits rather than a
+  # wall-clock window means a scheduled run delayed behind GitHub's queue cannot
+  # silently drop a night. A manual dispatch always builds (but still main only).
   changed:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read # gh run list, to read the last nightly's commit
     outputs:
       build: ${{ steps.check.outputs.build }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
       - id: check
         env:
           EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # workflow_dispatch can select any branch; building it would push that
+          # branch to the rolling `nightly` tag. Nightly is main only.
+          if [ "$REF" != "main" ]; then
+            echo "::error::Nightly builds main only; refusing ref '$REF'."
+            exit 1
+          fi
           if [ "$EVENT" = "workflow_dispatch" ]; then
             echo "build=true" >> "$GITHUB_OUTPUT"
             echo "::notice::manual dispatch — building the nightly."
             exit 0
           fi
-          if [ -n "$(git log --since='25 hours ago' --pretty=%H -1)" ]; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
-          else
+          # The last successful nightly's commit; empty on the first ever run.
+          last=$(gh run list --workflow=nightly.yml --branch main --status success \
+                   --limit 1 --json headSha --jq '.[0].headSha // ""')
+          if [ "$last" = "$HEAD_SHA" ]; then
             echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::main unchanged in the last day — skipping the nightly build."
+            echo "::notice::main is at $HEAD_SHA, already the last nightly — skipping."
+          else
+            echo "build=true" >> "$GITHUB_OUTPUT"
           fi
 
   image:
@@ -91,13 +107,16 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository }}
-          # A rolling `nightly`, a dated `nightly-YYYYMMDD` to pin one night, and
-          # a `sha-<short>` for the exact commit. Never `latest` — that is the
-          # stable release's tag, not a build off unreleased main.
+          # A rolling `nightly` and a dated `nightly-YYYYMMDD` to pin one night.
+          # Never `latest` — that is the stable release's tag, not a build off
+          # unreleased main. The dated tag records the commit through the OCI
+          # `revision` label, so a separate `sha-` tag would only duplicate it.
+          # The `changed` gate builds only when main actually moves, so dated tags
+          # accrue at the rate of change, not one a night; set a retention policy
+          # on the GHCR package (keep the most recent N `nightly-*`) if they pile up.
           tags: |
             type=raw,value=nightly
             type=raw,value=nightly-{{date 'YYYYMMDD'}}
-            type=sha,format=short
           flavor: |
             latest=false
 
