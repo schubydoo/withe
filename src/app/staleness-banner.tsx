@@ -110,17 +110,22 @@ export function StalenessBanner() {
   if (text === null) return null;
 
   return (
-    <p
+    // Matches the exposure banner in the layout it sits under: a full-width bar
+    // whose text sits in the same centered, padded column (B-8), with the dark
+    // palette the rest of the app gained in B-3.
+    <div
       role="status"
       aria-live="polite"
-      className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
+      className="border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-200"
     >
-      {text}{' '}
-      <a className="underline" href="/health">
-        Health
-      </a>
-      .
-    </p>
+      <p className="mx-auto max-w-4xl px-8 py-2 text-sm">
+        {text}{' '}
+        <a className="underline" href="/health">
+          Health
+        </a>
+        .
+      </p>
+    </div>
   );
 }
 
