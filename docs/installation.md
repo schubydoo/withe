@@ -9,6 +9,11 @@ docker pull ghcr.io/schubydoo/withe:latest
 To build from source instead, run `docker build -t withe .` and use `withe` in place of the image
 name below.
 
+**Nightly builds.** To dogfood unreleased changes, pull `ghcr.io/schubydoo/withe:nightly` — a signed
+multi-arch image rebuilt from `main` each night. Pin a specific night with the dated
+`nightly-YYYYMMDD` tag. Nightlies are for testing; `latest` and the `v*` tags stay reserved for
+stable releases.
+
 ## Run it
 
 ```bash
