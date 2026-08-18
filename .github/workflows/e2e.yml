@@ -85,7 +85,11 @@ jobs:
       # Playwright drives the cross-browser smoke; --with-deps installs the
       # system libraries WebKit and Firefox need, which a bare runner lacks.
       - name: Install Playwright browsers
-        timeout-minutes: 6
+        # Higher than the agent-browser step: this one apt-installs the ~120 WebKit
+        # and Firefox system packages, which is a legitimate multi-minute cold
+        # install on a runner that lacks them, and hit a 6-minute cap mid-unpack.
+        # Still well under the job's 20-minute cap, so a true hang is caught first.
+        timeout-minutes: 14
         run: npx playwright install --with-deps chromium firefox webkit
 
       - name: Flows and accessibility (agent-browser)
