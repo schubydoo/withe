@@ -37,8 +37,12 @@ name: Claude Code Review
 # SECURITY: the action itself only runs for users with write access and denies bots by
 # default. The `if:` below is narrower still — maintainer only, because this spends a
 # personal subscription quota — and cheaper, since it stops the job spinning up at all.
-# Advisory only: `contents: read` (Claude cannot push) and the instructions require a
-# COMMENT review, never REQUEST_CHANGES, so it can never gate a merge.
+# Advisory only: the instructions require a COMMENT review, never REQUEST_CHANGES, so
+# it can never gate a merge. Note the token Claude holds is the Claude App's own
+# installation token (minted from the OIDC exchange, not the job's GITHUB_TOKEN), so
+# the job's `contents: read` does not clamp it; its scope is whatever that App is
+# granted on this repo. The guarantee here rests on the COMMENT-review instruction,
+# not on a read-only token.
 
 on:
   issue_comment:
@@ -89,30 +93,10 @@ jobs:
           { echo "pr=$PR"; echo "debug=$DEBUG"; } >> "$GITHUB_OUTPUT"
           echo "::notice::Reviewing PR #$PR (debug artifact: $DEBUG)"
 
-      # Short-lived withe-ci App token for this review's GitHub API calls (>=5,000
-      # REST req/hr vs the 1,000/hr github-actions[bot] pool). continue-on-error
-      # plus the `|| github.token` fallbacks below mean a failed mint degrades to
-      # exactly the previous GITHUB_TOKEN behaviour. The submitted review and the
-      # tracking comment still post as claude[bot] — that identity comes from
-      # claude_code_oauth_token, not this token — so the post-count check is
-      # unaffected. Needs the App to have issues + pull-requests write and
-      # actions:read (for the mcp__github_ci__* log tools).
-      - name: Mint withe-ci App token
-        id: app-token
-        continue-on-error: true
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          app-id: ${{ secrets.WITHE_CI_APP_ID }}
-          private-key: ${{ secrets.WITHE_CI_APP_PRIVATE_KEY }}
-          permission-contents: read
-          permission-pull-requests: write
-          permission-issues: write
-          permission-actions: read
-
       - name: Count what Claude has already posted
         id: before
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ github.token }}
           PR: ${{ steps.resolve.outputs.pr }}
         run: |
           set -euo pipefail
@@ -129,7 +113,7 @@ jobs:
       - name: Fetch the review instructions from the default branch
         id: rules
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
@@ -183,11 +167,14 @@ jobs:
         uses: anthropics/claude-code-action@9d7150bc8a3dae8149739a88019d192b579ad90c # v1.0.193
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # withe-ci App token for the action's own GitHub API + CI-log tools
-          # (higher REST budget). Falls back to github.token if the mint failed.
-          # Comment/review identity stays claude[bot] — that is driven by
-          # claude_code_oauth_token above, not this token.
-          github_token: ${{ steps.app-token.outputs.token || github.token }}
+          # No `github_token` override: with only claude_code_oauth_token set, the
+          # action exchanges the job's OIDC token (id-token: write) for the Claude
+          # GitHub App's own installation token, so the review and its comments post
+          # as claude[bot] (matching the sibling repos). An override would make them
+          # post as that token's identity instead. The CI-log tools keep working
+          # through `additional_permissions: actions: read` below, which the action
+          # honours only on this token-exchange path — so deleting that input, not
+          # the job's permissions, is what would kill them.
           trigger_phrase: "@claude review"
           # NO `prompt:` — see the banner. Guidance goes through the system prompt.
           #
@@ -277,7 +264,7 @@ jobs:
         # that actually matters — whether the pull request gained a Claude comment.
         if: always() && steps.before.outcome == 'success'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ github.token }}
           PR: ${{ steps.resolve.outputs.pr }}
           BEFORE: ${{ steps.before.outputs.count }}
         run: |

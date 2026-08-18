@@ -126,7 +126,8 @@ List lock-file refreshes in their own section instead of only counting them
 - **Never add a `README.md` or any non-fragment `.md` to `.changeset/`** — knope parses every `.md`
   there and a file without front matter fails the release.
 - `CHANGELOG.md` is generated from these fragments; do not hand-edit it. Internal-only pull requests
-  (CI, refactor, tests) skip the changeset.
+  (CI, refactor, tests) skip the changeset — add the **`no-changelog`** label to opt out, which also
+  clears the advisory changeset-check comment.
 
 Releases run through [knope](https://knope.tech): merging a `chore: prepare release` pull request
 tags `v*` and builds the image.
