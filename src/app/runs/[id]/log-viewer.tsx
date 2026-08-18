@@ -24,13 +24,13 @@ const ROW = 22;
 const OVERSCAN = 20;
 
 const TONE: Record<LevelName, string> = {
-  trace: 'text-neutral-500 dark:text-neutral-400',
-  debug: 'text-neutral-500 dark:text-neutral-400',
+  trace: 'text-neutral-600 dark:text-neutral-400',
+  debug: 'text-neutral-600 dark:text-neutral-400',
   info: 'text-neutral-800 dark:text-neutral-200',
-  warn: 'text-amber-700 dark:text-amber-300',
+  warn: 'text-amber-800 dark:text-amber-300',
   error: 'text-red-700 dark:text-red-300',
   fatal: 'text-red-800 dark:text-red-300',
-  raw: 'text-purple-700 dark:text-purple-300',
+  raw: 'text-purple-800 dark:text-purple-300',
 };
 
 const ALL_LEVELS: LevelName[] = [...new Set(Object.values(LEVELS))];
@@ -163,7 +163,7 @@ export function LogViewer({ runId }: { runId: number }) {
           })}
         </fieldset>
 
-        <span className="text-neutral-500 dark:text-neutral-400">
+        <span className="text-neutral-600 dark:text-neutral-400">
           {visible.length === parsed.lines.length
             ? `${parsed.lines.length} lines`
             : `${visible.length} of ${parsed.lines.length} lines`}
@@ -221,7 +221,7 @@ function Row({
         expanded ? 'bg-neutral-200 dark:bg-neutral-800 dark:ring-1 dark:ring-inset dark:ring-neutral-600' : ''
       }`}
     >
-      <span className="w-12 shrink-0 text-right text-neutral-500 dark:text-neutral-400">{line.index + 1}</span>
+      <span className="w-12 shrink-0 text-right text-neutral-600 dark:text-neutral-400">{line.index + 1}</span>
       <span className={`w-12 shrink-0 uppercase ${TONE[line.level]}`}>{line.level}</span>
       <span className={TONE[line.level]}>{line.message}</span>
     </button>

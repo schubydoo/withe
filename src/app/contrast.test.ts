@@ -14,8 +14,11 @@
  *   - a text colour written beside a background colour (a badge, the banner) is
  *     read on that background;
  *   - a text colour with no background beside it floats on the page background
- *     (`PAGE`), unless the file paints its own surface (`SURFACE`).
- * `hover:`/`focus:` backgrounds are transient and are not treated as the surface.
+ *     (`PAGE`), or, in a file that paints its own surfaces, on every surface that
+ *     file lists (`SURFACE`) — a background written on a container with no text
+ *     beside it, like the log viewer's expanded row, forms a surface that the
+ *     co-located path cannot see, so it is named there instead.
+ * `hover:`/`focus:` backgrounds are transient and are not treated as a surface.
  */
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -91,23 +94,31 @@ const PALETTE: Record<string, string> = {
   'blue-900': '#1e3a8a',
   'purple-300': '#d8b4fe',
   'purple-700': '#9333ea',
+  'purple-800': '#6b21a8',
 };
 
 // The background <body> paints per theme (layout.tsx: `bg-white dark:bg-neutral-950`).
 const PAGE: Record<'light' | 'dark', string> = { light: 'white', dark: 'neutral-950' };
 
-// Files that paint their own surface, so their floating text is not on the page
-// background. Keyed by a path suffix. The log viewer wraps its lines in a
-// neutral-50 / neutral-900 panel.
-const SURFACE: { suffix: string; light: string; dark: string }[] = [
-  { suffix: 'runs/[id]/log-viewer.tsx', light: 'neutral-50', dark: 'neutral-900' },
+// Files that paint their own surfaces, so their floating text is not on the page
+// background. Keyed by a path suffix, and a file may declare more than one — a
+// background written on a container with no text beside it never pairs with that
+// text through the co-located path, so the surface it forms is named here instead.
+// The log viewer has two: the panel its lines sit in, and a row it fills when
+// expanded. Floating text in the file is read on every surface its theme lists.
+const SURFACE: { suffix: string; light: string[]; dark: string[] }[] = [
+  {
+    suffix: 'runs/[id]/log-viewer.tsx',
+    light: ['neutral-50', 'neutral-200'],
+    dark: ['neutral-900', 'neutral-800'],
+  },
 ];
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 
-function surfaceFor(file: string, theme: 'light' | 'dark'): string {
+function surfacesFor(file: string, theme: 'light' | 'dark'): string[] {
   const override = SURFACE.find((s) => file.endsWith(s.suffix));
-  return override ? override[theme] : PAGE[theme];
+  return override ? override[theme] : [PAGE[theme]];
 }
 
 function tsxFiles(dir: string): string[] {
@@ -151,7 +162,12 @@ function pairsFromFile(file: string): Pair[] {
         .filter((m) => Boolean(m[1]) === want)
         .map((m) => m[2])
         .filter((c): c is string => c !== undefined);
-      for (const fg of texts) pairs.push({ theme, fg, bg: bg ?? surfaceFor(file, theme) });
+      for (const fg of texts) {
+        // A text colour written beside a background is read on it; one with no
+        // background beside it floats on every surface its file can paint.
+        if (bg) pairs.push({ theme, fg, bg });
+        else for (const surface of surfacesFor(file, theme)) pairs.push({ theme, fg, bg: surface });
+      }
     }
   }
   return pairs;
