@@ -51,20 +51,18 @@ jobs:
       # archive.ubuntu.com (observed twice: runs timed out at 20:15 on this step).
       # Drop the azure mirror and cap apt's retries and timeouts so it fails fast to
       # the working mirror instead of hanging.
-      - name: Make apt fail fast off the flaky mirror
+      - name: Drop the slow apt mirror
         run: |
           # azure.archive.ubuntu.com is the runner's priority:1 in-datacentre apt
-          # mirror — fast when healthy, but intermittently unreachable, and the
-          # `--with-deps` installs below retry it until the job timeout. Probe it,
-          # and only drop it from the mirror list when it is actually down, so a
-          # healthy run keeps the fast mirror. The apt.conf cap below is the safety
-          # net for an azure that dies mid-run, after this probe passed.
-          if ! curl --max-time 5 -sfI http://azure.archive.ubuntu.com/ubuntu/dists/noble/InRelease >/dev/null 2>&1; then
-            if sudo sed -i '\#azure.archive.ubuntu.com#d' /etc/apt/apt-mirrors.txt 2>/dev/null; then
-              echo "::warning::azure apt mirror unreachable — dropped it from the mirror list for this run"
-            else
-              echo "::warning::azure apt mirror unreachable and /etc/apt/apt-mirrors.txt absent — mirror hardening skipped"
-            fi
+          # mirror, but its throughput is unreliable: a reachable-but-throttled
+          # azure (measured ~145 kB/s — a 61 MB font package took 7 minutes) timed
+          # the browser installs out. A reachability probe cannot see throughput,
+          # so drop azure unconditionally and let apt use archive.ubuntu.com, the
+          # mirror the healthy runs actually finished on. Steady beats fast-but-flaky.
+          if sudo sed -i '\#azure.archive.ubuntu.com#d' /etc/apt/apt-mirrors.txt 2>/dev/null; then
+            echo "dropped the azure mirror"
+          else
+            echo "::warning::/etc/apt/apt-mirrors.txt not found — mirror hardening skipped"
           fi
           # Retries 2 (down from apt's default 3) with short timeouts: a dead mirror
           # fails over in well under a minute, while a spare attempt still covers a
