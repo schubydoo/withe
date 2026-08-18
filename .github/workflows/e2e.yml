@@ -44,25 +44,23 @@ jobs:
       - name: Build
         run: npm run build
 
-      # The GitHub runner reaches apt through a mirror list whose first entry,
-      # azure.archive.ubuntu.com, is intermittently unreachable. The two
-      # `--with-deps` installs below each run `apt-get update`, which otherwise
-      # retries that mirror until the 20-minute job timeout before falling back to
-      # archive.ubuntu.com (observed twice: runs timed out at 20:15 on this step).
-      # Drop the azure mirror and cap apt's retries and timeouts so it fails fast to
-      # the working mirror instead of hanging.
-      - name: Drop the slow apt mirror
+      - name: Steer apt off the slow mirror and cap retries
         run: |
-          # azure.archive.ubuntu.com is the runner's priority:1 in-datacentre apt
-          # mirror, but its throughput is unreliable: a reachable-but-throttled
-          # azure (measured ~145 kB/s — a 61 MB font package took 7 minutes) timed
-          # the browser installs out. A reachability probe cannot see throughput,
-          # so drop azure unconditionally and let apt use archive.ubuntu.com, the
-          # mirror the healthy runs actually finished on. Steady beats fast-but-flaky.
-          if sudo sed -i '\#azure.archive.ubuntu.com#d' /etc/apt/apt-mirrors.txt 2>/dev/null; then
+          # The two `--with-deps` installs below run `apt-get update`. The runner's
+          # priority:1 mirror, azure.archive.ubuntu.com, has unreliable throughput:
+          # a reachable-but-throttled azure (measured ~145 kB/s — a 61 MB font
+          # package took 7 minutes) timed the browser installs out at their step
+          # caps. A cheap probe cannot see throughput, so drop azure unconditionally
+          # and let apt use archive.ubuntu.com, the mirror the healthy runs finished
+          # on. Steady beats fast-but-flaky.
+          if grep -qs azure.archive.ubuntu.com /etc/apt/apt-mirrors.txt; then
+            sudo sed -i '\#azure.archive.ubuntu.com#d' /etc/apt/apt-mirrors.txt
             echo "dropped the azure mirror"
           else
-            echo "::warning::/etc/apt/apt-mirrors.txt not found — mirror hardening skipped"
+            # No azure entry to drop: the image renamed the mirror or moved to
+            # deb822. Warn rather than claim a mitigation that did not run — a
+            # silent no-op would return as the 8-minute install timeout.
+            echo "::warning::no azure entry in /etc/apt/apt-mirrors.txt — mirror hardening skipped"
           fi
           # Retries 2 (down from apt's default 3) with short timeouts: a dead mirror
           # fails over in well under a minute, while a spare attempt still covers a
