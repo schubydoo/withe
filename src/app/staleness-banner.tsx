@@ -124,7 +124,7 @@ export function StalenessBanner() {
           <p className="mx-auto max-w-4xl px-8 py-2 text-sm">
             {text}{' '}
             <a className="underline" href="/health">
-              Health
+              Renovate health
             </a>
             .
           </p>
