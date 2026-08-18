@@ -41,6 +41,19 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The GitHub runner reaches apt through a mirror list whose first entry,
+      # azure.archive.ubuntu.com, is intermittently unreachable. The two
+      # `--with-deps` installs below each run `apt-get update`, which otherwise
+      # retries that mirror until the 20-minute job timeout before falling back to
+      # archive.ubuntu.com (observed twice: runs timed out at 20:15 on this step).
+      # Drop the azure mirror and cap apt's retries and timeouts so it fails fast to
+      # the working mirror instead of hanging.
+      - name: Make apt fail fast off the flaky mirror
+        run: |
+          sudo sed -i '\#azure.archive.ubuntu.com#d' /etc/apt/apt-mirrors.txt 2>/dev/null || true
+          printf 'Acquire::Retries "1";\nAcquire::http::Timeout "15";\nAcquire::https::Timeout "15";\n' \
+            | sudo tee /etc/apt/apt.conf.d/99-fail-fast >/dev/null
+
       # agent-browser drives the functional flows and the a11y audit (Chromium).
       # It bundles Chromium, so lockfile-pinning it would pull the browser into
       # every CI job that runs `npm ci`; accept the version-pinned ad-hoc global
