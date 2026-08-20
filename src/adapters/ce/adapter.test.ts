@@ -102,6 +102,29 @@ test('a repo whose job family is off degrades to a warning, not an exception', a
   assert.equal(result.runs.length, 0);
   assert.equal(result.warnings.length, 1);
   assert.match(result.warnings[0] ?? '', /Could not read runs for acme\/widget/);
+  // The enumeration is missing this repository's runs, and persist must know
+  // not to treat the silence as the source's whole word.
+  assert.equal(result.complete, false);
+});
+
+test('a healthy collection says its enumeration is complete', async () => {
+  routes = healthy();
+  const result = await adapter().collect();
+  assert.deepEqual(result.warnings, []);
+  assert.equal(result.complete, true);
+});
+
+test('a failed log fetch does not make the run enumeration incomplete', async () => {
+  routes = healthy();
+  routes[JOBS_PAGE_1] = {
+    status: 200,
+    body: [{ jobId: 'j1', reason: 'schedule-all', status: 'success', completedAt: '2026-08-06T17:05:00.000Z' }],
+  };
+  // No log route: the updates extraction warns, but every run page was read.
+  const result = await adapter().collect();
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0] ?? '', /Could not read updates/);
+  assert.equal(result.complete, true, 'the runs themselves were fully enumerated');
 });
 
 test('losing the org list returns empty with a warning naming the setting', async () => {
@@ -111,6 +134,7 @@ test('losing the org list returns empty with a warning naming the setting', asyn
   const result = await adapter().collect();
   assert.deepEqual(result.repos, []);
   assert.deepEqual(result.runs, []);
+  assert.equal(result.complete, false);
   // The inventory family is gated by both variables — the specification tags
   // getOrgs `Reporting`, which tad.md 4.4 had wrong.
   assert.match(result.warnings[0] ?? '', /MEND_RNV_API_ENABLED and MEND_RNV_API_ENABLE_REPORTING/);
@@ -293,7 +317,118 @@ test('the status endpoint, when it answers, names the forge', async () => {
     webBaseUrl: 'https://github.com',
     scheduleCron: null,
     scheduleLastAt: null,
+    system: null,
   });
+});
+
+test('the status endpoint carries queue depth, version and boot time (F-08)', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: {
+      platform: 'github',
+      endpoint: 'https://api.github.com/',
+      bootTime: '2026-08-19T06:00:00.000Z',
+      renovateVersion: '41.43.5',
+      jobs: { queue: { size: 3 } },
+    },
+  };
+  routes['/system/v1/jobs/queue'] = {
+    status: 200,
+    body: {
+      running: [],
+      pending: [
+        { jobId: 'q2', addedAt: '2026-08-20T10:05:00.000Z', attempts: 0, repository: 'acme/gadget', priority: 0, reason: 'schedule-all', organizationName: 'acme' },
+        { jobId: 'q1', addedAt: '2026-08-20T10:00:00.000Z', attempts: 0, repository: 'acme/widget', priority: 0, reason: 'schedule-all', organizationName: 'acme' },
+      ],
+    },
+  };
+  const result = await adapter().collect();
+
+  assert.deepEqual(result.meta?.system, {
+    queueDepth: 3,
+    oldestQueuedAt: new Date('2026-08-20T10:00:00.000Z'),
+    oldestQueuedRepo: 'acme/widget',
+    runnerVersion: '41.43.5',
+    bootedAt: new Date('2026-08-19T06:00:00.000Z'),
+  });
+});
+
+test('an unreadable queue listing still reports depth, version and boot time', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: {
+      bootTime: '2026-08-19T06:00:00.000Z',
+      renovateVersion: '41.43.5',
+      jobs: { queue: { size: 2 } },
+    },
+  };
+  // No /system/v1/jobs/queue route: it answers 404.
+  const result = await adapter().collect();
+
+  assert.equal(result.meta?.system?.queueDepth, 2);
+  assert.equal(result.meta?.system?.runnerVersion, '41.43.5');
+  assert.equal(result.meta?.system?.oldestQueuedAt, null);
+  assert.equal(result.meta?.system?.oldestQueuedRepo, null);
+});
+
+test('a listing truncated at its 100-job cap names no oldest job', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: { renovateVersion: '41.43.5', jobs: { queue: { size: 250 } } },
+  };
+  // Exactly 100 pending jobs: the cap. The spec promises no ordering, so the
+  // true oldest of 250 may not be on this page, and naming one would lie.
+  routes['/system/v1/jobs/queue'] = {
+    status: 200,
+    body: {
+      running: [],
+      pending: Array.from({ length: 100 }, (_, i) => ({
+        jobId: `q${i}`,
+        addedAt: `2026-08-20T10:${String(i % 60).padStart(2, '0')}:00.000Z`,
+        attempts: 0,
+        repository: 'acme/widget',
+        priority: 0,
+        reason: 'schedule-all',
+        organizationName: 'acme',
+      })),
+    },
+  };
+  const result = await adapter().collect();
+
+  assert.equal(result.meta?.system?.queueDepth, 250, 'the depth itself is still exact');
+  assert.equal(result.meta?.system?.oldestQueuedAt, null);
+  assert.equal(result.meta?.system?.oldestQueuedRepo, null);
+});
+
+test('an empty queue never asks for the queue listing', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: {
+      bootTime: '2026-08-19T06:00:00.000Z',
+      renovateVersion: '41.43.5',
+      jobs: { queue: { size: 0 } },
+    },
+  };
+  // A planted queue listing: if the adapter asked despite a zero depth, this
+  // pending job would leak into the result and fail the assertion below. One
+  // fewer request per sync on the common healthy fleet.
+  routes['/system/v1/jobs/queue'] = {
+    status: 200,
+    body: {
+      running: [],
+      pending: [
+        { jobId: 'q1', addedAt: '2026-08-20T10:00:00.000Z', attempts: 0, repository: 'acme/widget', priority: 0, reason: 'schedule-all', organizationName: 'acme' },
+      ],
+    },
+  };
+  const result = await adapter().collect();
+
+  assert.equal(result.meta?.system?.queueDepth, 0);
+  assert.equal(result.meta?.system?.oldestQueuedAt, null, 'the queue listing was fetched despite a zero depth');
 });
 
 test('the status endpoint carries the schedule when the server reports one', async () => {

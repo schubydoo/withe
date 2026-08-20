@@ -423,6 +423,45 @@ export function forges(db: Db): Map<string, ForgeInfo> {
   return new Map(rows.map((r) => [r.id, { platform: r.platform, webBaseUrl: r.webBaseUrl }]));
 }
 
+export interface SourceSystem {
+  sourceAdapterId: string;
+  kind: string;
+  queueDepth: number | null;
+  oldestQueuedAt: Date | null;
+  oldestQueuedRepo: string | null;
+  runnerVersion: string | null;
+  bootedAt: Date | null;
+}
+
+/**
+ * What each source's runner said about itself: queue depth, oldest waiting
+ * job, version and boot time (F-08, Task 4.6). All null for a source whose
+ * system API is off — the page shows the preflight pointer for those instead
+ * of an empty panel.
+ */
+export function sourceSystems(db: Db): SourceSystem[] {
+  const rows = db.all<{
+    sourceAdapterId: string;
+    kind: string;
+    queueDepth: number | null;
+    oldestQueuedAt: number | null;
+    oldestQueuedRepo: string | null;
+    runnerVersion: string | null;
+    bootedAt: number | null;
+  }>(sql`
+    select id as sourceAdapterId, kind, queue_depth as queueDepth,
+           oldest_queued_at as oldestQueuedAt, oldest_queued_repo as oldestQueuedRepo,
+           runner_version as runnerVersion, booted_at as bootedAt
+      from source
+     order by id
+  `);
+  return rows.map((row) => ({
+    ...row,
+    oldestQueuedAt: row.oldestQueuedAt === null ? null : new Date(row.oldestQueuedAt * 1000),
+    bootedAt: row.bootedAt === null ? null : new Date(row.bootedAt * 1000),
+  }));
+}
+
 export interface SourceSchedule {
   cron: string | null;
   lastScheduling: Date | null;

@@ -69,6 +69,26 @@ export interface PreflightResult {
  * returns partial data and a warning; it does not throw. A silent empty page is
  * the failure mode this field exists to prevent.
  */
+/**
+ * The runner's own health, when its API reports one (F-08, Task 4.6).
+ *
+ * Everything here is optional at the source: a server with the system API off
+ * reports none of it, and the health page then points at the preflight check
+ * rather than rendering an empty panel.
+ */
+export interface SystemInfo {
+  /** How many jobs wait in the runner's queue. Null when not reported. */
+  queueDepth: number | null;
+  /** When the oldest waiting job was queued. Null when the queue is empty or unreadable. */
+  oldestQueuedAt: Date | null;
+  /** The repository that oldest job is for, as `org/name`. */
+  oldestQueuedRepo: string | null;
+  /** The Renovate CLI version the server runs. */
+  runnerVersion: string | null;
+  /** When the server booted. */
+  bootedAt: Date | null;
+}
+
 /** What a source knows about the forge it works against. */
 export interface SourceMeta {
   platform: string | null;
@@ -78,6 +98,8 @@ export interface SourceMeta {
   scheduleCron: string | null;
   /** When that cron last scheduled. Null when the server does not report it. */
   scheduleLastAt: Date | null;
+  /** Queue and version facts from the system API. Null when it is off. */
+  system: SystemInfo | null;
 }
 
 export interface CollectResult {
@@ -85,6 +107,23 @@ export interface CollectResult {
   runs: RenovateRun[];
   updates: Update[];
   warnings: string[];
+  /**
+   * True when the run listing was fully enumerated — every repository's runs
+   * were read, whatever else degraded. This is what lets persist treat a run
+   * the cycle did not repeat as gone at the source (and so releasable to
+   * retention). It is deliberately not `warnings.length === 0`: a warning can
+   * be benign for run enumeration (a stray non-log file, a failed update
+   * extraction), and a source that warns every cycle must not lose retention
+   * forever. Required, so a new adapter has to decide rather than inherit.
+   */
+  complete: boolean;
+  /**
+   * True when `repos` is the source's full repository list, so a repository
+   * absent from it has been dropped at the source. False when the source sees
+   * only a partial view (a log directory), where an absent repository may
+   * simply have no log present. Gates removal-by-absence.
+   */
+  authoritativeRepoList: boolean;
   /**
    * Absent when the source cannot say. The pages then render names as plain
    * text rather than guessing at github.com, which is the wrong answer for the

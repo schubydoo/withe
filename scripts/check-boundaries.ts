@@ -71,6 +71,13 @@ export const RULES: Rule[] = [
     detail: 'Return a CollectResult and let the worker write it.',
   },
   {
+    name: 'no-filesystem-writes-in-adapters',
+    why: 'Task 4.5: log files are the operator\'s source record. Withe never deletes a file it did not create — and it creates none.',
+    applies: (file) => posix(file).startsWith('src/adapters/') && !file.endsWith('.test.ts'),
+    forbids: /\b(writeFileSync|writeFile|appendFileSync|appendFile|unlinkSync|unlink|rmSync|rmdirSync|renameSync|rename|truncateSync|truncate|mkdirSync|mkdir|createWriteStream|copyFileSync|copyFile)\s*\(/,
+    detail: 'Adapters read a source; they never write to one. A log directory is mounted read-only, and the code must deserve that mount.',
+  },
+  {
     name: 'no-constructor-parameter-properties',
     why: 'Node runs TypeScript by stripping types, and this is a syntax transform.',
     applies: (file) => posix(file).startsWith('src/'),

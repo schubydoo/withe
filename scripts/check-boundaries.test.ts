@@ -36,6 +36,12 @@ const CASES: { rule: string; file: string; bad: string; good: string }[] = [
     good: `import type { Repo } from '../../core/model.ts';`,
   },
   {
+    rule: 'no-filesystem-writes-in-adapters',
+    file: 'src/adapters/jsonlog/adapter.ts',
+    bad: `  unlinkSync(path); // prune the ingested log`,
+    good: `  const text = readFileSync(path, 'utf8');`,
+  },
+  {
     rule: 'no-constructor-parameter-properties',
     file: 'src/worker/sync.ts',
     bad: `  constructor(private readonly db: Db, adapters: SourceAdapter[]) {`,

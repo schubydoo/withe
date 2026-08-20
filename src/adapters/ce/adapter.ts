@@ -15,6 +15,7 @@ import type {
   SourceAdapter,
   SourceConfig,
   SourceMeta,
+  SystemInfo,
 } from '../types.ts';
 import { createCeClient, paginate, type CeClientConfig } from './client.ts';
 import { mapWithLimit } from './limit.ts';
@@ -155,6 +156,10 @@ export class CeAdapter implements SourceAdapter {
   async collect(): Promise<CollectResult> {
     const warnings: string[] = [];
     const repos: Repo[] = [];
+    // Whether every repository's runs were enumerated. Losing an org, a repo
+    // listing, or one repository's run pages clears it; a failed log fetch
+    // does not — the runs themselves were still fully read.
+    let complete = true;
 
     const orgs = await this.listOrgs();
     if (orgs.warning) {
@@ -162,7 +167,7 @@ export class CeAdapter implements SourceAdapter {
       // failure the adapter cannot degrade past, so it says so and returns
       // empty rather than throwing into the worker's face.
       warnings.push(orgs.warning);
-      return { repos: [], runs: [], updates: [], warnings };
+      return { repos: [], runs: [], updates: [], warnings, complete: false, authoritativeRepoList: true };
     }
 
     for (const name of orgs.names) {
@@ -176,6 +181,7 @@ export class CeAdapter implements SourceAdapter {
             ? `${name}: ${problem.detail}${problem.setting ? ` Set ${problem.setting}.` : ''}`
             : `Could not list repositories for ${name} (${result.response.status}).`,
         );
+        complete = false;
         continue;
       }
       const infos = result.data;
@@ -200,6 +206,7 @@ export class CeAdapter implements SourceAdapter {
         return await this.collectRuns(repo);
       } catch (cause) {
         warnings.push(`Could not read runs for ${repo.fullName}: ${describe(cause)}`);
+        complete = false;
         return [];
       }
     });
@@ -225,6 +232,10 @@ export class CeAdapter implements SourceAdapter {
       runs: runsPerRepo.flat(),
       updates: updatesPerRepo.flat(),
       warnings,
+      complete,
+      // The org repo listing is the full set of repositories, so an absent one
+      // has been uninstalled or made private.
+      authoritativeRepoList: true,
       meta: await this.forge(),
     };
   }
@@ -256,6 +267,9 @@ export class CeAdapter implements SourceAdapter {
     const data = status.data as {
       platform?: string;
       endpoint?: string;
+      bootTime?: string;
+      renovateVersion?: string;
+      jobs?: { queue?: { size?: number } };
       scheduler?: { allJobs?: { cron?: string; lastScheduling?: string } };
     };
     const platform = data.platform ?? null;
@@ -263,11 +277,56 @@ export class CeAdapter implements SourceAdapter {
     const job = data.scheduler?.allJobs;
     const scheduleCron = job?.cron ?? null;
     const scheduleLastAt = job?.lastScheduling ? new Date(job.lastScheduling) : null;
+    const system = await this.system(data);
     // Any one of these is worth keeping; a server that reports only a schedule
     // must not be dropped for having no browsable forge URL.
-    return platform || webBaseUrl || scheduleCron
-      ? { platform, webBaseUrl, scheduleCron, scheduleLastAt }
+    return platform || webBaseUrl || scheduleCron || system
+      ? { platform, webBaseUrl, scheduleCron, scheduleLastAt, system }
       : undefined;
+  }
+
+  /**
+   * Queue depth, oldest waiting job, version and boot time (F-08, Task 4.6).
+   *
+   * The depth comes from the status body, which counts the whole queue. The
+   * oldest waiting job needs the queue listing, which returns at most 100
+   * jobs in no promised order — so the minimum is computed only when the
+   * page is the whole pending set, and a deeper queue names no oldest job
+   * rather than a wrong one. A server that answers status but not the queue
+   * listing still reports depth, version and boot time.
+   */
+  private async system(data: {
+    bootTime?: string;
+    renovateVersion?: string;
+    jobs?: { queue?: { size?: number } };
+  }): Promise<SystemInfo | null> {
+    const queueDepth = data.jobs?.queue?.size ?? null;
+    const runnerVersion = data.renovateVersion ?? null;
+    const bootedAt = data.bootTime ? new Date(data.bootTime) : null;
+
+    let oldestQueuedAt: Date | null = null;
+    let oldestQueuedRepo: string | null = null;
+    if (queueDepth !== null && queueDepth > 0) {
+      const queue = await this.client.GET('/system/v1/jobs/queue');
+      const pending = queue.data?.pending ?? [];
+      // The listing returns at most 100 jobs and promises no ordering, so a
+      // truncated page cannot name the oldest — a younger job shown as the
+      // oldest is worse than none. Under the cap, the page is the whole queue
+      // and the minimum is exact.
+      if (pending.length < 100) {
+        for (const job of pending) {
+          const addedAt = job.addedAt ? new Date(job.addedAt) : null;
+          if (addedAt && (!oldestQueuedAt || addedAt < oldestQueuedAt)) {
+            oldestQueuedAt = addedAt;
+            oldestQueuedRepo = job.repository ?? null;
+          }
+        }
+      }
+    }
+
+    return queueDepth !== null || runnerVersion || bootedAt
+      ? { queueDepth, oldestQueuedAt, oldestQueuedRepo, runnerVersion, bootedAt }
+      : null;
   }
 
   private async collectUpdates(repo: Repo, run: RenovateRun): Promise<Update[]> {

@@ -11,7 +11,26 @@ records about 190 runs a day, or close to **10 MB a year**.
 
 By default Withe keeps every run. Set `WITHE_RETENTION_DAYS` to a number of days to cap the history;
 Withe then deletes older runs at the end of each sync and returns the freed space to the disk.
-Repositories, pending updates, and forge links are never pruned.
+Retention only touches runs the source itself no longer reports — a run the server still lists (or
+whose log file still sits in a mounted directory) would only be re-ingested on the next sync, so it
+stays until the source drops it. Repositories, pending updates, and forge links are never pruned.
+
+## File-backed sources: your files, your retention
+
+For a `jsonlog` source the log files are the source record, not a cache, so the rule is different
+and simpler:
+
+- **Withe never deletes, moves, or writes a log file.** It did not create them, and a build check
+  enforces that no adapter can gain a filesystem write. Rotate or delete logs with the tools that
+  made them — `logrotate`, your CI's artifact retention, or by hand.
+- **The files govern what Withe knows.** Every sync re-reads the directory. Delete a file and its
+  runs keep their history rows (like a server-pruned run, the log link goes grey); add or append a
+  file and its runs appear on the next sync.
+- **`WITHE_RETENTION_DAYS` takes effect only after the file is gone.** Retention skips runs the
+  source still reports, so a run whose file remains is kept — pruning it would only re-ingest it on
+  the next sync. Deleting the file is the operator's statement that the history can start aging out.
+  A sync that could not read the directory or a file releases nothing: only a fully read directory
+  counts as the source's whole word.
 
 ## Put the volume on local disk
 
