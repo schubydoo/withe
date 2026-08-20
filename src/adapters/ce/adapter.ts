@@ -278,11 +278,12 @@ export class CeAdapter implements SourceAdapter {
   /**
    * Queue depth, oldest waiting job, version and boot time (F-08, Task 4.6).
    *
-   * The depth comes from the status body, which counts the whole queue; the
+   * The depth comes from the status body, which counts the whole queue. The
    * oldest waiting job needs the queue listing, which returns at most 100
-   * jobs — enough to name the oldest, since the listing is what the server
-   * dispatches from. A server that answers status but not the queue listing
-   * still reports depth, version and boot time.
+   * jobs in no promised order — so the minimum is computed only when the
+   * page is the whole pending set, and a deeper queue names no oldest job
+   * rather than a wrong one. A server that answers status but not the queue
+   * listing still reports depth, version and boot time.
    */
   private async system(data: {
     bootTime?: string;
