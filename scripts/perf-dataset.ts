@@ -93,6 +93,7 @@ export function generate(dbPath: string, repoCount: number, nowMs: number): void
 
     const updates = Array.from({ length: UPDATES_PER_REPO }, (_unused, u) => {
       const isLock = u === UPDATES_PER_REPO - 1;
+      const fileCount = isLock ? Math.floor(rand() * 8) + 1 : 1;
       return {
         sourceAdapterId: 'default',
         repoId: i + 1,
@@ -105,7 +106,10 @@ export function generate(dbPath: string, repoCount: number, nowMs: number): void
         packageName: isLock ? null : `@scope/pkg-${u}`,
         state: 'detected' as const,
         prNumber: rand() > 0.5 ? Math.floor(rand() * 9000) + 1 : null,
-        packageFileCount: isLock ? Math.floor(rand() * 8) + 1 : 1,
+        packageFileCount: fileCount,
+        packageFiles: isLock
+          ? Array.from({ length: fileCount }, (_f, k) => `crates/crate-${k}/Cargo.toml`)
+          : [`packages/pkg-${u}/package.json`],
         detectedAt: new Date(nowMs - Math.floor(rand() * 5) * DAY_MS),
       };
     });

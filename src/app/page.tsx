@@ -210,7 +210,28 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
                     </Maybe>
                   </td>
                   <td className="py-1 pr-4 font-medium">{row.branchName}</td>
-                  <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">{row.packageFileCount}</td>
+                  <td className="py-1 pr-4 text-neutral-600 dark:text-neutral-300">
+                    <span className="tabular-nums">{row.packageFileCount}</span>
+                    {/* An unnamed branch is already named for its one manifest,
+                        so repeating the path says nothing new. */}
+                    {row.packageFiles.length > 0 &&
+                      !(row.packageFiles.length === 1 && row.packageFiles[0] === row.branchName) &&
+                      (row.packageFiles.length <= 3 ? (
+                        <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
+                          {row.packageFiles.join(', ')}
+                        </span>
+                      ) : (
+                        // A Cargo workspace can carry a dozen manifests. The
+                        // cell names three; the rest stay reachable by
+                        // keyboard, which a title tooltip would not be.
+                        <details className="ml-2 inline-block text-xs text-neutral-500 dark:text-neutral-400">
+                          <summary className="cursor-pointer">
+                            {row.packageFiles.slice(0, 3).join(', ')} +{row.packageFiles.length - 3} more
+                          </summary>
+                          {row.packageFiles.slice(3).join(', ')}
+                        </details>
+                      ))}
+                  </td>
                   <td className="py-1 text-neutral-500 dark:text-neutral-400">
                     {row.prNumber === null ? '' : (
                       <Maybe

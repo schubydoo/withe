@@ -29,6 +29,8 @@ export interface LockFileRefreshRow {
   branchName: string;
   /** How many manifests the branch refreshes. A Cargo workspace has many. */
   packageFileCount: number;
+  /** Those manifests by path. Empty on rows written before the column existed. */
+  packageFiles: string[];
   prNumber: number | null;
 }
 
@@ -73,11 +75,12 @@ export function pendingUpdates(db: Db): PendingUpdateRow[] {
  * five columns of the other groups with nothing.
  */
 export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
-  return db.all<LockFileRefreshRow>(sql`
+  const rows = db.all<Omit<LockFileRefreshRow, 'packageFiles'> & { packageFiles: string | null }>(sql`
     select u.source_adapter_id   as sourceAdapterId,
            r.full_name           as repoFullName,
            u.dependency_name     as branchName,
            u.package_file_count  as packageFileCount,
+           u.package_files       as packageFiles,
            u.pr_number           as prNumber
       from "update" u
       join repo r on r.id = u.repo_id
@@ -85,6 +88,9 @@ export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
        and r.removed_at is null
      order by r.full_name, u.dependency_name
   `);
+  // Stored as a JSON column. A malformed value must not take the page down
+  // with it, so it degrades to no paths.
+  return rows.map((row) => ({ ...row, packageFiles: parseList(row.packageFiles) }));
 }
 
 /**

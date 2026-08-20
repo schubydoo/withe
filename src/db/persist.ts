@@ -209,6 +209,7 @@ export function persist(
           prNumber: row.pullRequestNumber,
           detectedAt: row.detectedAt,
           packageFileCount: row.packageFileCount,
+          packageFiles: row.packageFiles,
         })
         .onConflictDoNothing()
         .run();

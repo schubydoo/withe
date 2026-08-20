@@ -95,6 +95,7 @@ function collectResult(): CollectResult {
         closeType: null,
         detectedAt: new Date(NOW),
         packageFileCount: 1,
+        packageFiles: [`packages/pkg-${u}/package.json`],
         sourceAdapterId: 'default',
       });
     }

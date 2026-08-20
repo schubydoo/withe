@@ -1,0 +1,1 @@
+ALTER TABLE `update` ADD `package_files` text;
