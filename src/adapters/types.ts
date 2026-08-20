@@ -86,6 +86,16 @@ export interface CollectResult {
   updates: Update[];
   warnings: string[];
   /**
+   * True when the run listing was fully enumerated — every repository's runs
+   * were read, whatever else degraded. This is what lets persist treat a run
+   * the cycle did not repeat as gone at the source (and so releasable to
+   * retention). It is deliberately not `warnings.length === 0`: a warning can
+   * be benign for run enumeration (a stray non-log file, a failed update
+   * extraction), and a source that warns every cycle must not lose retention
+   * forever. Required, so a new adapter has to decide rather than inherit.
+   */
+  complete: boolean;
+  /**
    * Absent when the source cannot say. The pages then render names as plain
    * text rather than guessing at github.com, which is the wrong answer for the
    * self-hosted forges Withe exists to support.

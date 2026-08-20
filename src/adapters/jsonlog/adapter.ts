@@ -91,8 +91,15 @@ export class JsonLogAdapter implements SourceAdapter {
     const warnings: string[] = [];
     const { files, warnings: listWarnings } = this.listFiles();
     warnings.push(...listWarnings);
+    // Whether every log file's runs were read. A directory or file that could
+    // not be listed or read clears it; a file that was read in full and holds
+    // no runs (a stray text file) does not — its warning is benign for run
+    // enumeration, and a source with a permanent stray file must not lose
+    // retention forever.
+    let complete = listWarnings.length === 0;
 
-    const found = this.readRuns(files, warnings);
+    const { found, readFailures } = this.readRuns(files, warnings);
+    if (readFailures > 0) complete = false;
 
     // The same run appears twice when the operator copies a file they also
     // mount live. One external id per run keeps one row per run, and the
@@ -112,7 +119,7 @@ export class JsonLogAdapter implements SourceAdapter {
 
     const updates = await this.buildUpdates([...byJob.values()], warnings);
 
-    return { repos, runs, updates, warnings };
+    return { repos, runs, updates, warnings, complete };
   }
 
   async fetchLog(run: Pick<RenovateRun, 'repoId' | 'externalJobId'>): Promise<ReadableStream<Uint8Array>> {
@@ -122,7 +129,7 @@ export class JsonLogAdapter implements SourceAdapter {
     const { files } = this.listFiles();
     const silent: string[] = [];
     for (const path of files) {
-      const match = this.readRuns([path], silent).find(
+      const match = this.readRuns([path], silent).found.find(
         (item) => externalJobId(item.run, item.file) === run.externalJobId,
       );
       if (!match) continue;
@@ -214,8 +221,9 @@ export class JsonLogAdapter implements SourceAdapter {
     return { files: files.sort(), warnings };
   }
 
-  private readRuns(files: string[], warnings: string[]): FoundRun[] {
+  private readRuns(files: string[], warnings: string[]): { found: FoundRun[]; readFailures: number } {
     const found: FoundRun[] = [];
+    let readFailures = 0;
     for (const path of files) {
       const file = relative(this.directory, path);
       let text: string;
@@ -223,6 +231,7 @@ export class JsonLogAdapter implements SourceAdapter {
         text = readFileSync(path, 'utf8');
       } catch (cause) {
         warnings.push(`Could not read ${file}: ${describe(cause)}`);
+        readFailures += 1;
         continue;
       }
       const parsed = parseLogFile(text);
@@ -242,7 +251,7 @@ export class JsonLogAdapter implements SourceAdapter {
       }
       for (const run of parsed.runs) found.push({ run, file });
     }
-    return found;
+    return { found, readFailures };
   }
 
   private buildRepos(found: FoundRun[]): Repo[] {

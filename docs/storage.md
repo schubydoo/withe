@@ -29,6 +29,8 @@ and simpler:
 - **`WITHE_RETENTION_DAYS` takes effect only after the file is gone.** Retention skips runs the
   source still reports, so a run whose file remains is kept — pruning it would only re-ingest it on
   the next sync. Deleting the file is the operator's statement that the history can start aging out.
+  A sync that could not read the directory or a file releases nothing: only a fully read directory
+  counts as the source's whole word.
 
 ## Put the volume on local disk
 

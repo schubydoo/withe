@@ -102,6 +102,29 @@ test('a repo whose job family is off degrades to a warning, not an exception', a
   assert.equal(result.runs.length, 0);
   assert.equal(result.warnings.length, 1);
   assert.match(result.warnings[0] ?? '', /Could not read runs for acme\/widget/);
+  // The enumeration is missing this repository's runs, and persist must know
+  // not to treat the silence as the source's whole word.
+  assert.equal(result.complete, false);
+});
+
+test('a healthy collection says its enumeration is complete', async () => {
+  routes = healthy();
+  const result = await adapter().collect();
+  assert.deepEqual(result.warnings, []);
+  assert.equal(result.complete, true);
+});
+
+test('a failed log fetch does not make the run enumeration incomplete', async () => {
+  routes = healthy();
+  routes[JOBS_PAGE_1] = {
+    status: 200,
+    body: [{ jobId: 'j1', reason: 'schedule-all', status: 'success', completedAt: '2026-08-06T17:05:00.000Z' }],
+  };
+  // No log route: the updates extraction warns, but every run page was read.
+  const result = await adapter().collect();
+  assert.equal(result.warnings.length, 1);
+  assert.match(result.warnings[0] ?? '', /Could not read updates/);
+  assert.equal(result.complete, true, 'the runs themselves were fully enumerated');
 });
 
 test('losing the org list returns empty with a warning naming the setting', async () => {
@@ -111,6 +134,7 @@ test('losing the org list returns empty with a warning naming the setting', asyn
   const result = await adapter().collect();
   assert.deepEqual(result.repos, []);
   assert.deepEqual(result.runs, []);
+  assert.equal(result.complete, false);
   // The inventory family is gated by both variables — the specification tags
   // getOrgs `Reporting`, which tad.md 4.4 had wrong.
   assert.match(result.warnings[0] ?? '', /MEND_RNV_API_ENABLED and MEND_RNV_API_ENABLE_REPORTING/);

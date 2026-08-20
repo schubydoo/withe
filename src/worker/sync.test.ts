@@ -70,7 +70,7 @@ function stub(id: string, behaviour: () => Promise<CollectResult>): SourceAdapte
   };
 }
 
-const EMPTY: CollectResult = { repos: [], runs: [], updates: [], warnings: [] };
+const EMPTY: CollectResult = { repos: [], runs: [], updates: [], warnings: [], complete: true };
 
 test('a cycle already running causes the next tick to be skipped', async () => {
   const { sqlite, db } = fresh();
@@ -109,7 +109,7 @@ test('a failing source does not stop the others and lands in sync_status', async
         repos: [repoOf('healthy', 'acme/widget')],
         runs: [runOf('healthy', 'acme/widget', 'j1', 'success', Date.now())],
         updates: [],
-        warnings: [],
+        warnings: [], complete: true,
       })),
     ],
     { intervalMs: 1000, stalledAfterMs: 7 * DAY, log: () => {} },
@@ -139,7 +139,7 @@ test('a source that fails mid-write leaves no partial rows', async () => {
     repos: [repoOf('src', 'acme/widget')],
     runs: [{ ...runOf('src', 'acme/widget', 'j1', 'success', Date.now()), status: undefined as never }],
     updates: [],
-    warnings: [],
+    warnings: [], complete: true,
   } satisfies CollectResult;
 
   const loop = new SyncLoop(db, [stub('src', async () => bad)], {
@@ -243,7 +243,7 @@ test('stalled is set for a repository with no recent successful run, and cleared
       runOf('src', 'acme/busy', 'j-new', 'success', now - 1000),
     ],
     updates: [],
-    warnings: [],
+    warnings: [], complete: true,
   };
 
   const loop = new SyncLoop(db, [stub('src', async () => collect)], {
@@ -287,7 +287,7 @@ test('a repository whose only recent runs failed counts as stalled', async () =>
           runOf('src', 'acme/failing', 'j-bad', 'failed', now - 1000),
         ],
         updates: [],
-        warnings: [],
+        warnings: [], complete: true,
       })),
     ],
     { intervalMs: 1000, stalledAfterMs: 7 * DAY, now: () => now, log: () => {} },
@@ -323,7 +323,7 @@ test('with no retention set, no run is ever deleted', async () => {
       repos: [repoOf('keep', 'acme/widget')],
       runs: [runOf('keep', 'acme/widget', 'ancient', 'success', old)],
       updates: [],
-      warnings: [],
+      warnings: [], complete: true,
     }))],
     { intervalMs: 1000, stalledAfterMs: 7 * DAY, log: () => {} },
   );
@@ -352,7 +352,7 @@ test('with retention set, runs the source dropped are pruned; still-listed ones 
       repos: [repoOf('prune', 'acme/widget')],
       runs: listed,
       updates: [],
-      warnings: [],
+      warnings: [], complete: true,
     }))],
     { intervalMs: 1000, stalledAfterMs: 7 * DAY, retentionMs: 30 * DAY, log: () => {}, now: () => now },
   );

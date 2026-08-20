@@ -100,7 +100,7 @@ const FLEET: CollectResult = {
     makeUpdate('acme/gadget', { dependencyName: 'package.json', currentVersion: null, targetVersion: null, updateType: 'lock-file-maintenance', packageFiles: ['package.json'] }),
     makeUpdate('acme/widget', { dependencyName: 'uv.lock', currentVersion: null, targetVersion: null, updateType: 'lock-file-maintenance', packageFileCount: 2, packageFiles: ['docs/pyproject.toml', 'pyproject.toml'] }),
   ],
-  warnings: [],
+  warnings: [], complete: true,
 };
 
 test('a sync writes every entity and records when it happened', () => {
@@ -215,7 +215,7 @@ test('the inventory carries 40 repositories across 3 organizations', () => {
     makeRun(r.fullName, `j${i}`, i % 7 === 0 ? 'failed' : 'success', '2026-08-06T17:00:00Z'),
   );
 
-  persist(db, SOURCE, 'ce', { repos, runs, updates: [], warnings: [] }, new Date());
+  persist(db, SOURCE, 'ce', { repos, runs, updates: [], warnings: [], complete: true }, new Date());
 
   const rows = repoInventory(db);
   assert.equal(rows.length, 40);
@@ -335,7 +335,7 @@ test('50 runs come back newest first with what each needs to render', () => {
   const runs = Array.from({ length: 50 }, (_, i) =>
     makeRun('acme/widget', `j${i}`, 'success', new Date(base + i * 3_600_000).toISOString()),
   );
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [] }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [], complete: true }, new Date());
 
   const { runs: rows, total } = runsForRepo(db, 'acme/widget');
   assert.equal(total, 50);
@@ -357,7 +357,7 @@ test('a queued run has no duration to report, only a wait', () => {
     startedAt: null,
     completedAt: null,
   };
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [queued], updates: [], warnings: [] }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [queued], updates: [], warnings: [], complete: true }, new Date());
 
   const [row] = runsForRepo(db, 'acme/widget').runs;
   assert.equal(row?.status, 'queued');
@@ -375,7 +375,7 @@ test('artifact errors survive the round trip and stay separate from the run erro
     error: null,
     artifactErrors: ['package.json: npm ERR! code ERESOLVE', 'uv.lock'],
   };
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [run], updates: [], warnings: [] }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [run], updates: [], warnings: [], complete: true }, new Date());
 
   const [row] = runsForRepo(db, 'acme/widget').runs;
   assert.equal(row?.status, 'success');
@@ -390,7 +390,7 @@ test('history pages beyond 200 rows', () => {
   const runs = Array.from({ length: 205 }, (_, i) =>
     makeRun('acme/widget', `j${i}`, 'success', new Date(base + i * 60_000).toISOString()),
   );
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [] }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [], complete: true }, new Date());
 
   const first = runsForRepo(db, 'acme/widget', 0);
   assert.equal(first.total, 205);
@@ -409,7 +409,7 @@ test('history pages beyond 200 rows', () => {
 
 test('a malformed artifact-errors column does not take the page down', () => {
   const { sqlite, db } = fresh();
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [makeRun('acme/widget', 'j1', 'success', '2026-08-06T12:00:00Z')], updates: [], warnings: [] }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [makeRun('acme/widget', 'j1', 'success', '2026-08-06T12:00:00Z')], updates: [], warnings: [], complete: true }, new Date());
   sqlite.prepare("update renovate_run set artifact_errors = '{not json'").run();
 
   const [row] = runsForRepo(db, 'acme/widget').runs;
@@ -435,7 +435,7 @@ test('triage leads with the failing repositories and how long each has been fail
     repos: [makeRepo('acme/widget'), makeRepo('acme/quiet')],
     runs: [...widgetRuns, makeRun('acme/quiet', 'q1', 'success', new Date(now - hour).toISOString())],
     updates: [],
-    warnings: [],
+    warnings: [], complete: true,
   }, new Date());
 
   const rows = triage(db);
@@ -466,7 +466,7 @@ test('a repository with no successful run and no error still surfaces as stalled
     repos: [makeRepo('acme/forgotten')],
     runs: [makeRun('acme/forgotten', 'f1', 'success', new Date(old).toISOString())],
     updates: [],
-    warnings: [],
+    warnings: [], complete: true,
   }, new Date());
   recomputeStalled(db, SOURCE, new Date(now - 7 * 24 * 3_600_000));
 
@@ -484,7 +484,7 @@ test('a repository that has never succeeded counts its failures from the first o
   const runs = Array.from({ length: 5 }, (_, i) =>
     makeRun('acme/broken', `b${i}`, 'failed', new Date(now - (5 - i) * 3_600_000).toISOString()),
   );
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/broken')], runs, updates: [], warnings: [] }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/broken')], runs, updates: [], warnings: [], complete: true }, new Date());
 
   const [row] = triage(db);
   assert.ok(row?.failingSince instanceof Date);
@@ -513,7 +513,7 @@ test('forges reports what each source said about its forge, or nulls', () => {
       scheduleLastAt: null,
     },
   }, new Date());
-  persist(db, 'quiet', 'ce', { repos: [], runs: [], updates: [], warnings: [] }, new Date());
+  persist(db, 'quiet', 'ce', { repos: [], runs: [], updates: [], warnings: [], complete: true }, new Date());
 
   const map = forges(db);
   assert.deepEqual(map.get(SOURCE), { platform: 'github', webBaseUrl: 'https://github.example' });
@@ -528,7 +528,7 @@ test('a clean cycle that reports nothing releases every old run to retention', (
   // clean cycle reports no repos and no runs. The old runs must flip to
   // log-unavailable, or retention stays a permanent no-op at the exact moment
   // the operator's file deletion says it should start.
-  persist(db, SOURCE, 'ce', { repos: [], runs: [], updates: [], warnings: [] }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [], runs: [], updates: [], warnings: [], complete: true }, new Date());
 
   const available = db.all<{ n: number }>(sql`
     select count(*) as n from renovate_run where log_available = 1
@@ -537,22 +537,70 @@ test('a clean cycle that reports nothing releases every old run to retention', (
   sqlite.close();
 });
 
-test('a degraded cycle does not grey every log link over a transient outage', () => {
+test('an incomplete cycle does not grey every log link over a transient outage', () => {
   const { sqlite, db } = fresh();
   persist(db, SOURCE, 'ce', FLEET, new Date());
-  // The jobs family broke: repos still list, runs are empty, and a warning
-  // says so. Nothing has been purged at the source; the logs must stay offered.
+  // The jobs family broke: repos still list, runs are empty, and the adapter
+  // says its enumeration was incomplete. Nothing has been purged at the
+  // source; the logs must stay offered.
   persist(db, SOURCE, 'ce', {
     repos: FLEET.repos,
     runs: [],
     updates: [],
     warnings: ['Could not read runs for acme/widget: 500'],
+    complete: false,
   }, new Date());
 
   const available = db.all<{ n: number }>(sql`
     select count(*) as n from renovate_run where log_available = 1
   `);
   assert.equal(available[0]?.n, FLEET.runs.length, 'a transient outage must not mark logs gone');
+  sqlite.close();
+});
+
+test('an incomplete cycle only speaks for the repositories that returned runs', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  // acme/widget's runs enumerated fine (and dropped j1); acme/gadget's jobs
+  // endpoint failed. Widget's unrepeated run may grey; gadget's history must
+  // not — its runs were not read at all this cycle.
+  persist(db, SOURCE, 'ce', {
+    repos: FLEET.repos,
+    runs: [makeRun('acme/widget', 'j2', 'success', '2026-08-06T17:00:00Z')],
+    updates: [],
+    warnings: ['Could not read runs for acme/gadget: 500'],
+    complete: false,
+  }, new Date());
+
+  const rows = db.all<{ externalJobId: string; available: number }>(sql`
+    select rr.external_job_id as externalJobId, rr.log_available as available
+      from renovate_run rr order by rr.external_job_id
+  `);
+  const byJob = new Map(rows.map((r) => [r.externalJobId, r.available]));
+  assert.equal(byJob.get('j2'), 1, 'the repeated run stays offered');
+  assert.equal(byJob.get('j1'), 0, "widget's unrepeated run is gone at the source");
+  assert.equal(byJob.get('j3'), 1, "gadget's history was not read this cycle and must not grey");
+  sqlite.close();
+});
+
+test('a complete cycle with a benign warning still releases unrepeated runs', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  // The jsonlog shape of a permanent, harmless warning: a stray text file in
+  // the log directory. Enumeration is complete, so retention must keep
+  // working — a source that warns every cycle must not pin history forever.
+  persist(db, SOURCE, 'ce', {
+    repos: [],
+    runs: [],
+    updates: [],
+    warnings: ['stray.log is not JSON Lines; skipped.'],
+    complete: true,
+  }, new Date());
+
+  const available = db.all<{ n: number }>(sql`
+    select count(*) as n from renovate_run where log_available = 1
+  `);
+  assert.equal(available[0]?.n, 0, 'a benign warning must not block the release');
   sqlite.close();
 });
 
