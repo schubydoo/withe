@@ -6,6 +6,7 @@ import { loadConfig } from '../../../../config/load.ts';
 import { openDatabase } from '../../../../db/client.ts';
 import { repoInventory, runsForRepo, RUNS_PER_PAGE, type RunRow } from '../../../../db/queries.ts';
 import { runWhen } from '../../../format.ts';
+import { groupByFullName } from '../../group.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,14 +22,15 @@ function read(fullName: string, page: number, rawSource: string | undefined) {
   const { sqlite, db } = openDatabase(config.dbPath);
   try {
     // Every source that describes this repository — the history below merges
-    // their runs, and the header names the contributors (Task 4.4).
+    // their runs, and the header names the contributors (Task 4.4). The same
+    // grouping rule as the inventory decides whose facts to show, so the two
+    // pages can never disagree about a repository being alive or removed.
     const knownRows = repoInventory(db).filter((r) => r.fullName === fullName);
-    const contributors = [...new Set(knownRows.map((r) => r.sourceAdapterId))].sort();
+    const [group] = groupByFullName(knownRows);
+    const contributors = group?.sources ?? [];
     // An unknown source value shows everything rather than an error page.
     const source = rawSource !== undefined && contributors.includes(rawSource) ? rawSource : null;
-    // Alive while any contributor still lists it; removed only when all agree.
-    const known = knownRows.find((r) => !r.removedAt) ?? knownRows[0];
-    return { known, contributors, source, ...runsForRepo(db, fullName, page, undefined, source) };
+    return { known: group?.primary, contributors, source, ...runsForRepo(db, fullName, page, undefined, source) };
   } finally {
     sqlite.close();
   }

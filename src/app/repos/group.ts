@@ -20,6 +20,9 @@ export interface SourcedRow {
 export interface Grouped<T extends SourcedRow> {
   /** The row whose facts the page shows: the one with the newest run. */
   primary: T;
+  /** Every contributing row, for facts one contributor has and another lacks
+   * — a pending count, a forge link. */
+  rows: T[];
   /** Every source that contributed this repository, sorted for stable output. */
   sources: string[];
 }
@@ -48,7 +51,7 @@ export function groupByFullName<T extends SourcedRow>(rows: T[]): Grouped<T>[] {
     for (const row of candidates) {
       if ((row.lastRunAt?.getTime() ?? 0) > (primary.lastRunAt?.getTime() ?? 0)) primary = row;
     }
-    return { primary, sources: group.map((row) => row.sourceAdapterId).sort() };
+    return { primary, rows: group, sources: group.map((row) => row.sourceAdapterId).sort() };
   });
 }
 

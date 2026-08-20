@@ -39,11 +39,26 @@ function state(row: InventoryRow): { label: string; tone: string } {
 }
 
 interface Props {
-  searchParams: Promise<{ source?: string }>;
+  // Typed wide: other filters (the search box's q and state) share this query
+  // string, and the source links below must carry them rather than drop them.
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+/** This page's URL with the source filter changed and every other filter kept. */
+function sourceHref(params: Record<string, string | string[] | undefined>, source: string | null): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'source' || value === undefined) continue;
+    for (const one of Array.isArray(value) ? value : [value]) query.append(key, one);
+  }
+  if (source !== null) query.set('source', source);
+  const text = query.toString();
+  return text === '' ? '/repos' : `/repos?${text}`;
 }
 
 export default async function Repos({ searchParams }: Props) {
-  const { source: rawSource } = await searchParams;
+  const params = await searchParams;
+  const rawSource = Array.isArray(params.source) ? params.source.at(-1) : params.source;
   const { rows, forge } = read();
   // Which sources exist comes from the data, not the filter, so the filter
   // links stay visible while one is active. An unknown value shows everything
@@ -71,14 +86,14 @@ export default async function Repos({ searchParams }: Props) {
           {source === null ? (
             <span className="font-medium">all</span>
           ) : (
-            <a className="underline" href="/repos">all</a>
+            <a className="underline" href={sourceHref(params, null)}>all</a>
           )}
           {sources.map((id) => (
             <span key={id} className="ml-2">
               {source === id ? (
                 <span className="font-medium">{id}</span>
               ) : (
-                <a className="underline" href={`/repos?source=${encodeURIComponent(id)}`}>{id}</a>
+                <a className="underline" href={sourceHref(params, id)}>{id}</a>
               )}
             </span>
           ))}
@@ -100,8 +115,14 @@ export default async function Repos({ searchParams }: Props) {
           </tr>
         </thead>
         <tbody>
-          {grouped.map(({ primary: row, sources: contributors }) => {
+          {grouped.map(({ primary: row, rows: group, sources: contributors }) => {
             const { label, tone } = state(row);
+            // One contributor can know what another does not: take the fuller
+            // pending count, and the first forge link any contributor carries.
+            const pendingCount = Math.max(...group.map((r) => r.pendingCount));
+            const forgeHref = group
+              .map((r) => repoUrl(forge.get(r.sourceAdapterId)?.webBaseUrl ?? null, r.fullName))
+              .find((href) => href !== null) ?? null;
             return (
               <tr key={row.fullName} className="border-b border-neutral-200 dark:border-neutral-800">
                 <td className="py-1.5 pr-4">
@@ -112,26 +133,20 @@ export default async function Repos({ searchParams }: Props) {
                     <span className="text-neutral-500 dark:text-neutral-400">{row.org}/</span>
                     <span className="font-medium">{row.name}</span>
                   </a>
-                  {(() => {
-                    // The name goes to Withe's own history; this goes to the
-                    // forge. Two destinations, so two targets rather than one
-                    // link the operator has to guess about.
-                    const href = repoUrl(
-                      forge.get(row.sourceAdapterId)?.webBaseUrl ?? null,
-                      row.fullName,
-                    );
-                    return href ? (
-                      <a
-                        className="ml-2 text-xs text-neutral-500 dark:text-neutral-400 underline"
-                        href={href}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        title="Open on the forge"
-                      >
-                        forge
-                      </a>
-                    ) : null;
-                  })()}
+                  {/* The name goes to Withe's own history; this goes to the
+                      forge. Two destinations, so two targets rather than one
+                      link the operator has to guess about. */}
+                  {forgeHref && (
+                    <a
+                      className="ml-2 text-xs text-neutral-500 dark:text-neutral-400 underline"
+                      href={forgeHref}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title="Open on the forge"
+                    >
+                      forge
+                    </a>
+                  )}
                   {sources.length > 1 && (
                     <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
                       {contributors.join(' + ')}
@@ -150,7 +165,7 @@ export default async function Repos({ searchParams }: Props) {
                   )}
                 </td>
                 <td className="py-1.5 tabular-nums text-neutral-600 dark:text-neutral-300">
-                  {row.pendingCount === 0 ? '—' : row.pendingCount}
+                  {pendingCount === 0 ? '—' : pendingCount}
                 </td>
               </tr>
             );

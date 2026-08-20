@@ -221,8 +221,9 @@ export function runsForRepo(
   /** Restrict to one source's runs. Null merges every contributor (Task 4.4). */
   source: string | null = null,
 ): { runs: RunRow[]; total: number } {
-  // `x is null or y = x` folds the filter into one statement; SQLite prunes
-  // the constant half at plan time.
+  // `x is null or y = x` folds the filter into one statement. The parameter
+  // is bound, so both halves are evaluated per row — cheap at this scale, and
+  // one statement beats two near-identical ones drifting apart.
   const [count] = db.all<{ total: number }>(sql`
     select count(*) as total
       from renovate_run rr join repo r on r.id = rr.repo_id
