@@ -17,6 +17,12 @@ test('the repository inventory lists the repositories', async ({ page }) => {
   await expect(page.getByText('acme/sprocket').first()).toBeVisible();
 });
 
+test('a state filter in the URL narrows the inventory to matching repositories', async ({ page }) => {
+  await page.goto('/repos?state=failing');
+  await expect(page.getByText('acme/lever').first()).toBeVisible();
+  await expect(page.getByText('acme/sprocket')).toHaveCount(0);
+});
+
 test('a repository page renders its run history', async ({ page }) => {
   await page.goto('/repos/acme/lever');
   await expect(page.getByRole('heading', { name: 'acme/lever' })).toBeVisible();

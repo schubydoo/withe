@@ -31,8 +31,20 @@ export function persist(
     const outcome = result.warnings.length > 0 ? 'partial' : 'ok';
 
     // A source that could not report its forge keeps whatever it last said,
-    // rather than blanking the links because one probe came back empty.
+    // rather than blanking the links because one probe came back empty. That
+    // sticky rule covers identity (platform, URL, cron) only. The system facts
+    // describe a moment, not an identity: a cycle where the status probe
+    // answered nothing must clear them — whether it answered without them
+    // (meta present, system null) or did not answer at all (no meta) — rather
+    // than freeze a queue depth from an hour ago and show it as current.
     const meta = result.meta;
+    const system = {
+      queueDepth: meta?.system?.queueDepth ?? null,
+      oldestQueuedAt: meta?.system?.oldestQueuedAt ?? null,
+      oldestQueuedRepo: meta?.system?.oldestQueuedRepo ?? null,
+      runnerVersion: meta?.system?.runnerVersion ?? null,
+      bootedAt: meta?.system?.bootedAt ?? null,
+    };
     tx.insert(source)
       .values({
         id: sourceAdapterId,
@@ -43,12 +55,14 @@ export function persist(
         webBaseUrl: meta?.webBaseUrl ?? null,
         scheduleCron: meta?.scheduleCron ?? null,
         scheduleLastAt: meta?.scheduleLastAt ?? null,
+        ...system,
       })
       .onConflictDoUpdate({
         target: source.id,
         set: {
           lastSyncAt: finishedAt,
           lastSyncOutcome: outcome,
+          ...system,
           ...(meta
             ? {
                 platform: meta.platform,

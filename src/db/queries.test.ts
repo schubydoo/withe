@@ -12,7 +12,7 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist, recomputeStalled } from './persist.ts';
-import { forges, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, triage } from './queries.ts';
+import { forges, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, sourceSystems, triage } from './queries.ts';
 import { renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
@@ -567,6 +567,7 @@ test('forges reports what each source said about its forge, or nulls', () => {
       webBaseUrl: 'https://github.example',
       scheduleCron: null,
       scheduleLastAt: null,
+      system: null,
     },
   }, new Date());
   persist(db, 'quiet', 'ce', { repos: [], runs: [], updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
@@ -655,6 +656,90 @@ test('a complete cycle with a benign warning still releases unrepeated runs', ()
     select count(*) as n from renovate_run where log_available = 1
   `);
   assert.equal(available[0]?.n, 0, 'a benign warning must not block the release');
+  sqlite.close();
+});
+
+test('sourceSystems reports the runner facts a sync recorded, and nulls before one', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', {
+    ...FLEET,
+    meta: {
+      platform: 'github',
+      webBaseUrl: 'https://github.example',
+      scheduleCron: null,
+      scheduleLastAt: null,
+      system: {
+        queueDepth: 3,
+        oldestQueuedAt: new Date('2026-08-20T10:00:00Z'),
+        oldestQueuedRepo: 'acme/widget',
+        runnerVersion: '41.43.5',
+        bootedAt: new Date('2026-08-19T06:00:00Z'),
+      },
+    },
+  }, new Date());
+  persist(db, 'quiet', 'ce', { repos: [], runs: [], updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
+
+  const rows = sourceSystems(db);
+  // Ordered by id: 'quiet' sorts before the fixture source.
+  assert.deepEqual(rows, [
+    {
+      sourceAdapterId: 'quiet',
+      kind: 'ce',
+      queueDepth: null,
+      oldestQueuedAt: null,
+      oldestQueuedRepo: null,
+      runnerVersion: null,
+      bootedAt: null,
+    },
+    {
+      sourceAdapterId: SOURCE,
+      kind: 'ce',
+      queueDepth: 3,
+      oldestQueuedAt: new Date('2026-08-20T10:00:00Z'),
+      oldestQueuedRepo: 'acme/widget',
+      runnerVersion: '41.43.5',
+      bootedAt: new Date('2026-08-19T06:00:00Z'),
+    },
+  ]);
+  sqlite.close();
+});
+
+test('a sync that lost the system API clears the queue facts rather than freezing them', () => {
+  const { sqlite, db } = fresh();
+  const withSystem = {
+    ...FLEET,
+    meta: {
+      platform: 'github',
+      webBaseUrl: 'https://github.example',
+      scheduleCron: null,
+      scheduleLastAt: null,
+      system: {
+        queueDepth: 3,
+        oldestQueuedAt: new Date('2026-08-20T10:00:00Z'),
+        oldestQueuedRepo: 'acme/widget',
+        runnerVersion: '41.43.5',
+        bootedAt: new Date('2026-08-19T06:00:00Z'),
+      },
+    },
+  };
+  persist(db, SOURCE, 'ce', withSystem, new Date());
+  // The real loss path: the status probe errors, so the adapter returns no
+  // meta at all — not a meta with `system: null`, which a 200 without system
+  // fields would produce. Both must clear.
+  persist(db, SOURCE, 'ce', { ...FLEET }, new Date());
+
+  const [row] = sourceSystems(db);
+  assert.equal(row?.queueDepth, null, 'a stale queue depth would read as current');
+  assert.equal(row?.runnerVersion, null);
+
+  // And the meta-present shape clears too.
+  persist(db, SOURCE, 'ce', withSystem, new Date());
+  persist(db, SOURCE, 'ce', {
+    ...FLEET,
+    meta: { platform: 'github', webBaseUrl: 'https://github.example', scheduleCron: null, scheduleLastAt: null, system: null },
+  }, new Date());
+  const [again] = sourceSystems(db);
+  assert.equal(again?.queueDepth, null);
   sqlite.close();
 });
 
