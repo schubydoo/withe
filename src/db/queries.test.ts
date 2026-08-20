@@ -79,6 +79,7 @@ function makeUpdate(fullName: string, over: Partial<Update>): Update {
     closeType: null,
     detectedAt: new Date('2026-08-06T17:00:00Z'),
     packageFileCount: 1,
+    packageFiles: [],
     sourceAdapterId: SOURCE,
     ...over,
   };
@@ -96,8 +97,8 @@ const FLEET: CollectResult = {
     makeUpdate('acme/widget', { dependencyName: 'astral-sh/uv', packageFileCount: 7, pullRequestNumber: 1199, state: 'pr-open' }),
     makeUpdate('acme/widget', { dependencyName: 'next', currentVersion: '15.0.0', targetVersion: '16.0.0', updateType: 'major' }),
     makeUpdate('acme/gadget', { dependencyName: 'tsx', currentVersion: '0.4.0', targetVersion: '0.5.0', updateType: 'minor' }),
-    makeUpdate('acme/gadget', { dependencyName: 'package.json', currentVersion: null, targetVersion: null, updateType: 'lock-file-maintenance' }),
-    makeUpdate('acme/widget', { dependencyName: 'uv.lock', currentVersion: null, targetVersion: null, updateType: 'lock-file-maintenance' }),
+    makeUpdate('acme/gadget', { dependencyName: 'package.json', currentVersion: null, targetVersion: null, updateType: 'lock-file-maintenance', packageFiles: ['package.json'] }),
+    makeUpdate('acme/widget', { dependencyName: 'uv.lock', currentVersion: null, targetVersion: null, updateType: 'lock-file-maintenance', packageFileCount: 2, packageFiles: ['docs/pyproject.toml', 'pyproject.toml'] }),
   ],
   warnings: [],
 };
@@ -136,6 +137,24 @@ test('the page reads three groups and the lock-file refreshes', () => {
   assert.deepEqual(locks.map((l) => l.repoFullName), ['acme/gadget', 'acme/widget']);
   assert.deepEqual(locks.map((l) => l.branchName), ['package.json', 'uv.lock']);
   assert.equal(new Set(locks.map((l) => l.repoFullName)).size, 2);
+  // The manifests come back by name, not only as a count.
+  assert.deepEqual(locks.map((l) => l.packageFiles), [
+    ['package.json'],
+    ['docs/pyproject.toml', 'pyproject.toml'],
+  ]);
+  sqlite.close();
+});
+
+test('a lock-file row written before the paths column reads as no paths', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  // Rows from before migration 0004 hold null; a malformed value must degrade
+  // the same way rather than take the page down.
+  sqlite.prepare("update \"update\" set package_files = null where dependency_name = 'package.json'").run();
+  sqlite.prepare("update \"update\" set package_files = '{not json' where dependency_name = 'uv.lock'").run();
+
+  const locks = lockFileRefreshes(db);
+  assert.deepEqual(locks.map((l) => l.packageFiles), [[], []]);
   sqlite.close();
 });
 
