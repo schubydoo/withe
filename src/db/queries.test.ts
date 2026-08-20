@@ -100,7 +100,7 @@ const FLEET: CollectResult = {
     makeUpdate('acme/gadget', { dependencyName: 'package.json', currentVersion: null, targetVersion: null, updateType: 'lock-file-maintenance', packageFiles: ['package.json'] }),
     makeUpdate('acme/widget', { dependencyName: 'uv.lock', currentVersion: null, targetVersion: null, updateType: 'lock-file-maintenance', packageFileCount: 2, packageFiles: ['docs/pyproject.toml', 'pyproject.toml'] }),
   ],
-  warnings: [], complete: true,
+  warnings: [], complete: true, authoritativeRepoList: true,
 };
 
 test('a sync writes every entity and records when it happened', () => {
@@ -215,7 +215,7 @@ test('the inventory carries 40 repositories across 3 organizations', () => {
     makeRun(r.fullName, `j${i}`, i % 7 === 0 ? 'failed' : 'success', '2026-08-06T17:00:00Z'),
   );
 
-  persist(db, SOURCE, 'ce', { repos, runs, updates: [], warnings: [], complete: true }, new Date());
+  persist(db, SOURCE, 'ce', { repos, runs, updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
 
   const rows = repoInventory(db);
   assert.equal(rows.length, 40);
@@ -275,7 +275,7 @@ test('an incomplete cycle does not mark a missing repository removed, nor delete
     repos: FLEET.repos.filter((r) => r.fullName !== 'acme/gadget'),
     runs: FLEET.runs.filter((r) => !r.repoId.endsWith('acme/gadget')),
     updates: FLEET.updates.filter((u) => !u.repoId.endsWith('acme/gadget')),
-    complete: false,
+    complete: false, authoritativeRepoList: true,
   }, new Date());
 
   const gadget = repoInventory(db).find((r) => r.fullName === 'acme/gadget');
@@ -294,6 +294,27 @@ test('an incomplete cycle does not mark a missing repository removed, nor delete
   const goneNow = repoInventory(db).find((r) => r.fullName === 'acme/gadget');
   assert.ok(goneNow?.removedAt instanceof Date, 'a complete cycle that omits it does remove it');
   assert.equal(goneNow?.pendingCount, 0);
+  sqlite.close();
+});
+
+test('a non-authoritative source never marks an absent repository removed', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+
+  // A complete cycle from a source whose repo list is a partial view (a log
+  // directory): acme/gadget is absent only because its log rotated away, not
+  // because it was uninstalled. Removal-by-absence must not fire.
+  persist(db, SOURCE, 'ce', {
+    ...FLEET,
+    repos: FLEET.repos.filter((r) => r.fullName !== 'acme/gadget'),
+    runs: FLEET.runs.filter((r) => !r.repoId.endsWith('acme/gadget')),
+    updates: FLEET.updates.filter((u) => !u.repoId.endsWith('acme/gadget')),
+    authoritativeRepoList: false,
+  }, new Date());
+
+  const gadget = repoInventory(db).find((r) => r.fullName === 'acme/gadget');
+  assert.equal(gadget?.removedAt, null, 'absence from a partial view is not a removal');
+  assert.ok((gadget?.pendingCount ?? 0) > 0, 'its pending updates survive');
   sqlite.close();
 });
 
@@ -370,7 +391,7 @@ test('50 runs come back newest first with what each needs to render', () => {
   const runs = Array.from({ length: 50 }, (_, i) =>
     makeRun('acme/widget', `j${i}`, 'success', new Date(base + i * 3_600_000).toISOString()),
   );
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [], complete: true }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
 
   const { runs: rows, total } = runsForRepo(db, 'acme/widget');
   assert.equal(total, 50);
@@ -392,7 +413,7 @@ test('a queued run has no duration to report, only a wait', () => {
     startedAt: null,
     completedAt: null,
   };
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [queued], updates: [], warnings: [], complete: true }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [queued], updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
 
   const [row] = runsForRepo(db, 'acme/widget').runs;
   assert.equal(row?.status, 'queued');
@@ -410,7 +431,7 @@ test('artifact errors survive the round trip and stay separate from the run erro
     error: null,
     artifactErrors: ['package.json: npm ERR! code ERESOLVE', 'uv.lock'],
   };
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [run], updates: [], warnings: [], complete: true }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [run], updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
 
   const [row] = runsForRepo(db, 'acme/widget').runs;
   assert.equal(row?.status, 'success');
@@ -425,7 +446,7 @@ test('history pages beyond 200 rows', () => {
   const runs = Array.from({ length: 205 }, (_, i) =>
     makeRun('acme/widget', `j${i}`, 'success', new Date(base + i * 60_000).toISOString()),
   );
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [], complete: true }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs, updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
 
   const first = runsForRepo(db, 'acme/widget', 0);
   assert.equal(first.total, 205);
@@ -444,7 +465,7 @@ test('history pages beyond 200 rows', () => {
 
 test('a malformed artifact-errors column does not take the page down', () => {
   const { sqlite, db } = fresh();
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [makeRun('acme/widget', 'j1', 'success', '2026-08-06T12:00:00Z')], updates: [], warnings: [], complete: true }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/widget')], runs: [makeRun('acme/widget', 'j1', 'success', '2026-08-06T12:00:00Z')], updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
   sqlite.prepare("update renovate_run set artifact_errors = '{not json'").run();
 
   const [row] = runsForRepo(db, 'acme/widget').runs;
@@ -470,7 +491,7 @@ test('triage leads with the failing repositories and how long each has been fail
     repos: [makeRepo('acme/widget'), makeRepo('acme/quiet')],
     runs: [...widgetRuns, makeRun('acme/quiet', 'q1', 'success', new Date(now - hour).toISOString())],
     updates: [],
-    warnings: [], complete: true,
+    warnings: [], complete: true, authoritativeRepoList: true,
   }, new Date());
 
   const rows = triage(db);
@@ -501,7 +522,7 @@ test('a repository with no successful run and no error still surfaces as stalled
     repos: [makeRepo('acme/forgotten')],
     runs: [makeRun('acme/forgotten', 'f1', 'success', new Date(old).toISOString())],
     updates: [],
-    warnings: [], complete: true,
+    warnings: [], complete: true, authoritativeRepoList: true,
   }, new Date());
   recomputeStalled(db, SOURCE, new Date(now - 7 * 24 * 3_600_000));
 
@@ -519,7 +540,7 @@ test('a repository that has never succeeded counts its failures from the first o
   const runs = Array.from({ length: 5 }, (_, i) =>
     makeRun('acme/broken', `b${i}`, 'failed', new Date(now - (5 - i) * 3_600_000).toISOString()),
   );
-  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/broken')], runs, updates: [], warnings: [], complete: true }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [makeRepo('acme/broken')], runs, updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
 
   const [row] = triage(db);
   assert.ok(row?.failingSince instanceof Date);
@@ -548,7 +569,7 @@ test('forges reports what each source said about its forge, or nulls', () => {
       scheduleLastAt: null,
     },
   }, new Date());
-  persist(db, 'quiet', 'ce', { repos: [], runs: [], updates: [], warnings: [], complete: true }, new Date());
+  persist(db, 'quiet', 'ce', { repos: [], runs: [], updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
 
   const map = forges(db);
   assert.deepEqual(map.get(SOURCE), { platform: 'github', webBaseUrl: 'https://github.example' });
@@ -563,7 +584,7 @@ test('a clean cycle that reports nothing releases every old run to retention', (
   // clean cycle reports no repos and no runs. The old runs must flip to
   // log-unavailable, or retention stays a permanent no-op at the exact moment
   // the operator's file deletion says it should start.
-  persist(db, SOURCE, 'ce', { repos: [], runs: [], updates: [], warnings: [], complete: true }, new Date());
+  persist(db, SOURCE, 'ce', { repos: [], runs: [], updates: [], warnings: [], complete: true, authoritativeRepoList: true }, new Date());
 
   const available = db.all<{ n: number }>(sql`
     select count(*) as n from renovate_run where log_available = 1
@@ -583,7 +604,7 @@ test('an incomplete cycle does not grey every log link over a transient outage',
     runs: [],
     updates: [],
     warnings: ['Could not read runs for acme/widget: 500'],
-    complete: false,
+    complete: false, authoritativeRepoList: true,
   }, new Date());
 
   const available = db.all<{ n: number }>(sql`
@@ -606,7 +627,7 @@ test('an incomplete cycle moves no availability at all', () => {
     runs: [makeRun('acme/widget', 'j2', 'success', '2026-08-06T17:00:00Z')],
     updates: [],
     warnings: ['Could not read runs for acme/gadget: 500'],
-    complete: false,
+    complete: false, authoritativeRepoList: true,
   }, new Date());
 
   const available = db.all<{ n: number }>(sql`
@@ -627,7 +648,7 @@ test('a complete cycle with a benign warning still releases unrepeated runs', ()
     runs: [],
     updates: [],
     warnings: ['stray.log is not JSON Lines; skipped.'],
-    complete: true,
+    complete: true, authoritativeRepoList: true,
   }, new Date());
 
   const available = db.all<{ n: number }>(sql`

@@ -8,7 +8,7 @@ const stub = (config: SourceConfig): SourceAdapter => ({
   id: config.id,
   kind: config.kind,
   preflight: async () => ({ ok: true, problems: [], reachableButEmpty: false, compose: '' }),
-  collect: async () => ({ repos: [], runs: [], updates: [], warnings: [], complete: true }),
+  collect: async () => ({ repos: [], runs: [], updates: [], warnings: [], complete: true, authoritativeRepoList: true }),
   fetchLog: async () => new ReadableStream<Uint8Array>(),
 });
 

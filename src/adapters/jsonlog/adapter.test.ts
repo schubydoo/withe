@@ -134,6 +134,20 @@ test('an unreadable file makes the enumeration incomplete', async (t) => {
   assert.ok(result.warnings.some((w) => w.includes('locked.log')));
 });
 
+test('an entry that cannot be stat-ed makes the cycle incomplete, not a silent skip', async (t) => {
+  if (process.getuid?.() === 0) return t.skip('root reads through permissions');
+  const root = dir();
+  writeFileSync(join(root, 'good.log'), [header(), ...repoRun('acme/widget', 1)].join('\n'));
+  // Drop search permission on the directory: readdir still lists names, but
+  // statSync on each child fails EACCES — not ENOENT, so not a benign
+  // rotation. Such an entry may be a log, so the cycle is incomplete.
+  chmodSync(root, 0o600);
+  const result = await adapter(root).collect();
+  chmodSync(root, 0o755);
+  assert.equal(result.complete, false, 'an un-stat-able entry may be a log');
+  assert.ok(result.warnings.some((w) => w.includes('good.log')));
+});
+
 test('a healthy directory reports a complete enumeration', async () => {
   const root = dir();
   writeFileSync(join(root, 'renovate.log'), [header(), ...repoRun('acme/widget', 1)].join('\n'));

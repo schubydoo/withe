@@ -96,6 +96,13 @@ export interface CollectResult {
    */
   complete: boolean;
   /**
+   * True when `repos` is the source's full repository list, so a repository
+   * absent from it has been dropped at the source. False when the source sees
+   * only a partial view (a log directory), where an absent repository may
+   * simply have no log present. Gates removal-by-absence.
+   */
+  authoritativeRepoList: boolean;
+  /**
    * Absent when the source cannot say. The pages then render names as plain
    * text rather than guessing at github.com, which is the wrong answer for the
    * self-hosted forges Withe exists to support.

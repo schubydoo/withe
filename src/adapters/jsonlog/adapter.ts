@@ -89,17 +89,15 @@ export class JsonLogAdapter implements SourceAdapter {
 
   async collect(): Promise<CollectResult> {
     const warnings: string[] = [];
-    const { files, warnings: listWarnings } = this.listFiles();
+    const { files, warnings: listWarnings, listFailures } = this.listFiles();
     warnings.push(...listWarnings);
-    // Whether every log file's runs were read. A directory or file that could
-    // not be listed or read clears it; a file that was read in full and holds
-    // no runs (a stray text file) does not — its warning is benign for run
-    // enumeration, and a source with a permanent stray file must not lose
-    // retention forever.
-    let complete = listWarnings.length === 0;
 
     const { found, readFailures } = this.readRuns(files, warnings);
-    if (readFailures > 0) complete = false;
+    // Complete when nothing that should have been read was missed. A benign
+    // skip — a stray non-log file, an oversized file, a raced rotation — warns
+    // but is not a failure; a directory, stat, or file that could not be read
+    // is.
+    const complete = listFailures === 0 && readFailures === 0;
 
     // The same run appears twice when the operator copies a file they also
     // mount live. One external id per run keeps one row per run, and the
@@ -119,7 +117,7 @@ export class JsonLogAdapter implements SourceAdapter {
 
     const updates = await this.buildUpdates([...byJob.values()], warnings);
 
-    return { repos, runs, updates, warnings, complete };
+    return { repos, runs, updates, warnings, complete, authoritativeRepoList: false };
   }
 
   async fetchLog(run: Pick<RenovateRun, 'repoId' | 'externalJobId'>): Promise<ReadableStream<Uint8Array>> {
@@ -181,16 +179,23 @@ export class JsonLogAdapter implements SourceAdapter {
     }
   }
 
-  /** Log files under the directory, walked to a shallow depth. */
-  private listFiles(): { files: string[]; warnings: string[] } {
+  /**
+   * Log files under the directory, walked to a shallow depth. `listFailures`
+   * counts entries that could not be read (a directory or a stat that failed
+   * for any reason but ENOENT), which mark the cycle incomplete; benign skips
+   * only warn.
+   */
+  private listFiles(): { files: string[]; warnings: string[]; listFailures: number } {
     const files: string[] = [];
     const warnings: string[] = [];
+    let listFailures = 0;
     const walk = (dir: string, depth: number): void => {
       let names: string[];
       try {
         names = readdirSync(dir);
       } catch (cause) {
         warnings.push(`Could not list ${dir}: ${describe(cause)}`);
+        listFailures += 1;
         return;
       }
       for (const name of names) {
@@ -199,8 +204,14 @@ export class JsonLogAdapter implements SourceAdapter {
         let stat;
         try {
           stat = statSync(path);
-        } catch {
-          continue; // Vanished between listing and stat — a rotation, not an error.
+        } catch (cause) {
+          // ENOENT: the entry vanished between listing and stat — a rotation.
+          // Anything else (EACCES, EIO) left part of the tree unread.
+          if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') {
+            warnings.push(`Could not read ${relative(this.directory, path)}: ${describe(cause)}`);
+            listFailures += 1;
+          }
+          continue;
         }
         if (stat.isDirectory()) {
           if (depth < MAX_DEPTH) walk(path, depth + 1);
@@ -218,7 +229,7 @@ export class JsonLogAdapter implements SourceAdapter {
       }
     };
     walk(this.directory, 0);
-    return { files: files.sort(), warnings };
+    return { files: files.sort(), warnings, listFailures };
   }
 
   private readRuns(files: string[], warnings: string[]): { found: FoundRun[]; readFailures: number } {

@@ -166,7 +166,7 @@ export class CeAdapter implements SourceAdapter {
       // failure the adapter cannot degrade past, so it says so and returns
       // empty rather than throwing into the worker's face.
       warnings.push(orgs.warning);
-      return { repos: [], runs: [], updates: [], warnings, complete: false };
+      return { repos: [], runs: [], updates: [], warnings, complete: false, authoritativeRepoList: true };
     }
 
     for (const name of orgs.names) {
@@ -232,6 +232,9 @@ export class CeAdapter implements SourceAdapter {
       updates: updatesPerRepo.flat(),
       warnings,
       complete,
+      // The org repo listing is the full set of repositories, so an absent one
+      // has been uninstalled or made private.
+      authoritativeRepoList: true,
       meta: await this.forge(),
     };
   }

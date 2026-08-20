@@ -91,13 +91,12 @@ export function persist(
     // repository look like it never existed; marking it removed keeps the
     // record and lets the inventory say what happened.
     //
-    // Only a complete enumeration may conclude a repository is gone from its
-    // absence, for the same reason the run sweep above does: on an incomplete
-    // cycle a repository can be missing because its only log file was
-    // transiently unreadable, not because it was uninstalled. Marking it
-    // removed there would grey it and delete its pending updates until the
-    // next complete cycle restored them.
-    if (result.complete && result.repos.length > 0) {
+    // Removal-by-absence needs two things: the source's repository list is the
+    // full set (`authoritativeRepoList`), and this cycle read all of it
+    // (`complete`). A log directory is a partial view — an absent repository
+    // may simply have no log present — so it is never authoritative and its
+    // repositories are never removed here.
+    if (result.authoritativeRepoList && result.complete && result.repos.length > 0) {
       const present = result.repos.map((r) => r.fullName);
       tx.run(sql`
         update repo

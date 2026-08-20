@@ -101,7 +101,7 @@ function collectResult(): CollectResult {
     }
   }
 
-  return { repos, runs, updates, warnings: [], complete: true };
+  return { repos, runs, updates, warnings: [], complete: true, authoritativeRepoList: true };
 }
 
 /** Writer process: persist the whole 500-repo set, WRITER_ITERATIONS times. */
