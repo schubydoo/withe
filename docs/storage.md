@@ -13,6 +13,22 @@ By default Withe keeps every run. Set `WITHE_RETENTION_DAYS` to a number of days
 Withe then deletes older runs at the end of each sync and returns the freed space to the disk.
 Repositories, pending updates, and forge links are never pruned.
 
+## File-backed sources: your files, your retention
+
+For a `jsonlog` source the log files are the source record, not a cache, so the rule is different
+and simpler:
+
+- **Withe never deletes, moves, or writes a log file.** It did not create them, and a build check
+  enforces that no adapter can gain a filesystem write. Rotate or delete logs with the tools that
+  made them — `logrotate`, your CI's artifact retention, or by hand.
+- **The files govern what Withe knows.** Every sync re-reads the directory. Delete a file and its
+  runs keep their history rows (like a server-pruned run, the log link goes grey); add or append a
+  file and its runs appear on the next sync.
+- **`WITHE_RETENTION_DAYS` takes effect only after the file is gone.** A pruned run whose file still
+  sits in the directory is re-ingested on the next sync, so setting the retention shorter than your
+  own file rotation does nothing for those runs — by design, since deleting the file is the
+  operator's statement that the history can go.
+
 ## Put the volume on local disk
 
 Use a Docker named volume or a local disk path. **Do not point the volume at an NFS or SMB mount.**
