@@ -90,7 +90,14 @@ export function persist(
     // private. Deleting the row would take its run history with it and make the
     // repository look like it never existed; marking it removed keeps the
     // record and lets the inventory say what happened.
-    if (result.repos.length > 0) {
+    //
+    // Only a complete enumeration may conclude a repository is gone from its
+    // absence, for the same reason the run sweep above does: on an incomplete
+    // cycle a repository can be missing because its only log file was
+    // transiently unreadable, not because it was uninstalled. Marking it
+    // removed there would grey it and delete its pending updates until the
+    // next complete cycle restored them.
+    if (result.complete && result.repos.length > 0) {
       const present = result.repos.map((r) => r.fullName);
       tx.run(sql`
         update repo

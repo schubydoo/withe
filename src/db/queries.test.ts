@@ -262,6 +262,41 @@ test('a repository the source stops listing is marked removed, not deleted', () 
   sqlite.close();
 });
 
+test('an incomplete cycle does not mark a missing repository removed, nor delete its updates', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+
+  // acme/gadget is absent this cycle, but the cycle is incomplete — its only
+  // file was transiently unreadable, not uninstalled. It must keep its row
+  // unremoved and its pending updates, or a transient read error would grey a
+  // repository and delete history the source never dropped.
+  persist(db, SOURCE, 'ce', {
+    ...FLEET,
+    repos: FLEET.repos.filter((r) => r.fullName !== 'acme/gadget'),
+    runs: FLEET.runs.filter((r) => !r.repoId.endsWith('acme/gadget')),
+    updates: FLEET.updates.filter((u) => !u.repoId.endsWith('acme/gadget')),
+    complete: false,
+  }, new Date());
+
+  const gadget = repoInventory(db).find((r) => r.fullName === 'acme/gadget');
+  assert.equal(gadget?.removedAt, null, 'a transient absence is not a removal');
+  assert.ok((gadget?.pendingCount ?? 0) > 0, 'its pending updates survive the incomplete cycle');
+
+  // A later complete cycle that still omits it is the source's whole word, so
+  // now it is genuinely gone.
+  persist(db, SOURCE, 'ce', {
+    ...FLEET,
+    repos: FLEET.repos.filter((r) => r.fullName !== 'acme/gadget'),
+    runs: FLEET.runs.filter((r) => !r.repoId.endsWith('acme/gadget')),
+    updates: FLEET.updates.filter((u) => !u.repoId.endsWith('acme/gadget')),
+  }, new Date());
+
+  const goneNow = repoInventory(db).find((r) => r.fullName === 'acme/gadget');
+  assert.ok(goneNow?.removedAt instanceof Date, 'a complete cycle that omits it does remove it');
+  assert.equal(goneNow?.pendingCount, 0);
+  sqlite.close();
+});
+
 test("a removed repository's pending updates disappear with it", () => {
   const { sqlite, db } = fresh();
   persist(db, SOURCE, 'ce', FLEET, new Date());
