@@ -124,6 +124,13 @@ export const update = sqliteTable(
      * Task 1.8 shows one row with a count rather than seven rows.
      */
     packageFileCount: integer('package_file_count').notNull().default(1),
+    /**
+     * Those package files by path, as a JSON array. Null only on rows written
+     * before the column existed; persist rewrites the whole update set every
+     * sync, so the column fills itself within one interval and needs no
+     * backfill.
+     */
+    packageFiles: text('package_files', { mode: 'json' }).$type<string[]>(),
   },
   (t) => [
     // Every sync re-reads the same pending updates. Without a natural key the

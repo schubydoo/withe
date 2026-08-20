@@ -168,6 +168,7 @@ test('one lock-file branch is one refresh, whatever it counts manifests', async 
   assert.ok(update);
   assert.equal(update.dependencyName, 'renovate/lock-file-maintenance');
   assert.equal(update.packageFileCount, 2);
+  assert.deepEqual(update.packageFiles, ['package.json', 'pyproject.toml']);
   assert.equal(update.updateType, 'lock-file-maintenance');
   assert.equal(update.targetVersion, null);
   assert.equal(isHeld(update), false);
@@ -198,6 +199,12 @@ test('two lock-file branches stay two refreshes', async () => {
       ['renovate/lock-file-maintenance', 2],
       ['renovate/lock-file-maintenance-docs', 1],
     ],
+  );
+  // Each branch names only its own manifests: a text search over the log could
+  // not separate them, which is why the paths are carried on the row.
+  assert.deepEqual(
+    extract.updates.map((u) => u.packageFiles).sort(),
+    [['Cargo.toml', 'crates/cli/Cargo.toml'], ['docs/requirements.in']],
   );
 });
 

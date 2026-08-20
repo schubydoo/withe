@@ -131,5 +131,12 @@ export interface Update {
    * repository; Task 1.8 shows one row and a count rather than seven rows.
    */
   packageFileCount: number;
+  /**
+   * Those package files by path. A lock-file refresh covering 13 manifests
+   * must be able to name them, and no other record holds the paths: searching
+   * the run log cannot recover them, because Renovate reports every branch in
+   * one `branchesInformation` line. Empty when the source names no files.
+   */
+  packageFiles: string[];
   sourceAdapterId: SourceAdapterId;
 }

@@ -215,6 +215,7 @@ export async function extractFromLog(
             closeType: null,
             detectedAt: context.detectedAt,
             packageFileCount: 1,
+            packageFiles: [],
             sourceAdapterId: context.sourceAdapterId,
           });
         }
@@ -234,7 +235,11 @@ export async function extractFromLog(
   }
 
   for (const [key, update] of byKey) {
-    update.packageFileCount = Math.max(1, filesByKey.get(key)?.size ?? 1);
+    const files = filesByKey.get(key);
+    update.packageFileCount = Math.max(1, files?.size ?? 1);
+    // Sorted so the same log always produces the same row, whatever order the
+    // branches reported the manifests in.
+    update.packageFiles = files ? [...files].sort() : [];
   }
 
   return {

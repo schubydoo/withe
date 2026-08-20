@@ -210,7 +210,14 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
                     </Maybe>
                   </td>
                   <td className="py-1 pr-4 font-medium">{row.branchName}</td>
-                  <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">{row.packageFileCount}</td>
+                  <td className="py-1 pr-4 text-neutral-600 dark:text-neutral-300">
+                    <span className="tabular-nums">{row.packageFileCount}</span>
+                    {row.packageFiles.length > 0 && (
+                      <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
+                        {row.packageFiles.join(', ')}
+                      </span>
+                    )}
+                  </td>
                   <td className="py-1 text-neutral-500 dark:text-neutral-400">
                     {row.prNumber === null ? '' : (
                       <Maybe
