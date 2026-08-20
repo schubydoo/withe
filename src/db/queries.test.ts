@@ -243,6 +243,40 @@ test('a repository the source stops listing is marked removed, not deleted', () 
   sqlite.close();
 });
 
+test("a removed repository's pending updates disappear with it", () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+
+  // The next sync no longer mentions acme/gadget. The others keep their updates.
+  persist(db, SOURCE, 'ce', {
+    ...FLEET,
+    repos: FLEET.repos.filter((r) => r.fullName !== 'acme/gadget'),
+    runs: [],
+    updates: FLEET.updates.filter((u) => !u.repoId.endsWith('acme/gadget')),
+  }, new Date());
+
+  assert.deepEqual(pendingUpdates(db).map((u) => u.dependencyName).sort(), ['astral-sh/uv', 'next']);
+  assert.deepEqual(lockFileRefreshes(db).map((l) => l.repoFullName), ['acme/widget']);
+
+  // The rows are deleted, not only filtered: the inventory, which lists
+  // removed repositories, must not count updates the source can no longer see.
+  const gadget = repoInventory(db).find((r) => r.fullName === 'acme/gadget');
+  assert.equal(gadget?.pendingCount, 0);
+  sqlite.close();
+});
+
+test('stale update rows of an already-removed repository are not listed', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  // A database from before persist cleared these rows: the repository is
+  // marked removed but its updates are still there.
+  sqlite.prepare("update repo set removed_at = 1 where full_name = 'acme/gadget'").run();
+
+  assert.deepEqual(pendingUpdates(db).map((u) => u.dependencyName).sort(), ['astral-sh/uv', 'next']);
+  assert.deepEqual(lockFileRefreshes(db).map((l) => l.repoFullName), ['acme/widget']);
+  sqlite.close();
+});
+
 test('a repository that comes back is no longer marked removed', () => {
   const { sqlite, db } = fresh();
   persist(db, SOURCE, 'ce', FLEET, new Date());
@@ -268,6 +302,11 @@ test('one source removing a repository does not touch another source', () => {
   const removed = repoInventory(db).filter((r) => r.removedAt);
   assert.equal(removed.length, 2);
   assert.ok(removed.every((r) => r.sourceAdapterId === SOURCE), 'sources must not remove each other');
+  assert.equal(
+    pendingUpdates(db).filter((u) => u.sourceAdapterId === 'other').length,
+    3,
+    "another source's pending updates must survive the removal",
+  );
   sqlite.close();
 });
 

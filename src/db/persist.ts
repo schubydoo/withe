@@ -99,6 +99,17 @@ export function persist(
            and removed_at is null
            and full_name not in (${sql.join(present.map((n) => sql`${n}`), sql`, `)})
       `);
+      // Their pending updates go with them: the snapshot delete further down
+      // only covers repositories the source still lists. Matching every
+      // removed repository, not only the newly marked, also clears rows that
+      // databases from before this delete still hold.
+      tx.run(sql`
+        delete from "update"
+         where source_adapter_id = ${sourceAdapterId}
+           and repo_id in (select id from repo
+                            where source_adapter_id = ${sourceAdapterId}
+                              and removed_at is not null)
+      `);
     }
 
     // One read, then an in-memory map. Resolving each run's repository with its

@@ -60,6 +60,7 @@ export function pendingUpdates(db: Db): PendingUpdateRow[] {
       from "update" u
       join repo r on r.id = u.repo_id
      where u.update_type is not 'lock-file-maintenance'
+       and r.removed_at is null
      order by r.full_name, u.dependency_name
   `);
 }
@@ -81,6 +82,7 @@ export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
       from "update" u
       join repo r on r.id = u.repo_id
      where u.update_type is 'lock-file-maintenance'
+       and r.removed_at is null
      order by r.full_name, u.dependency_name
   `);
 }
