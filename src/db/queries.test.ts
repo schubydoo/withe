@@ -329,6 +329,40 @@ test('one source removing a repository does not touch another source', () => {
   sqlite.close();
 });
 
+test('two sources merge into one run history, and the source filter splits it back', () => {
+  const { sqlite, db } = fresh();
+  // The same repository, watched by a server API and a log directory. Rows
+  // stay separate in the database; the history view merges by full name.
+  persist(db, SOURCE, 'ce', {
+    repos: [makeRepo('acme/widget')],
+    runs: [makeRun('acme/widget', 'j1', 'success', '2026-08-20T07:00:00Z')],
+    updates: [],
+    warnings: [],
+  }, new Date());
+  const fromLogs: RenovateRun = {
+    ...makeRun('acme/widget', 'acme/widget@2026-08-20T08:00:00.000Z', 'success', '2026-08-20T08:00:00Z'),
+    id: 'cron-logs:acme/widget@2026-08-20T08:00:00.000Z',
+    repoId: 'cron-logs:acme/widget',
+    sourceAdapterId: 'cron-logs',
+  };
+  persist(db, 'cron-logs', 'jsonlog', {
+    repos: [{ ...makeRepo('acme/widget'), id: 'cron-logs:acme/widget', sourceAdapterId: 'cron-logs' }],
+    runs: [fromLogs],
+    updates: [],
+    warnings: [],
+  }, new Date());
+
+  const merged = runsForRepo(db, 'acme/widget');
+  assert.equal(merged.total, 2, 'both contributors appear in one history');
+  assert.deepEqual(merged.runs.map((r) => r.sourceAdapterId), ['cron-logs', SOURCE], 'newest first, each naming its source');
+
+  const filtered = runsForRepo(db, 'acme/widget', 0, undefined, SOURCE);
+  assert.equal(filtered.total, 1);
+  assert.equal(filtered.runs[0]?.sourceAdapterId, SOURCE);
+
+  sqlite.close();
+});
+
 test('50 runs come back newest first with what each needs to render', () => {
   const { sqlite, db } = fresh();
   const base = Date.parse('2026-08-06T00:00:00Z');

@@ -7,6 +7,7 @@ import { repoUrl } from '../../core/links.ts';
 import { openDatabase } from '../../db/client.ts';
 import { forges, repoInventory, type ForgeInfo, type InventoryRow } from '../../db/queries.ts';
 import { ago } from '../format.ts';
+import { distinctSources, groupByFullName } from './group.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,18 +38,52 @@ function state(row: InventoryRow): { label: string; tone: string } {
   return { label: 'active', tone: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300' };
 }
 
-export default function Repos() {
+interface Props {
+  searchParams: Promise<{ source?: string }>;
+}
+
+export default async function Repos({ searchParams }: Props) {
+  const { source: rawSource } = await searchParams;
   const { rows, forge } = read();
-  const orgs = [...new Set(rows.map((r) => r.org))];
-  const removed = rows.filter((r) => r.removedAt).length;
+  // Which sources exist comes from the data, not the filter, so the filter
+  // links stay visible while one is active. An unknown value shows everything
+  // rather than an error page — same rule as an unknown state elsewhere.
+  const sources = distinctSources(rows);
+  const source = typeof rawSource === 'string' && sources.includes(rawSource) ? rawSource : null;
+  const grouped = groupByFullName(source ? rows.filter((r) => r.sourceAdapterId === source) : rows);
+  const shown = grouped.map((g) => g.primary);
+  const orgs = [...new Set(shown.map((r) => r.org))];
+  const removed = shown.filter((r) => r.removedAt).length;
 
   return (
     <main className="mx-auto max-w-5xl p-8">
       <h1 className="text-2xl font-semibold">Repositories</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        {rows.length} across {orgs.length} {orgs.length === 1 ? 'organization' : 'organizations'}
+        {shown.length} across {orgs.length} {orgs.length === 1 ? 'organization' : 'organizations'}
         {removed > 0 && `, ${removed} removed at the source and kept for their history`}
       </p>
+
+      {sources.length > 1 && (
+        // Only a multi-source install is offered the filter: with one source
+        // the labels would name the same thing on every row (Task 4.4).
+        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
+          Source:{' '}
+          {source === null ? (
+            <span className="font-medium">all</span>
+          ) : (
+            <a className="underline" href="/repos">all</a>
+          )}
+          {sources.map((id) => (
+            <span key={id} className="ml-2">
+              {source === id ? (
+                <span className="font-medium">{id}</span>
+              ) : (
+                <a className="underline" href={`/repos?source=${encodeURIComponent(id)}`}>{id}</a>
+              )}
+            </span>
+          ))}
+        </p>
+      )}
 
       <table className="mt-6 w-full text-sm">
         <caption className="sr-only">
@@ -65,10 +100,10 @@ export default function Repos() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
+          {grouped.map(({ primary: row, sources: contributors }) => {
             const { label, tone } = state(row);
             return (
-              <tr key={`${row.sourceAdapterId}/${row.fullName}`} className="border-b border-neutral-200 dark:border-neutral-800">
+              <tr key={row.fullName} className="border-b border-neutral-200 dark:border-neutral-800">
                 <td className="py-1.5 pr-4">
                   <a
                     className="underline decoration-neutral-300 dark:decoration-neutral-700 hover:decoration-neutral-600"
@@ -97,6 +132,11 @@ export default function Repos() {
                       </a>
                     ) : null;
                   })()}
+                  {sources.length > 1 && (
+                    <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
+                      {contributors.join(' + ')}
+                    </span>
+                  )}
                 </td>
                 <td className="py-1.5 pr-4">
                   <span className={`rounded px-1.5 py-0.5 text-xs ${tone}`}>{label}</span>
@@ -118,7 +158,7 @@ export default function Repos() {
         </tbody>
       </table>
 
-      {rows.length === 0 && (
+      {shown.length === 0 && (
         <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
           No repositories yet. The <a className="underline" href="/preflight">setup check</a> says
           why.

@@ -11,17 +11,24 @@ export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ org: string; repo: string }>;
-  searchParams: Promise<{ page?: string }>;
+  searchParams: Promise<{ page?: string; source?: string }>;
 }
 
-function read(fullName: string, page: number) {
+function read(fullName: string, page: number, rawSource: string | undefined) {
   const config = loadConfig();
   if (config.sources.length === 0 || !existsSync(config.dbPath)) redirect('/preflight');
 
   const { sqlite, db } = openDatabase(config.dbPath);
   try {
-    const known = repoInventory(db).find((r) => r.fullName === fullName);
-    return { known, ...runsForRepo(db, fullName, page) };
+    // Every source that describes this repository — the history below merges
+    // their runs, and the header names the contributors (Task 4.4).
+    const knownRows = repoInventory(db).filter((r) => r.fullName === fullName);
+    const contributors = [...new Set(knownRows.map((r) => r.sourceAdapterId))].sort();
+    // An unknown source value shows everything rather than an error page.
+    const source = rawSource !== undefined && contributors.includes(rawSource) ? rawSource : null;
+    // Alive while any contributor still lists it; removed only when all agree.
+    const known = knownRows.find((r) => !r.removedAt) ?? knownRows[0];
+    return { known, contributors, source, ...runsForRepo(db, fullName, page, undefined, source) };
   } finally {
     sqlite.close();
   }
@@ -47,6 +54,11 @@ function since(when: Date): string {
   return minutes < 120 ? `${minutes}m` : `${Math.round(minutes / 60)}h`;
 }
 
+/** Carry the active source filter across pagination links. */
+function withSource(href: string, source: string | null): string {
+  return source === null ? href : `${href}&source=${encodeURIComponent(source)}`;
+}
+
 const TONE: Record<string, string> = {
   success: 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-300',
   failed: 'bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-300',
@@ -57,12 +69,13 @@ const TONE: Record<string, string> = {
 
 export default async function RunHistory({ params, searchParams }: Props) {
   const { org, repo } = await params;
-  const { page: rawPage } = await searchParams;
+  const { page: rawPage, source: rawSource } = await searchParams;
   const fullName = `${decodeURIComponent(org)}/${decodeURIComponent(repo)}`;
   const page = Math.max(0, Number(rawPage ?? '0') || 0);
 
-  const { known, runs, total } = read(fullName, page);
+  const { known, contributors, source, runs, total } = read(fullName, page, rawSource);
   if (!known) notFound();
+  const multiSource = contributors.length > 1;
 
   const pages = Math.max(1, Math.ceil(total / RUNS_PER_PAGE));
   const failures = runs.filter((r) => r.status === 'failed').length;
@@ -75,13 +88,35 @@ export default async function RunHistory({ params, searchParams }: Props) {
         {known.removedAt && ' · removed at the source, history kept'}
         {failures > 0 && ` · ${failures} failed on this page`}
         {runs[0]?.runnerVersion && ` · Renovate ${runs[0].runnerVersion}`}
+        {multiSource && ` · seen by ${contributors.join(' and ')}`}
       </p>
+
+      {multiSource && (
+        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
+          Source:{' '}
+          {source === null ? (
+            <span className="font-medium">all</span>
+          ) : (
+            <a className="underline" href="?">all</a>
+          )}
+          {contributors.map((id) => (
+            <span key={id} className="ml-2">
+              {source === id ? (
+                <span className="font-medium">{id}</span>
+              ) : (
+                <a className="underline" href={`?source=${encodeURIComponent(id)}`}>{id}</a>
+              )}
+            </span>
+          ))}
+        </p>
+      )}
 
       <table className="mt-6 w-full text-sm">
         <caption className="sr-only">Runs for {fullName}, newest first.</caption>
         <thead>
           <tr className="border-b border-neutral-300 dark:border-neutral-700 text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
             <th scope="col" className="py-2 pr-4 font-medium">When</th>
+            {multiSource && <th scope="col" className="py-2 pr-4 font-medium">Source</th>}
             <th scope="col" className="py-2 pr-4 font-medium">Status</th>
             <th scope="col" className="py-2 pr-4 font-medium">Duration</th>
             <th scope="col" className="py-2 font-medium">Reason</th>
@@ -91,10 +126,15 @@ export default async function RunHistory({ params, searchParams }: Props) {
           {runs.map((run) => {
             const { label, value } = timing(run);
             return (
-              <tr key={run.externalJobId} className="border-b border-neutral-200 dark:border-neutral-800 align-top">
+              <tr key={run.id} className="border-b border-neutral-200 dark:border-neutral-800 align-top">
                 <td className="py-1.5 pr-4 whitespace-nowrap text-neutral-600 dark:text-neutral-300">
                   {runWhen(run) ?? '—'}
                 </td>
+                {multiSource && (
+                  <td className="py-1.5 pr-4 whitespace-nowrap text-neutral-600 dark:text-neutral-300">
+                    {run.sourceAdapterId}
+                  </td>
+                )}
                 <td className="py-1.5 pr-4">
                   <span className={`rounded px-1.5 py-0.5 text-xs ${TONE[run.status] ?? TONE.unknown}`}>
                     {run.status}
@@ -151,7 +191,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
         // page is simply past the end of them.
         <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
           Page {page + 1} is past the end of {total} runs.{' '}
-          <a className="underline" href="?page=0">
+          <a className="underline" href={withSource('?page=0', source)}>
             Back to the newest
           </a>
           .
@@ -161,7 +201,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
       {pages > 1 && (
         <nav className="mt-6 flex items-center gap-4 text-sm" aria-label="Run history pages">
           {page > 0 && (
-            <a className="underline" href={`?page=${page - 1}`}>
+            <a className="underline" href={withSource(`?page=${page - 1}`, source)}>
               Newer
             </a>
           )}
@@ -169,7 +209,7 @@ export default async function RunHistory({ params, searchParams }: Props) {
             Page {page + 1} of {pages}
           </span>
           {page + 1 < pages && (
-            <a className="underline" href={`?page=${page + 1}`}>
+            <a className="underline" href={withSource(`?page=${page + 1}`, source)}>
               Older
             </a>
           )}

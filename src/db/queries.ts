@@ -189,6 +189,8 @@ export function repoInventory(db: Db): InventoryRow[] {
 export interface RunRow {
   /** Database id, used to address the log without exposing upstream paths. */
   id: number;
+  /** Which configured source contributed the run (Task 4.4). */
+  sourceAdapterId: string;
   externalJobId: string;
   reason: string | null;
   queuedAt: Date | null;
@@ -216,15 +218,21 @@ export function runsForRepo(
   fullName: string,
   page = 0,
   perPage = RUNS_PER_PAGE,
+  /** Restrict to one source's runs. Null merges every contributor (Task 4.4). */
+  source: string | null = null,
 ): { runs: RunRow[]; total: number } {
+  // `x is null or y = x` folds the filter into one statement; SQLite prunes
+  // the constant half at plan time.
   const [count] = db.all<{ total: number }>(sql`
     select count(*) as total
       from renovate_run rr join repo r on r.id = rr.repo_id
      where r.full_name = ${fullName}
+       and (${source} is null or rr.source_adapter_id = ${source})
   `);
 
   const rows = db.all<{
     id: number;
+    sourceAdapterId: string;
     externalJobId: string;
     reason: string | null;
     queuedAt: number | null;
@@ -236,13 +244,15 @@ export function runsForRepo(
     runnerVersion: string | null;
     logAvailable: number;
   }>(sql`
-    select rr.id, rr.external_job_id as externalJobId, rr.reason,
+    select rr.id, rr.source_adapter_id as sourceAdapterId,
+           rr.external_job_id as externalJobId, rr.reason,
            rr.queued_at as queuedAt, rr.started_at as startedAt,
            rr.completed_at as completedAt, rr.status, rr.error,
            rr.artifact_errors as artifactErrors, rr.runner_version as runnerVersion,
            rr.log_available as logAvailable
       from renovate_run rr join repo r on r.id = rr.repo_id
      where r.full_name = ${fullName}
+       and (${source} is null or rr.source_adapter_id = ${source})
      order by coalesce(rr.completed_at, rr.started_at, rr.queued_at) desc, rr.id desc
      limit ${perPage} offset ${page * perPage}
   `);
@@ -251,6 +261,7 @@ export function runsForRepo(
     total: count?.total ?? 0,
     runs: rows.map((row) => ({
       id: row.id,
+      sourceAdapterId: row.sourceAdapterId,
       externalJobId: row.externalJobId,
       reason: row.reason,
       queuedAt: seconds(row.queuedAt),
