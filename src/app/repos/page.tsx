@@ -123,11 +123,11 @@ export default async function Repos({ searchParams }: Props) {
         {removed > 0 && `, ${removed} removed at the source and kept for their history`}
       </p>
 
-      <Filters filter={filter} shown={shown.length} total={rows.length} />
+      {rows.length > 0 && <Filters filter={filter} shown={shown.length} total={rows.length} />}
 
       <table className="mt-6 w-full text-sm">
         <caption className="sr-only">
-          Every repository Withe knows about, with its state and most recent run.
+          {isActive(filter) ? 'The repositories matching this filter' : 'Every repository Withe knows about'}, with its state and most recent run.
         </caption>
         <thead>
           <tr className="border-b border-neutral-300 dark:border-neutral-700 text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">

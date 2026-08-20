@@ -45,15 +45,25 @@ export function repoState(row: StatefulRow): RepoState {
   return 'active';
 }
 
-/** Every state, in the order the filter control offers them. */
-export const REPO_STATES: readonly RepoState[] = [
-  'active',
-  'failing',
-  'stalled',
-  'no runs yet',
-  'disabled',
-  'removed',
-];
+/**
+ * Every state, in the order the filter control offers them.
+ *
+ * Keyed by `RepoState` rather than written as a bare array: adding a state to
+ * the union is then a compile error until the control offers it, which no test
+ * over hand-written rows can catch.
+ */
+const ORDER: Record<RepoState, number> = {
+  active: 0,
+  failing: 1,
+  stalled: 2,
+  'no runs yet': 3,
+  disabled: 4,
+  removed: 5,
+};
+
+export const REPO_STATES: readonly RepoState[] = (Object.keys(ORDER) as RepoState[]).sort(
+  (a, b) => ORDER[a] - ORDER[b],
+);
 
 export interface RepoFilter {
   /** Trimmed search text. Empty means no text filter. */
@@ -97,12 +107,8 @@ export function isActive(filter: RepoFilter): boolean {
 /** Matches org, name, or the `org/name` form the operator sees on the page. */
 export function matchesQuery(row: NamedRow, q: string): boolean {
   if (q === '') return true;
-  const needle = q.toLowerCase();
-  return (
-    row.org.toLowerCase().includes(needle) ||
-    row.name.toLowerCase().includes(needle) ||
-    `${row.org}/${row.name}`.toLowerCase().includes(needle)
-  );
+  // `org/name` contains both halves, so one test covers all three forms.
+  return `${row.org}/${row.name}`.toLowerCase().includes(q.toLowerCase());
 }
 
 export function filterRepos<T extends StatefulRow & NamedRow>(rows: T[], filter: RepoFilter): T[] {

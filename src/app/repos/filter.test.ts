@@ -7,9 +7,7 @@ import {
   matchesQuery,
   NO_FILTER,
   readFilter,
-  REPO_STATES,
   repoState,
-  type RepoState,
 } from './filter.ts';
 
 interface Row {
@@ -47,20 +45,6 @@ test('repoState prefers removed over every other state it also matches', () => {
   // would send the operator looking for a run that will never come.
   const gone = row({ removedAt: new Date(0), enabled: false, stalled: true, lastRunStatus: 'failed' });
   assert.equal(repoState(gone), 'removed');
-});
-
-test('every state the badge can show is offered by the filter', () => {
-  const reachable: RepoState[] = [
-    repoState(row()),
-    repoState(row({ lastRunStatus: null })),
-    repoState(row({ stalled: true })),
-    repoState(row({ lastRunStatus: 'failed' })),
-    repoState(row({ enabled: false })),
-    repoState(row({ removedAt: new Date(0) })),
-  ];
-  for (const state of reachable) {
-    assert.ok(REPO_STATES.includes(state), `${state} is missing from the filter control`);
-  }
 });
 
 test('matchesQuery matches org, name, and the org/name form, case-insensitively', () => {
