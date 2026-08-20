@@ -70,6 +70,9 @@ function duration(seconds: number | null): string {
 export default function HealthPage() {
   const { sources, systems, migrations, databaseBytes, intervalSeconds } = read();
   const health = assess(sources, intervalSeconds);
+  // Sources with at least one successful sync: only those can be said to have
+  // "reported nothing" — the rest simply have not reported at all.
+  const everSynced = new Set(sources.filter((s) => s.lastSuccessAt !== null).map((s) => s.sourceAdapterId));
 
   // NFR-18: the state is a word first. The colour repeats it, never replaces it.
   const tone =
@@ -162,7 +165,15 @@ export default function HealthPage() {
           {systems.map((system) => (
             <div key={system.sourceAdapterId} className="mt-2">
               {systems.length > 1 && <h3 className="text-sm font-medium">{system.sourceAdapterId}</h3>}
-              {hasSystemFacts(system) ? (
+              {!everSynced.has(system.sourceAdapterId) ? (
+                // All-null facts on a source that has never synced mean nothing
+                // about the system API; blaming a setting here would send the
+                // operator to fix the wrong thing.
+                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                  No sync has completed yet, so nothing has been reported. The table above says how
+                  the syncs are going.
+                </p>
+              ) : hasSystemFacts(system) ? (
                 <dl className="mt-1 grid grid-cols-[12rem_1fr] gap-y-1 text-sm">
                   <dt className="text-neutral-500 dark:text-neutral-400">Queue depth</dt>
                   <dd className="tabular-nums">

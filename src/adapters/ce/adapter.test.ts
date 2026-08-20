@@ -349,6 +349,36 @@ test('an unreadable queue listing still reports depth, version and boot time', a
   assert.equal(result.meta?.system?.oldestQueuedRepo, null);
 });
 
+test('a listing truncated at its 100-job cap names no oldest job', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: { renovateVersion: '41.43.5', jobs: { queue: { size: 250 } } },
+  };
+  // Exactly 100 pending jobs: the cap. The spec promises no ordering, so the
+  // true oldest of 250 may not be on this page, and naming one would lie.
+  routes['/system/v1/jobs/queue'] = {
+    status: 200,
+    body: {
+      running: [],
+      pending: Array.from({ length: 100 }, (_, i) => ({
+        jobId: `q${i}`,
+        addedAt: `2026-08-20T10:${String(i % 60).padStart(2, '0')}:00.000Z`,
+        attempts: 0,
+        repository: 'acme/widget',
+        priority: 0,
+        reason: 'schedule-all',
+        organizationName: 'acme',
+      })),
+    },
+  };
+  const result = await adapter().collect();
+
+  assert.equal(result.meta?.system?.queueDepth, 250, 'the depth itself is still exact');
+  assert.equal(result.meta?.system?.oldestQueuedAt, null);
+  assert.equal(result.meta?.system?.oldestQueuedRepo, null);
+});
+
 test('an empty queue never asks for the queue listing', async () => {
   routes = healthy();
   routes['/system/v1/status'] = {

@@ -586,15 +586,23 @@ test('a sync that lost the system API clears the queue facts rather than freezin
     },
   };
   persist(db, SOURCE, 'ce', withSystem, new Date());
-  // The next cycle reaches the server but the system probe answers nothing.
-  persist(db, SOURCE, 'ce', {
-    ...FLEET,
-    meta: { platform: 'github', webBaseUrl: 'https://github.example', scheduleCron: null, scheduleLastAt: null, system: null },
-  }, new Date());
+  // The real loss path: the status probe errors, so the adapter returns no
+  // meta at all — not a meta with `system: null`, which a 200 without system
+  // fields would produce. Both must clear.
+  persist(db, SOURCE, 'ce', { ...FLEET }, new Date());
 
   const [row] = sourceSystems(db);
   assert.equal(row?.queueDepth, null, 'a stale queue depth would read as current');
   assert.equal(row?.runnerVersion, null);
+
+  // And the meta-present shape clears too.
+  persist(db, SOURCE, 'ce', withSystem, new Date());
+  persist(db, SOURCE, 'ce', {
+    ...FLEET,
+    meta: { platform: 'github', webBaseUrl: 'https://github.example', scheduleCron: null, scheduleLastAt: null, system: null },
+  }, new Date());
+  const [again] = sourceSystems(db);
+  assert.equal(again?.queueDepth, null);
   sqlite.close();
 });
 

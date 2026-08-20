@@ -297,11 +297,18 @@ export class CeAdapter implements SourceAdapter {
     let oldestQueuedRepo: string | null = null;
     if (queueDepth !== null && queueDepth > 0) {
       const queue = await this.client.GET('/system/v1/jobs/queue');
-      for (const pending of queue.data?.pending ?? []) {
-        const addedAt = pending.addedAt ? new Date(pending.addedAt) : null;
-        if (addedAt && (!oldestQueuedAt || addedAt < oldestQueuedAt)) {
-          oldestQueuedAt = addedAt;
-          oldestQueuedRepo = pending.repository ?? null;
+      const pending = queue.data?.pending ?? [];
+      // The listing returns at most 100 jobs and promises no ordering, so a
+      // truncated page cannot name the oldest — a younger job shown as the
+      // oldest is worse than none. Under the cap, the page is the whole queue
+      // and the minimum is exact.
+      if (pending.length < 100) {
+        for (const job of pending) {
+          const addedAt = job.addedAt ? new Date(job.addedAt) : null;
+          if (addedAt && (!oldestQueuedAt || addedAt < oldestQueuedAt)) {
+            oldestQueuedAt = addedAt;
+            oldestQueuedRepo = job.repository ?? null;
+          }
         }
       }
     }
