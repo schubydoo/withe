@@ -58,7 +58,32 @@ sources:
     kind: ce
     url: https://renovate.example.lan
     tokenEnv: HOME_CE_TOKEN      # names an environment variable, never the secret itself
+  - id: cron-logs
+    kind: jsonlog
+    path: /logs/renovate         # a directory of Renovate JSON Lines logs, mounted read-only
 ```
 
 `tokenEnv` names a variable rather than holding the secret, so the file is safe to commit or paste
 into a forum post when asking for help.
+
+## Source kinds
+
+### `ce` — a self-hosted Renovate server
+
+Reads the server's API. Needs `url` and `tokenEnv`.
+
+### `jsonlog` — a directory of run logs
+
+For the operator who runs plain `renovate/renovate` — a cron container, a CI job, or by hand — and
+has no server API to ask. Point Renovate's `RENOVATE_LOG_FILE` (with
+`RENOVATE_LOG_FILE_LEVEL=debug`) into a directory and mount that directory into Withe read-only;
+`path` names where it is mounted. Nothing about how Renovate runs changes.
+
+- Files ending `.log`, `.jsonl`, or `.ndjson` are read, including up to three directory levels down,
+  so an unzipped CI artifact works as dropped.
+- New and appended files are picked up on the next sync cycle; no restart, no file watcher.
+- One file may hold many runs (a runner appending across invocations), or one run per file (a CI
+  artifact per workflow run). Both work, and a file copied by hand next to the live one does not
+  double its runs.
+- A file that is not a Renovate log is skipped with a warning on the health page, never a crash.
+- Withe never writes to, moves, or deletes a log file. The files are yours; retention is yours too.

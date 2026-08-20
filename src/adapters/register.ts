@@ -7,5 +7,6 @@
  * than a convention, and `scripts/check-boundaries.ts` enforces it.
  */
 import './ce/adapter.ts';
+import './jsonlog/adapter.ts';
 
 export { createAdapter } from './registry.ts';

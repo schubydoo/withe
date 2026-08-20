@@ -213,6 +213,10 @@ function readSource(entry: RawSource, index: number, env: Env, seen: Set<string>
     if (!config.token) throw new ConfigError(`${where}.tokenEnv`, 'is required for a ce source');
   }
 
+  if (kind === 'jsonlog' && !config.path) {
+    throw new ConfigError(`${where}.path`, 'is required for a jsonlog source');
+  }
+
   return config;
 }
 
