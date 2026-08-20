@@ -20,6 +20,16 @@ export const source = sqliteTable('source', {
   /** When that cron last scheduled — the absolute instant the next run is
    * projected from, which keeps the estimate free of the runner's timezone. */
   scheduleLastAt: integer('schedule_last_at', { mode: 'timestamp' }),
+  /** Jobs waiting in the runner's queue, when its system API reports it (F-08).
+   * Null when the API is off, which the health page distinguishes from zero. */
+  queueDepth: integer('queue_depth'),
+  /** When the oldest waiting job was queued, and for which repository. */
+  oldestQueuedAt: integer('oldest_queued_at', { mode: 'timestamp' }),
+  oldestQueuedRepo: text('oldest_queued_repo'),
+  /** The Renovate CLI version the server reports it runs. */
+  runnerVersion: text('runner_version'),
+  /** When the server booted. */
+  bootedAt: integer('booted_at', { mode: 'timestamp' }),
 });
 
 export const repo = sqliteTable(

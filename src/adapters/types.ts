@@ -69,6 +69,26 @@ export interface PreflightResult {
  * returns partial data and a warning; it does not throw. A silent empty page is
  * the failure mode this field exists to prevent.
  */
+/**
+ * The runner's own health, when its API reports one (F-08, Task 4.6).
+ *
+ * Everything here is optional at the source: a server with the system API off
+ * reports none of it, and the health page then points at the preflight check
+ * rather than rendering an empty panel.
+ */
+export interface SystemInfo {
+  /** How many jobs wait in the runner's queue. Null when not reported. */
+  queueDepth: number | null;
+  /** When the oldest waiting job was queued. Null when the queue is empty or unreadable. */
+  oldestQueuedAt: Date | null;
+  /** The repository that oldest job is for, as `org/name`. */
+  oldestQueuedRepo: string | null;
+  /** The Renovate CLI version the server runs. */
+  runnerVersion: string | null;
+  /** When the server booted. */
+  bootedAt: Date | null;
+}
+
 /** What a source knows about the forge it works against. */
 export interface SourceMeta {
   platform: string | null;
@@ -78,6 +98,8 @@ export interface SourceMeta {
   scheduleCron: string | null;
   /** When that cron last scheduled. Null when the server does not report it. */
   scheduleLastAt: Date | null;
+  /** Queue and version facts from the system API. Null when it is off. */
+  system: SystemInfo | null;
 }
 
 export interface CollectResult {

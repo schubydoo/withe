@@ -293,7 +293,88 @@ test('the status endpoint, when it answers, names the forge', async () => {
     webBaseUrl: 'https://github.com',
     scheduleCron: null,
     scheduleLastAt: null,
+    system: null,
   });
+});
+
+test('the status endpoint carries queue depth, version and boot time (F-08)', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: {
+      platform: 'github',
+      endpoint: 'https://api.github.com/',
+      bootTime: '2026-08-19T06:00:00.000Z',
+      renovateVersion: '41.43.5',
+      jobs: { queue: { size: 3 } },
+    },
+  };
+  routes['/system/v1/jobs/queue'] = {
+    status: 200,
+    body: {
+      running: [],
+      pending: [
+        { jobId: 'q2', addedAt: '2026-08-20T10:05:00.000Z', attempts: 0, repository: 'acme/gadget', priority: 0, reason: 'schedule-all', organizationName: 'acme' },
+        { jobId: 'q1', addedAt: '2026-08-20T10:00:00.000Z', attempts: 0, repository: 'acme/widget', priority: 0, reason: 'schedule-all', organizationName: 'acme' },
+      ],
+    },
+  };
+  const result = await adapter().collect();
+
+  assert.deepEqual(result.meta?.system, {
+    queueDepth: 3,
+    oldestQueuedAt: new Date('2026-08-20T10:00:00.000Z'),
+    oldestQueuedRepo: 'acme/widget',
+    runnerVersion: '41.43.5',
+    bootedAt: new Date('2026-08-19T06:00:00.000Z'),
+  });
+});
+
+test('an unreadable queue listing still reports depth, version and boot time', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: {
+      bootTime: '2026-08-19T06:00:00.000Z',
+      renovateVersion: '41.43.5',
+      jobs: { queue: { size: 2 } },
+    },
+  };
+  // No /system/v1/jobs/queue route: it answers 404.
+  const result = await adapter().collect();
+
+  assert.equal(result.meta?.system?.queueDepth, 2);
+  assert.equal(result.meta?.system?.runnerVersion, '41.43.5');
+  assert.equal(result.meta?.system?.oldestQueuedAt, null);
+  assert.equal(result.meta?.system?.oldestQueuedRepo, null);
+});
+
+test('an empty queue never asks for the queue listing', async () => {
+  routes = healthy();
+  routes['/system/v1/status'] = {
+    status: 200,
+    body: {
+      bootTime: '2026-08-19T06:00:00.000Z',
+      renovateVersion: '41.43.5',
+      jobs: { queue: { size: 0 } },
+    },
+  };
+  // A planted queue listing: if the adapter asked despite a zero depth, this
+  // pending job would leak into the result and fail the assertion below. One
+  // fewer request per sync on the common healthy fleet.
+  routes['/system/v1/jobs/queue'] = {
+    status: 200,
+    body: {
+      running: [],
+      pending: [
+        { jobId: 'q1', addedAt: '2026-08-20T10:00:00.000Z', attempts: 0, repository: 'acme/widget', priority: 0, reason: 'schedule-all', organizationName: 'acme' },
+      ],
+    },
+  };
+  const result = await adapter().collect();
+
+  assert.equal(result.meta?.system?.queueDepth, 0);
+  assert.equal(result.meta?.system?.oldestQueuedAt, null, 'the queue listing was fetched despite a zero depth');
 });
 
 test('the status endpoint carries the schedule when the server reports one', async () => {

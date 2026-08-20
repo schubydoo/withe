@@ -15,6 +15,7 @@ import type {
   SourceAdapter,
   SourceConfig,
   SourceMeta,
+  SystemInfo,
 } from '../types.ts';
 import { createCeClient, paginate, type CeClientConfig } from './client.ts';
 import { mapWithLimit } from './limit.ts';
@@ -256,6 +257,9 @@ export class CeAdapter implements SourceAdapter {
     const data = status.data as {
       platform?: string;
       endpoint?: string;
+      bootTime?: string;
+      renovateVersion?: string;
+      jobs?: { queue?: { size?: number } };
       scheduler?: { allJobs?: { cron?: string; lastScheduling?: string } };
     };
     const platform = data.platform ?? null;
@@ -263,11 +267,48 @@ export class CeAdapter implements SourceAdapter {
     const job = data.scheduler?.allJobs;
     const scheduleCron = job?.cron ?? null;
     const scheduleLastAt = job?.lastScheduling ? new Date(job.lastScheduling) : null;
+    const system = await this.system(data);
     // Any one of these is worth keeping; a server that reports only a schedule
     // must not be dropped for having no browsable forge URL.
-    return platform || webBaseUrl || scheduleCron
-      ? { platform, webBaseUrl, scheduleCron, scheduleLastAt }
+    return platform || webBaseUrl || scheduleCron || system
+      ? { platform, webBaseUrl, scheduleCron, scheduleLastAt, system }
       : undefined;
+  }
+
+  /**
+   * Queue depth, oldest waiting job, version and boot time (F-08, Task 4.6).
+   *
+   * The depth comes from the status body, which counts the whole queue; the
+   * oldest waiting job needs the queue listing, which returns at most 100
+   * jobs — enough to name the oldest, since the listing is what the server
+   * dispatches from. A server that answers status but not the queue listing
+   * still reports depth, version and boot time.
+   */
+  private async system(data: {
+    bootTime?: string;
+    renovateVersion?: string;
+    jobs?: { queue?: { size?: number } };
+  }): Promise<SystemInfo | null> {
+    const queueDepth = data.jobs?.queue?.size ?? null;
+    const runnerVersion = data.renovateVersion ?? null;
+    const bootedAt = data.bootTime ? new Date(data.bootTime) : null;
+
+    let oldestQueuedAt: Date | null = null;
+    let oldestQueuedRepo: string | null = null;
+    if (queueDepth !== null && queueDepth > 0) {
+      const queue = await this.client.GET('/system/v1/jobs/queue');
+      for (const pending of queue.data?.pending ?? []) {
+        const addedAt = pending.addedAt ? new Date(pending.addedAt) : null;
+        if (addedAt && (!oldestQueuedAt || addedAt < oldestQueuedAt)) {
+          oldestQueuedAt = addedAt;
+          oldestQueuedRepo = pending.repository ?? null;
+        }
+      }
+    }
+
+    return queueDepth !== null || runnerVersion || bootedAt
+      ? { queueDepth, oldestQueuedAt, oldestQueuedRepo, runnerVersion, bootedAt }
+      : null;
   }
 
   private async collectUpdates(repo: Repo, run: RenovateRun): Promise<Update[]> {

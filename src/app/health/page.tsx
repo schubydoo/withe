@@ -9,7 +9,7 @@ import { existsSync, statSync } from 'node:fs';
 import { loadConfig } from '../../config/load.ts';
 import { assess, STALE_AFTER_INTERVALS } from '../../core/health.ts';
 import { openDatabase } from '../../db/client.ts';
-import { migrationState, sourceHealth, type MigrationState, type SourceHealth } from '../../db/queries.ts';
+import { migrationState, sourceHealth, sourceSystems, type MigrationState, type SourceHealth, type SourceSystem } from '../../db/queries.ts';
 import { ago } from '../format.ts';
 import { describeAge } from '../staleness.ts';
 
@@ -19,6 +19,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 interface Report {
   sources: SourceHealth[];
+  systems: SourceSystem[];
   migrations: MigrationState;
   databaseBytes: number | null;
   intervalSeconds: number;
@@ -27,13 +28,14 @@ interface Report {
 function read(): Report {
   const config = loadConfig();
   if (!existsSync(config.dbPath)) {
-    return { sources: [], migrations: { applied: 0, newestAt: null }, databaseBytes: null, intervalSeconds: config.syncIntervalSeconds };
+    return { sources: [], systems: [], migrations: { applied: 0, newestAt: null }, databaseBytes: null, intervalSeconds: config.syncIntervalSeconds };
   }
 
   const { sqlite, db } = openDatabase(config.dbPath);
   try {
     return {
       sources: sourceHealth(db, new Date(Date.now() - DAY_MS)),
+      systems: sourceSystems(db),
       migrations: migrationState(db),
       databaseBytes: statSync(config.dbPath).size,
       intervalSeconds: config.syncIntervalSeconds,
@@ -50,13 +52,23 @@ function size(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Whether the source reported anything at all from its system API. */
+function hasSystemFacts(system: SourceSystem): boolean {
+  return (
+    system.queueDepth !== null ||
+    system.runnerVersion !== null ||
+    system.bootedAt !== null ||
+    system.oldestQueuedAt !== null
+  );
+}
+
 function duration(seconds: number | null): string {
   if (seconds === null) return '—';
   return seconds < 1 ? 'under a second' : `${seconds}s`;
 }
 
 export default function HealthPage() {
-  const { sources, migrations, databaseBytes, intervalSeconds } = read();
+  const { sources, systems, migrations, databaseBytes, intervalSeconds } = read();
   const health = assess(sources, intervalSeconds);
 
   // NFR-18: the state is a word first. The colour repeats it, never replaces it.
@@ -139,6 +151,47 @@ export default function HealthPage() {
           </table>
         )}
       </section>
+
+      {systems.length > 0 && (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Renovate server</h2>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            What the server reports about itself: its job queue, version and boot time.
+            Values refresh with each sync.
+          </p>
+          {systems.map((system) => (
+            <div key={system.sourceAdapterId} className="mt-2">
+              {systems.length > 1 && <h3 className="text-sm font-medium">{system.sourceAdapterId}</h3>}
+              {hasSystemFacts(system) ? (
+                <dl className="mt-1 grid grid-cols-[12rem_1fr] gap-y-1 text-sm">
+                  <dt className="text-neutral-500 dark:text-neutral-400">Queue depth</dt>
+                  <dd className="tabular-nums">
+                    {system.queueDepth === null ? '—' : system.queueDepth === 0 ? '0 — nothing waiting' : system.queueDepth}
+                  </dd>
+                  <dt className="text-neutral-500 dark:text-neutral-400">Oldest waiting job</dt>
+                  <dd>
+                    {system.oldestQueuedAt === null
+                      ? '—'
+                      : `${system.oldestQueuedRepo ?? 'unknown repository'}, queued ${ago(system.oldestQueuedAt, '—')}`}
+                  </dd>
+                  <dt className="text-neutral-500 dark:text-neutral-400">Renovate version</dt>
+                  <dd className="tabular-nums">{system.runnerVersion ?? '—'}</dd>
+                  <dt className="text-neutral-500 dark:text-neutral-400">Booted</dt>
+                  <dd>{ago(system.bootedAt, '—')}</dd>
+                </dl>
+              ) : (
+                // No fact at all means the system API is off (or the source has
+                // never synced). Naming the check beats an empty panel.
+                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                  This server reports nothing about itself — its system status API is likely not
+                  enabled. The <a className="underline" href="/preflight">setup check</a> names the
+                  setting.
+                </p>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">This instance</h2>

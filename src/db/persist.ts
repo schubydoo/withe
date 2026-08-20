@@ -43,6 +43,11 @@ export function persist(
         webBaseUrl: meta?.webBaseUrl ?? null,
         scheduleCron: meta?.scheduleCron ?? null,
         scheduleLastAt: meta?.scheduleLastAt ?? null,
+        queueDepth: meta?.system?.queueDepth ?? null,
+        oldestQueuedAt: meta?.system?.oldestQueuedAt ?? null,
+        oldestQueuedRepo: meta?.system?.oldestQueuedRepo ?? null,
+        runnerVersion: meta?.system?.runnerVersion ?? null,
+        bootedAt: meta?.system?.bootedAt ?? null,
       })
       .onConflictDoUpdate({
         target: source.id,
@@ -55,6 +60,14 @@ export function persist(
                 webBaseUrl: meta.webBaseUrl,
                 scheduleCron: meta.scheduleCron,
                 scheduleLastAt: meta.scheduleLastAt,
+                // Queue facts describe a moment, not an identity: a cycle
+                // where the system API stopped answering must clear them
+                // rather than freeze a queue depth from an hour ago.
+                queueDepth: meta.system?.queueDepth ?? null,
+                oldestQueuedAt: meta.system?.oldestQueuedAt ?? null,
+                oldestQueuedRepo: meta.system?.oldestQueuedRepo ?? null,
+                runnerVersion: meta.system?.runnerVersion ?? null,
+                bootedAt: meta.system?.bootedAt ?? null,
               }
             : {}),
         },
