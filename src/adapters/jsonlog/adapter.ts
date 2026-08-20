@@ -93,10 +93,10 @@ export class JsonLogAdapter implements SourceAdapter {
     warnings.push(...listWarnings);
 
     const { found, readFailures } = this.readRuns(files, warnings);
-    // Complete when nothing that should have been read was missed. A benign
-    // skip — a stray non-log file, an oversized file, a raced rotation — warns
-    // but is not a failure; a directory, stat, or file that could not be read
-    // is.
+    // Complete when every file that could hold runs was read. The only benign
+    // skips are a non-log file read in full (no runs to miss) and a file that
+    // vanished before it could be read (ENOENT). Any file present but unread —
+    // unreadable, un-stat-able, or too large — leaves the cycle incomplete.
     const complete = listFailures === 0 && readFailures === 0;
 
     // The same run appears twice when the operator copies a file they also
@@ -219,10 +219,13 @@ export class JsonLogAdapter implements SourceAdapter {
         }
         if (!LOG_EXTENSIONS.some((ext) => name.toLowerCase().endsWith(ext))) continue;
         if (stat.size > MAX_FILE_BYTES) {
+          // Present but not read: it may hold runs, so the cycle is incomplete
+          // until the operator splits or removes it.
           warnings.push(
             `${relative(this.directory, path)} is ${Math.round(stat.size / (1024 * 1024))} MB — ` +
               `too large for a run log; skipped.`,
           );
+          listFailures += 1;
           continue;
         }
         files.push(path);

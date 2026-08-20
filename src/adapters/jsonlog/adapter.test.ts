@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -146,6 +146,21 @@ test('an entry that cannot be stat-ed makes the cycle incomplete, not a silent s
   chmodSync(root, 0o755);
   assert.equal(result.complete, false, 'an un-stat-able entry may be a log');
   assert.ok(result.warnings.some((w) => w.includes('good.log')));
+});
+
+test('an oversized log file makes the cycle incomplete — present but unread', async () => {
+  const root = dir();
+  writeFileSync(join(root, 'good.log'), [header(), ...repoRun('acme/widget', 1)].join('\n'));
+  // A sparse file over the 100 MB cap: skipped for size, but it is present and
+  // may hold runs, so the cycle must not report complete (which would grey and
+  // prune the history it holds while the file still exists).
+  const big = join(root, 'big.log');
+  writeFileSync(big, '');
+  truncateSync(big, 100 * 1024 * 1024 + 1);
+
+  const result = await adapter(root).collect();
+  assert.equal(result.complete, false, 'a present-but-unread file leaves the cycle incomplete');
+  assert.ok(result.warnings.some((w) => w.includes('big.log')));
 });
 
 test('a healthy directory reports a complete enumeration', async () => {
