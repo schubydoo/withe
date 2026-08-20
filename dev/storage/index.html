@@ -445,6 +445,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#file-backed-sources-your-files-your-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File-backed sources: your files, your retention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#put-the-volume-on-local-disk" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -615,6 +626,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#file-backed-sources-your-files-your-retention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File-backed sources: your files, your retention
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#put-the-volume-on-local-disk" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -687,7 +709,25 @@ run is one Renovate job for one repository. A fleet of 8 repositories on Renovat
 records about 190 runs a day, or close to <strong>10 MB a year</strong>.</p>
 <p>By default Withe keeps every run. Set <code>WITHE_RETENTION_DAYS</code> to a number of days to cap the history;
 Withe then deletes older runs at the end of each sync and returns the freed space to the disk.
-Repositories, pending updates, and forge links are never pruned.</p>
+Retention only touches runs the source itself no longer reports — a run the server still lists (or
+whose log file still sits in a mounted directory) would only be re-ingested on the next sync, so it
+stays until the source drops it. Repositories, pending updates, and forge links are never pruned.</p>
+<h2 id="file-backed-sources-your-files-your-retention">File-backed sources: your files, your retention<a class="headerlink" href="#file-backed-sources-your-files-your-retention" title="Permanent link">&para;</a></h2>
+<p>For a <code>jsonlog</code> source the log files are the source record, not a cache, so the rule is different
+and simpler:</p>
+<ul>
+<li><strong>Withe never deletes, moves, or writes a log file.</strong> It did not create them, and a build check
+  enforces that no adapter can gain a filesystem write. Rotate or delete logs with the tools that
+  made them — <code>logrotate</code>, your CI's artifact retention, or by hand.</li>
+<li><strong>The files govern what Withe knows.</strong> Every sync re-reads the directory. Delete a file and its
+  runs keep their history rows (like a server-pruned run, the log link goes grey); add or append a
+  file and its runs appear on the next sync.</li>
+<li><strong><code>WITHE_RETENTION_DAYS</code> takes effect only after the file is gone.</strong> Retention skips runs the
+  source still reports, so a run whose file remains is kept — pruning it would only re-ingest it on
+  the next sync. Deleting the file is the operator's statement that the history can start aging out.
+  A sync that could not read the directory or a file releases nothing: only a fully read directory
+  counts as the source's whole word.</li>
+</ul>
 <h2 id="put-the-volume-on-local-disk">Put the volume on local disk<a class="headerlink" href="#put-the-volume-on-local-disk" title="Permanent link">&para;</a></h2>
 <p>Use a Docker named volume or a local disk path. <strong>Do not point the volume at an NFS or SMB mount.</strong>
 SQLite runs in write-ahead-logging mode, which needs a memory-mapped <code>-shm</code> file that network
