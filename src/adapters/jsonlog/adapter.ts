@@ -95,11 +95,13 @@ export class JsonLogAdapter implements SourceAdapter {
     const found = this.readRuns(files, warnings);
 
     // The same run appears twice when the operator copies a file they also
-    // mount live. One external id per run keeps one row per run.
+    // mount live. One external id per run keeps one row per run, and the
+    // fuller slice wins — a hand copy taken mid-run is the truncated one.
     const byJob = new Map<string, FoundRun>();
     for (const item of found) {
       const key = externalJobId(item.run, item.file);
-      if (!byJob.has(key)) byJob.set(key, item);
+      const existing = byJob.get(key);
+      if (!existing || item.run.lines.length > existing.run.lines.length) byJob.set(key, item);
     }
 
     const repos = this.buildRepos([...byJob.values()]);
@@ -115,20 +117,30 @@ export class JsonLogAdapter implements SourceAdapter {
 
   async fetchLog(run: Pick<RenovateRun, 'repoId' | 'externalJobId'>): Promise<ReadableStream<Uint8Array>> {
     // Logs live in the operator's files, so the slice is found by re-scanning
-    // rather than kept in memory between syncs. A fetch happens on a click.
+    // rather than kept in memory between syncs. A fetch happens on a click,
+    // and the scan stops at the first file that holds the run.
     const { files } = this.listFiles();
     const silent: string[] = [];
-    for (const item of this.readRuns(files, silent)) {
-      if (externalJobId(item.run, item.file) === run.externalJobId) {
-        const text = item.run.lines.join('\n') + '\n';
-        const bytes = new TextEncoder().encode(text);
-        return new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(bytes);
+    for (const path of files) {
+      const match = this.readRuns([path], silent).find(
+        (item) => externalJobId(item.run, item.file) === run.externalJobId,
+      );
+      if (!match) continue;
+      const encoder = new TextEncoder();
+      const lines = match.run.lines;
+      let next = 0;
+      // One chunk per line: the slice is already held as lines, and encoding
+      // on demand avoids a second whole-slice copy.
+      return new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (next >= lines.length) {
             controller.close();
-          },
-        });
-      }
+            return;
+          }
+          controller.enqueue(encoder.encode(lines[next] + '\n'));
+          next += 1;
+        },
+      });
     }
     throw new Error(`The log for run ${run.externalJobId} is no longer in ${this.directory}.`);
   }
@@ -216,10 +228,12 @@ export class JsonLogAdapter implements SourceAdapter {
       const parsed = parseLogFile(text);
       if (parsed.runs.length === 0) {
         // A malformed file is skipped with a warning, never a crash. A file
-        // with no runs and no JSON is not a Renovate log at all.
-        if (parsed.totalLines > 0) {
+        // with no runs and no JSON is not a Renovate log at all. Blank lines
+        // count for neither side, so a text file padded with them still reads
+        // as not-JSON rather than as almost-a-log.
+        if (parsed.contentLines > 0) {
           warnings.push(
-            parsed.malformedLines === parsed.totalLines
+            parsed.malformedLines === parsed.contentLines
               ? `${file} is not JSON Lines; skipped.`
               : `${file} contains no recognizable Renovate run; skipped.`,
           );
@@ -233,14 +247,12 @@ export class JsonLogAdapter implements SourceAdapter {
 
   private buildRepos(found: FoundRun[]): Repo[] {
     // The newest run's word wins for the install state, as it does upstream.
-    const newest = new Map<string, FoundRun>();
-    for (const item of found) {
-      const existing = newest.get(item.run.repository);
-      if (!existing || after(item.run, existing.run)) newest.set(item.run.repository, item);
-    }
-
-    return [...newest.values()].map(({ run }) => {
-      const [org = '', name = ''] = run.repository.split('/');
+    return [...newestPerRepo(found).values()].map(({ run }) => {
+      // A GitLab subgroup project is `group/subgroup/project`: the name is the
+      // last segment and everything before it is the organization path.
+      const segments = run.repository.split('/');
+      const name = segments.pop() ?? '';
+      const org = segments.join('/');
       return {
         id: `${this.id}:${run.repository}`,
         org,
@@ -280,14 +292,8 @@ export class JsonLogAdapter implements SourceAdapter {
   private async buildUpdates(found: FoundRun[], warnings: string[]): Promise<Update[]> {
     // Pending updates come from each repository's newest run only — an older
     // run describes a state that has been superseded, same rule as upstream.
-    const newest = new Map<string, FoundRun>();
-    for (const item of found) {
-      const existing = newest.get(item.run.repository);
-      if (!existing || after(item.run, existing.run)) newest.set(item.run.repository, item);
-    }
-
     const updates: Update[] = [];
-    for (const { run, file } of newest.values()) {
+    for (const { run, file } of newestPerRepo(found).values()) {
       try {
         const extract = await extractFromLog(lineStream(run.lines), {
           repoId: `${this.id}:${run.repository}`,
@@ -315,6 +321,16 @@ function externalJobId(run: ParsedRun, file: string): string {
   return run.startedAt
     ? `${run.repository}@${run.startedAt.toISOString()}`
     : `${run.repository}@${file}#L${run.firstLine}`;
+}
+
+/** Each repository's newest run — the one whose word counts. */
+function newestPerRepo(found: FoundRun[]): Map<string, FoundRun> {
+  const newest = new Map<string, FoundRun>();
+  for (const item of found) {
+    const existing = newest.get(item.run.repository);
+    if (!existing || after(item.run, existing.run)) newest.set(item.run.repository, item);
+  }
+  return newest;
 }
 
 /** Newest by completion, then by start, for picking the current state. */

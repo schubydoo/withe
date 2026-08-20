@@ -42,6 +42,8 @@ function withRuns(count: number) {
     externalJobId: `job-${i}`,
     status: 'success' as const,
     completedAt: new Date(now - i * DAY_MS),
+    // Runs the source has already purged — the only kind retention touches.
+    logAvailable: false,
   }));
   // Batched; 20k separate inserts is slow enough to matter in a test.
   for (let i = 0; i < rows.length; i += 500) {
@@ -72,10 +74,31 @@ test('with no retention set, the worker never calls this — but called, it dele
   void path;
 });
 
+test('a run the source still lists is never pruned, however old', () => {
+  const { sqlite, db } = withRuns(0);
+  // Ancient, but log_available = 1: the source reports it every cycle, so
+  // deleting it would only make the next sync re-insert it under a new id.
+  db.insert(renovateRun)
+    .values({
+      sourceAdapterId: 'default',
+      repoId: 1,
+      externalJobId: 'still-listed',
+      status: 'success',
+      completedAt: new Date(Date.now() - 400 * DAY_MS),
+      logAvailable: true,
+    })
+    .run();
+
+  const deleted = pruneOldRuns(db, new Date());
+  assert.equal(deleted, 0);
+  assert.equal(runCount(db), 1);
+  sqlite.close();
+});
+
 test('a run whose timestamps are all null is kept, not guessed at', () => {
   const { sqlite, db } = withRuns(0);
   db.insert(renovateRun)
-    .values({ sourceAdapterId: 'default', repoId: 1, externalJobId: 'timeless', status: 'unknown' })
+    .values({ sourceAdapterId: 'default', repoId: 1, externalJobId: 'timeless', status: 'unknown', logAvailable: false })
     .run();
 
   const deleted = pruneOldRuns(db, new Date());

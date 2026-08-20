@@ -19,21 +19,25 @@
  * artifact). All three shapes reduce to the same rule.
  */
 
-/** `org/name` and nothing else — one slash, no scheme, no spaces. */
-const REPO_SHAPE = /^[^\s/:]+\/[^\s/:]+$/;
+/** A forge path: slash-separated non-empty segments, no scheme, no spaces.
+ * More than two segments is a real shape — a GitLab subgroup project is
+ * `group/subgroup/project`. A colon anywhere rejects URLs outright. */
+const REPO_SHAPE = /^[^\s:/]+(\/[^\s:/]+)+$/;
 
-/** Bunyan's error level. At or above this, the run failed. */
-const LEVEL_FATAL = 60;
+/** Bunyan's error level. At or above this, the run failed — the runner logs
+ * repository-level failures at `error` (50), the same ones a server marks
+ * `failed` on the job, and `fatal` (60) only when the process itself dies. */
+const LEVEL_ERROR = 50;
 
 export interface ParsedRun {
   /** `org/name`, as the log states it. */
   repository: string;
   startedAt: Date | null;
   completedAt: Date | null;
-  /** Failed when the slice carries a fatal line; success otherwise. A log
-   * only ever describes finished work, so nothing here is queued or running. */
+  /** Failed when the slice carries an error-level line; success otherwise. A
+   * log only ever describes finished work, so nothing is queued or running. */
   status: 'success' | 'failed';
-  /** The first fatal line's message, when the run failed. */
+  /** The first error-level line's message, when the run failed. */
   error: string | null;
   /** From the invocation header, or from the slice itself. */
   runnerVersion: string | null;
@@ -51,6 +55,9 @@ export interface ParsedFile {
   /** Lines that were not JSON. A few are tolerable (a truncated tail); a file
    * with no JSON at all is not a log and the caller warns once. */
   malformedLines: number;
+  /** Non-blank lines — the denominator `malformedLines` is measured against.
+   * Blank lines are neither content nor malformed. */
+  contentLines: number;
   totalLines: number;
 }
 
@@ -101,8 +108,10 @@ export function parseLogFile(text: string): ParsedFile {
 
   const entries: Entry[] = [];
   let malformedLines = 0;
+  let contentLines = 0;
   for (const [index, raw] of rawLines.entries()) {
     if (raw.trim() === '') continue;
+    contentLines += 1;
     const entry = readEntry(raw, index + 1);
     if (entry) entries.push(entry);
     else malformedLines += 1;
@@ -123,7 +132,7 @@ export function parseLogFile(text: string): ParsedFile {
     runs.push(...sliceInvocation(entries.slice(from, to)));
   }
 
-  return { runs, malformedLines, totalLines: rawLines.length };
+  return { runs, malformedLines, contentLines, totalLines: rawLines.length };
 }
 
 function sliceInvocation(entries: Entry[]): ParsedRun[] {
@@ -144,15 +153,17 @@ function sliceInvocation(entries: Entry[]): ParsedRun[] {
   for (const [repository, bound] of bounds) {
     const slice = entries.slice(bound.first, bound.last + 1);
     const timed = slice.filter((e) => e.time);
-    const fatal = slice.find((e) => (e.level ?? 0) >= LEVEL_FATAL);
+    const failure = slice.find((e) => (e.level ?? 0) >= LEVEL_ERROR);
     runs.push({
       repository,
       startedAt: timed[0]?.time ?? null,
       completedAt: timed.at(-1)?.time ?? null,
-      status: fatal ? 'failed' : 'success',
-      error: fatal ? (fatal.msg ?? 'fatal error with no message') : null,
+      status: failure ? 'failed' : 'success',
+      error: failure ? (failure.msg ?? 'error with no message') : null,
       runnerVersion: slice.find((e) => e.renovateVersion)?.renovateVersion ?? headerVersion,
-      installStatus: slice.find((e) => e.repository === repository && e.installStatus)?.installStatus ?? null,
+      // The finish line is the last carrier of the field pair, and the last
+      // word is the one that counts when a slice somehow holds several.
+      installStatus: slice.findLast((e) => e.repository === repository && e.installStatus)?.installStatus ?? null,
       lines: slice.map((e) => e.raw),
       firstLine: slice[0]?.lineNo ?? 0,
       lastLine: slice.at(-1)?.lineNo ?? 0,

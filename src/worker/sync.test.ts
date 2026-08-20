@@ -335,25 +335,34 @@ test('with no retention set, no run is ever deleted', async () => {
   sqlite.close();
 });
 
-test('with retention set, runs past the window are pruned at the end of the cycle', async () => {
+test('with retention set, runs the source dropped are pruned; still-listed ones are not', async () => {
   const { sqlite, db } = fresh();
   const now = Date.now();
+  // The source's own retention window shrinks between cycles: first it still
+  // lists the stale run, then it stops. Pruning a still-listed run would be
+  // churn — the next cycle re-inserts it under a new row id — so retention
+  // only takes a run once its source has let go of it.
+  let listed = [
+    runOf('prune', 'acme/widget', 'fresh', 'success', now - 1 * DAY),
+    runOf('prune', 'acme/widget', 'stale', 'success', now - 60 * DAY),
+  ];
   const loop = new SyncLoop(
     db,
     [stub('prune', async () => ({
       repos: [repoOf('prune', 'acme/widget')],
-      runs: [
-        runOf('prune', 'acme/widget', 'fresh', 'success', now - 1 * DAY),
-        runOf('prune', 'acme/widget', 'stale', 'success', now - 60 * DAY),
-      ],
+      runs: listed,
       updates: [],
       warnings: [],
     }))],
     { intervalMs: 1000, stalledAfterMs: 7 * DAY, retentionMs: 30 * DAY, log: () => {}, now: () => now },
   );
 
-  const report = await loop.runCycle();
-  assert.equal(report.pruned, 1);
+  const first = await loop.runCycle();
+  assert.equal(first.pruned, 0, 'a run the source still lists is not pruned');
+
+  listed = listed.slice(0, 1);
+  const second = await loop.runCycle();
+  assert.equal(second.pruned, 1, 'a dropped run past the window is pruned');
 
   const jobs = db.$client
     .prepare('select external_job_id from renovate_run')

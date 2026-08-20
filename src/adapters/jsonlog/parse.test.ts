@@ -74,6 +74,25 @@ test('a URL in the repository field is a lookup, not a repository', () => {
   assert.equal(runs[0]?.lines.length, 3);
 });
 
+test('an error-level line marks the run failed, the same runs a server marks failed', () => {
+  const text = [
+    header(),
+    ...repoLines('acme/widget', 1, 1),
+    line({ repository: 'acme/widget', time: T(2), level: 50, msg: 'Repository has unresolved errors' }),
+    ...repoLines('acme/widget', 3, 3),
+  ].join('\n');
+
+  const { runs } = parseLogFile(text);
+  assert.equal(runs[0]?.status, 'failed');
+  assert.equal(runs[0]?.error, 'Repository has unresolved errors');
+});
+
+test('a GitLab subgroup path is a repository, not noise', () => {
+  const text = [header(), ...repoLines('group/subgroup/project', 1, 2)].join('\n');
+  const { runs } = parseLogFile(text);
+  assert.deepEqual(runs.map((r) => r.repository), ['group/subgroup/project']);
+});
+
 test('a fatal line marks the run failed and carries its message', () => {
   const text = [
     header(),
@@ -102,18 +121,20 @@ test('the finish line names the install status, by fields not message text', () 
   assert.equal(runs[0]?.installStatus, 'activated');
 });
 
-test('non-JSON lines are counted, never fatal', () => {
+test('non-JSON lines are counted, never fatal, and blanks count for neither side', () => {
   const text = [
     'not json at all',
+    '',
     header(),
     ...repoLines('acme/widget', 1, 2),
     '{truncated',
   ].join('\n');
 
-  const { runs, malformedLines, totalLines } = parseLogFile(text);
+  const { runs, malformedLines, contentLines, totalLines } = parseLogFile(text);
   assert.equal(runs.length, 1);
   assert.equal(malformedLines, 2);
-  assert.equal(totalLines, 5);
+  assert.equal(contentLines, 5, 'the blank line is not content');
+  assert.equal(totalLines, 6);
 });
 
 test('line numbers address the slice in the original file', () => {

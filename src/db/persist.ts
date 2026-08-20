@@ -288,6 +288,15 @@ export function recordSyncFailure(
  * forge each row points at stay: they describe the present, not the past. A
  * run whose timestamps are all null is left alone rather than guessed at.
  *
+ * Only runs the source no longer lists are pruned (`log_available = 0` —
+ * persist flips it for exactly this fact). Pruning a run the source still
+ * reports would be theatre: the next sync re-inserts it under a new row id,
+ * breaking every link to the old one, and the row count never drops. For a
+ * server source the still-listed window is the server's own retention; for a
+ * file-backed source it is the files, which is the Task 4.5 rule — deleting
+ * the file is the operator's retention statement, and this is where it takes
+ * effect.
+ *
  * The delete alone frees pages inside the file without shrinking it —
  * `auto_vacuum = INCREMENTAL` (set in `openDatabase` before any table exists)
  * only marks them reusable. `incremental_vacuum` moves them out, and in WAL
@@ -299,6 +308,7 @@ export function pruneOldRuns(db: Db, cutoff: Date): number {
   const deleted = db.run(sql`
     delete from renovate_run
      where coalesce(completed_at, started_at, queued_at) < ${seconds}
+       and log_available = 0
   `).changes;
 
   if (deleted > 0) {
