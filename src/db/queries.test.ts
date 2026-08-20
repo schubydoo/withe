@@ -558,12 +558,14 @@ test('an incomplete cycle does not grey every log link over a transient outage',
   sqlite.close();
 });
 
-test('an incomplete cycle only speaks for the repositories that returned runs', () => {
+test('an incomplete cycle moves no availability at all', () => {
   const { sqlite, db } = fresh();
   persist(db, SOURCE, 'ce', FLEET, new Date());
-  // acme/widget's runs enumerated fine (and dropped j1); acme/gadget's jobs
-  // endpoint failed. Widget's unrepeated run may grey; gadget's history must
-  // not — its runs were not read at all this cycle.
+  // acme/widget returned runs but the cycle was incomplete. A partial sweep
+  // scoped to widget would still be wrong for a file-backed source, where one
+  // repository's runs span files: an unreadable file's runs would grey — and,
+  // with retention set, be deleted — because a readable file happened to hold
+  // the same repository. So an incomplete cycle asserts nothing.
   persist(db, SOURCE, 'ce', {
     repos: FLEET.repos,
     runs: [makeRun('acme/widget', 'j2', 'success', '2026-08-06T17:00:00Z')],
@@ -572,14 +574,10 @@ test('an incomplete cycle only speaks for the repositories that returned runs', 
     complete: false,
   }, new Date());
 
-  const rows = db.all<{ externalJobId: string; available: number }>(sql`
-    select rr.external_job_id as externalJobId, rr.log_available as available
-      from renovate_run rr order by rr.external_job_id
+  const available = db.all<{ n: number }>(sql`
+    select count(*) as n from renovate_run where log_available = 1
   `);
-  const byJob = new Map(rows.map((r) => [r.externalJobId, r.available]));
-  assert.equal(byJob.get('j2'), 1, 'the repeated run stays offered');
-  assert.equal(byJob.get('j1'), 0, "widget's unrepeated run is gone at the source");
-  assert.equal(byJob.get('j3'), 1, "gadget's history was not read this cycle and must not grey");
+  assert.equal(available[0]?.n, FLEET.runs.length, 'nothing greys until the next complete cycle');
   sqlite.close();
 });
 

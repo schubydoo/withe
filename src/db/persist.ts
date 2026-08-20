@@ -133,39 +133,27 @@ export function persist(
     // it. Marking runs unavailable first, then setting the collected ones
     // back, computes that in two statements instead of one request per run.
     //
-    // How wide the marking sweeps depends on how much this cycle can be
-    // trusted, and the adapter says so itself (`result.complete`) rather than
-    // persist guessing from warnings — a source with a permanent benign
-    // warning must not lose retention forever, and a degraded one must not
-    // grey history over a transient outage.
-    //
-    // A complete enumeration is the source's whole word: every run it did not
-    // repeat — including runs of repositories it stopped listing, and the
+    // Only a complete enumeration moves the flag, and the adapter says so
+    // itself (`result.complete`) rather than persist guessing from warnings —
+    // a source with a permanent benign warning must not lose retention
+    // forever. A complete cycle is the source's whole word: every run it did
+    // not repeat — including runs of repositories it stopped listing, and the
     // all-files-deleted case where it reported nothing at all — is gone at
-    // the source, and retention may take it. An incomplete one only speaks
-    // for the repositories it actually returned runs for.
+    // the source, and retention may take it.
+    //
+    // An incomplete cycle moves nothing. Scoping a partial sweep to
+    // "repositories that returned runs" would still be wrong for a
+    // file-backed source, where one repository's runs span files: an
+    // unreadable file's runs would grey — and, with retention set, be
+    // deleted — because a readable file happened to hold the same
+    // repository. Silence until the next complete cycle costs only a delay
+    // in greying links; guessing costs history.
     if (result.complete) {
       tx.run(sql`
         update renovate_run
            set log_available = 0
          where source_adapter_id = ${sourceAdapterId}
       `);
-    } else {
-      const withRuns = [
-        ...new Set(
-          result.runs
-            .map((row) => idFor(row.repoId))
-            .filter((n): n is number => n !== undefined),
-        ),
-      ];
-      if (withRuns.length > 0) {
-        tx.run(sql`
-          update renovate_run
-             set log_available = 0
-           where source_adapter_id = ${sourceAdapterId}
-             and repo_id in (${sql.join(withRuns.map((n) => sql`${n}`), sql`, `)})
-        `);
-      }
     }
 
     let runs = 0;

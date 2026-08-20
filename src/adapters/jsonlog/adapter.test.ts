@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -105,6 +105,41 @@ test('a hand-copied duplicate of a live file does not double the runs', async ()
 
   const result = await adapter(root).collect();
   assert.equal(result.runs.length, 1, 'the same run in two files is one run');
+});
+
+test('a stray non-log file warns but leaves the enumeration complete', async () => {
+  const root = dir();
+  writeFileSync(join(root, 'good.log'), [header(), ...repoRun('acme/widget', 1)].join('\n'));
+  writeFileSync(join(root, 'stray.log'), 'plain text\n');
+
+  const result = await adapter(root).collect();
+  assert.equal(result.warnings.length, 1);
+  // The stray file was read in full and holds no runs; nothing about the run
+  // enumeration is missing, so retention must keep working despite the
+  // permanent warning.
+  assert.equal(result.complete, true);
+});
+
+test('an unreadable file makes the enumeration incomplete', async (t) => {
+  if (process.getuid?.() === 0) return t.skip('root reads through permissions');
+  const root = dir();
+  writeFileSync(join(root, 'good.log'), [header(), ...repoRun('acme/widget', 1)].join('\n'));
+  const locked = join(root, 'locked.log');
+  writeFileSync(locked, [header(10), ...repoRun('acme/gadget', 11)].join('\n'));
+  chmodSync(locked, 0o000);
+
+  const result = await adapter(root).collect();
+  chmodSync(locked, 0o644);
+  assert.equal(result.complete, false, 'a file that could not be read may hold runs');
+  assert.ok(result.warnings.some((w) => w.includes('locked.log')));
+});
+
+test('a healthy directory reports a complete enumeration', async () => {
+  const root = dir();
+  writeFileSync(join(root, 'renovate.log'), [header(), ...repoRun('acme/widget', 1)].join('\n'));
+  const result = await adapter(root).collect();
+  assert.deepEqual(result.warnings, []);
+  assert.equal(result.complete, true);
 });
 
 test('a malformed file costs a warning, never the other files', async () => {
