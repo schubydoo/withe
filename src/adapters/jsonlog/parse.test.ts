@@ -21,11 +21,18 @@ function repoLines(repo: string, from: number, to: number, over: Record<string, 
   return out;
 }
 
+/** The finish line: the field pair every completed run ends with. */
+function finish(repo: string, minute: number, status = 'activated'): string {
+  return line({ repository: repo, time: T(minute), msg: 'Repository finished', durationMs: 1000, status });
+}
+
 test('a multi-repo invocation yields one run per repository (Docker cron shape)', () => {
   const text = [
     header(),
-    ...repoLines('acme/widget', 1, 3),
-    ...repoLines('acme/gadget', 4, 6),
+    ...repoLines('acme/widget', 1, 2),
+    finish('acme/widget', 3),
+    ...repoLines('acme/gadget', 4, 5),
+    finish('acme/gadget', 6),
   ].join('\n');
 
   const { runs, malformedLines } = parseLogFile(text);
@@ -41,9 +48,11 @@ test('a multi-repo invocation yields one run per repository (Docker cron shape)'
 test('two appended invocations yield two runs of the same repository (hand-copied shape)', () => {
   const text = [
     header('44.11.4', 0),
-    ...repoLines('acme/widget', 1, 2),
+    ...repoLines('acme/widget', 1, 1),
+    finish('acme/widget', 2),
     header('44.12.0', 10),
-    ...repoLines('acme/widget', 11, 12),
+    ...repoLines('acme/widget', 11, 11),
+    finish('acme/widget', 12),
   ].join('\n');
 
   const { runs } = parseLogFile(text);
@@ -53,11 +62,22 @@ test('two appended invocations yield two runs of the same repository (hand-copie
 });
 
 test('a file with no header still forms one invocation (truncated CI artifact)', () => {
-  const text = repoLines('acme/widget', 1, 2).join('\n');
+  const text = [...repoLines('acme/widget', 1, 2), finish('acme/widget', 3)].join('\n');
   const { runs } = parseLogFile(text);
   assert.equal(runs.length, 1);
   assert.equal(runs[0]?.repository, 'acme/widget');
+  assert.equal(runs[0]?.status, 'success');
   assert.equal(runs[0]?.runnerVersion, null);
+});
+
+test('a slice with no finish line is unknown, never a guessed success', () => {
+  // The runner is mid-write, or the copy was truncated. Persisting this as a
+  // completed success would stamp a completion instant the log never stated.
+  const text = [header(), ...repoLines('acme/widget', 1, 2)].join('\n');
+  const { runs } = parseLogFile(text);
+  assert.equal(runs[0]?.status, 'unknown');
+  assert.equal(runs[0]?.completedAt, null);
+  assert.deepEqual(runs[0]?.startedAt, new Date(T(1)));
 });
 
 test('a URL in the repository field is a lookup, not a repository', () => {
@@ -65,7 +85,7 @@ test('a URL in the repository field is a lookup, not a repository', () => {
     header(),
     ...repoLines('acme/widget', 1, 1),
     line({ repository: 'https://github.com/other/thing', time: T(2) }),
-    ...repoLines('acme/widget', 3, 3),
+    finish('acme/widget', 3),
   ].join('\n');
 
   const { runs } = parseLogFile(text);
@@ -74,38 +94,56 @@ test('a URL in the repository field is a lookup, not a repository', () => {
   assert.equal(runs[0]?.lines.length, 3);
 });
 
-test('an error-level line marks the run failed, the same runs a server marks failed', () => {
+test("the finish line's own status word decides failure, and level 50 supplies the message", () => {
   const text = [
     header(),
     ...repoLines('acme/widget', 1, 1),
     line({ repository: 'acme/widget', time: T(2), level: 50, msg: 'Repository has unresolved errors' }),
-    ...repoLines('acme/widget', 3, 3),
+    finish('acme/widget', 3, 'unknown-error'),
   ].join('\n');
 
   const { runs } = parseLogFile(text);
   assert.equal(runs[0]?.status, 'failed');
   assert.equal(runs[0]?.error, 'Repository has unresolved errors');
+  assert.equal(runs[0]?.installStatus, null, 'an error word is an outcome, not an install state');
 });
 
-test('a GitLab subgroup path is a repository, not noise', () => {
-  const text = [header(), ...repoLines('group/subgroup/project', 1, 2)].join('\n');
-  const { runs } = parseLogFile(text);
-  assert.deepEqual(runs.map((r) => r.repository), ['group/subgroup/project']);
-});
-
-test('a fatal line marks the run failed and carries its message', () => {
+test('an error-level line alone does not fail a run the finish line calls healthy', () => {
+  // The runner logs level 50 for a lookup that failed without failing the
+  // repository; the finish line is the authority on the outcome.
   const text = [
     header(),
     ...repoLines('acme/widget', 1, 1),
-    line({ repository: 'acme/widget', time: T(2), level: 60, msg: 'repository disabled by config' }),
-    ...repoLines('acme/gadget', 3, 4),
+    line({ repository: 'acme/widget', time: T(2), level: 50, msg: 'lookup failed for one datasource' }),
+    finish('acme/widget', 3),
+  ].join('\n');
+
+  const { runs } = parseLogFile(text);
+  assert.equal(runs[0]?.status, 'success');
+  assert.equal(runs[0]?.error, null);
+});
+
+test('a GitLab subgroup path is a repository, not noise', () => {
+  const text = [header(), ...repoLines('group/subgroup/project', 1, 1), finish('group/subgroup/project', 2)].join('\n');
+  const { runs } = parseLogFile(text);
+  assert.deepEqual(runs.map((r) => r.repository), ['group/subgroup/project']);
+  assert.equal(runs[0]?.status, 'success');
+});
+
+test('a fatal line fails the run even with no finish line — the process died', () => {
+  const text = [
+    header(),
+    ...repoLines('acme/widget', 1, 1),
+    line({ repository: 'acme/widget', time: T(2), level: 60, msg: 'fatal: out of disk' }),
+    ...repoLines('acme/gadget', 3, 3),
+    finish('acme/gadget', 4),
   ].join('\n');
 
   const { runs } = parseLogFile(text);
   const widget = runs.find((r) => r.repository === 'acme/widget');
   const gadget = runs.find((r) => r.repository === 'acme/gadget');
   assert.equal(widget?.status, 'failed');
-  assert.equal(widget?.error, 'repository disabled by config');
+  assert.equal(widget?.error, 'fatal: out of disk');
   assert.equal(gadget?.status, 'success');
   assert.equal(gadget?.error, null);
 });
@@ -119,6 +157,7 @@ test('the finish line names the install status, by fields not message text', () 
 
   const { runs } = parseLogFile(text);
   assert.equal(runs[0]?.installStatus, 'activated');
+  assert.equal(runs[0]?.status, 'success');
 });
 
 test('non-JSON lines are counted, never fatal, and blanks count for neither side', () => {
@@ -126,7 +165,8 @@ test('non-JSON lines are counted, never fatal, and blanks count for neither side
     'not json at all',
     '',
     header(),
-    ...repoLines('acme/widget', 1, 2),
+    ...repoLines('acme/widget', 1, 1),
+    finish('acme/widget', 2),
     '{truncated',
   ].join('\n');
 
@@ -141,7 +181,8 @@ test('line numbers address the slice in the original file', () => {
   const text = [
     header(),                                   // line 1
     line({ msg: 'global config', time: T(0) }), // line 2
-    ...repoLines('acme/widget', 1, 3),          // lines 3-5
+    ...repoLines('acme/widget', 1, 2),          // lines 3-4
+    finish('acme/widget', 3),                   // line 5
   ].join('\n');
 
   const { runs } = parseLogFile(text);

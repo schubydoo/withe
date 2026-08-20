@@ -24,20 +24,33 @@
  * `group/subgroup/project`. A colon anywhere rejects URLs outright. */
 const REPO_SHAPE = /^[^\s:/]+(\/[^\s:/]+)+$/;
 
-/** Bunyan's error level. At or above this, the run failed — the runner logs
- * repository-level failures at `error` (50), the same ones a server marks
- * `failed` on the job, and `fatal` (60) only when the process itself dies. */
+/** Bunyan's levels: `error` (50) marks a problem, `fatal` (60) the process
+ * dying. An error line alone does not fail a run — the runner also logs one
+ * for a lookup that failed without failing the repository — so the outcome
+ * comes from the finish line's own status word, and level 50 only supplies
+ * the message once something else says the run failed. */
 const LEVEL_ERROR = 50;
+const LEVEL_FATAL = 60;
+
+/** The finish-line status words that mean the run failed. Everything else
+ * ('activated', 'onboarded', 'disabled', ...) is an install state. */
+const ERROR_RESULTS = new Set(['error', 'unknown-error']);
 
 export interface ParsedRun {
   /** `org/name`, as the log states it. */
   repository: string;
   startedAt: Date | null;
+  /** Null when the run never finished — a file the runner is still writing,
+   * or a truncated copy. The instant the sync saw would be a guess. */
   completedAt: Date | null;
-  /** Failed when the slice carries an error-level line; success otherwise. A
-   * log only ever describes finished work, so nothing is queued or running. */
-  status: 'success' | 'failed';
-  /** The first error-level line's message, when the run failed. */
+  /**
+   * `failed` when the finish line's status word says so or a fatal line ended
+   * the process; `success` only on a finish line with a healthy word; and
+   * `unknown` when the slice has no finish line at all — guessing success
+   * there would persist a half-written run as a completed one.
+   */
+  status: 'success' | 'failed' | 'unknown';
+  /** What failed, when the run did: the first error-level message. */
   error: string | null;
   /** From the invocation header, or from the slice itself. */
   runnerVersion: string | null;
@@ -69,7 +82,8 @@ interface Entry {
   level: number | null;
   msg: string | null;
   renovateVersion: string | null;
-  installStatus: string | null;
+  /** The finish line's status word, present only on that line's field pair. */
+  finishStatus: string | null;
 }
 
 function readEntry(raw: string, lineNo: number): Entry | null {
@@ -84,9 +98,10 @@ function readEntry(raw: string, lineNo: number): Entry | null {
 
   const repoRaw = typeof o.repository === 'string' ? o.repository : null;
   const time = typeof o.time === 'string' ? new Date(o.time) : null;
-  // The finish line carries `durationMs` with a string `status` — the install
-  // state. Field shapes, not message text (core/renovate-log.ts states why).
-  const installStatus =
+  // The finish line carries `durationMs` with a string `status` — the run's
+  // outcome or install state. Field shapes, not message text
+  // (core/renovate-log.ts states why).
+  const finishStatus =
     typeof o.durationMs === 'number' && typeof o.status === 'string' ? o.status : null;
 
   return {
@@ -97,7 +112,7 @@ function readEntry(raw: string, lineNo: number): Entry | null {
     level: typeof o.level === 'number' ? o.level : null,
     msg: typeof o.msg === 'string' ? o.msg : null,
     renovateVersion: typeof o.renovateVersion === 'string' ? o.renovateVersion : null,
-    installStatus,
+    finishStatus,
   };
 }
 
@@ -153,17 +168,34 @@ function sliceInvocation(entries: Entry[]): ParsedRun[] {
   for (const [repository, bound] of bounds) {
     const slice = entries.slice(bound.first, bound.last + 1);
     const timed = slice.filter((e) => e.time);
-    const failure = slice.find((e) => (e.level ?? 0) >= LEVEL_ERROR);
+    // The finish line is the last carrier of the field pair, and the last
+    // word is the one that counts when a slice somehow holds several.
+    const finish = slice.findLast((e) => e.repository === repository && e.finishStatus);
+    const fatal = slice.find((e) => (e.level ?? 0) >= LEVEL_FATAL);
+    const firstError = slice.find((e) => (e.level ?? 0) >= LEVEL_ERROR);
+
+    const status = fatal
+      ? 'failed'
+      : !finish
+        ? 'unknown'
+        : ERROR_RESULTS.has(finish.finishStatus ?? '')
+          ? 'failed'
+          : 'success';
+    const finished = status !== 'unknown';
+
     runs.push({
       repository,
       startedAt: timed[0]?.time ?? null,
-      completedAt: timed.at(-1)?.time ?? null,
-      status: failure ? 'failed' : 'success',
-      error: failure ? (failure.msg ?? 'error with no message') : null,
+      completedAt: finished ? (timed.at(-1)?.time ?? null) : null,
+      status,
+      error:
+        status === 'failed'
+          ? (firstError?.msg ?? fatal?.msg ?? `the runner reported '${finish?.finishStatus}'`)
+          : null,
       runnerVersion: slice.find((e) => e.renovateVersion)?.renovateVersion ?? headerVersion,
-      // The finish line is the last carrier of the field pair, and the last
-      // word is the one that counts when a slice somehow holds several.
-      installStatus: slice.findLast((e) => e.repository === repository && e.installStatus)?.installStatus ?? null,
+      // An error word is an outcome, not an install state.
+      installStatus:
+        finish && !ERROR_RESULTS.has(finish.finishStatus ?? '') ? (finish.finishStatus ?? null) : null,
       lines: slice.map((e) => e.raw),
       firstLine: slice[0]?.lineNo ?? 0,
       lastLine: slice.at(-1)?.lineNo ?? 0,
