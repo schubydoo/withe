@@ -104,7 +104,13 @@ export function persist(
     // private. Deleting the row would take its run history with it and make the
     // repository look like it never existed; marking it removed keeps the
     // record and lets the inventory say what happened.
-    if (result.repos.length > 0) {
+    //
+    // Removal-by-absence needs two things: the source's repository list is the
+    // full set (`authoritativeRepoList`), and this cycle read all of it
+    // (`complete`). A log directory is a partial view — an absent repository
+    // may simply have no log present — so it is never authoritative and its
+    // repositories are never removed here.
+    if (result.authoritativeRepoList && result.complete && result.repos.length > 0) {
       const present = result.repos.map((r) => r.fullName);
       tx.run(sql`
         update repo
@@ -144,16 +150,29 @@ export function persist(
     };
 
     // A run the source no longer lists has been purged there, and its log with
-    // it. Marking every touched repository's runs unavailable first, then
-    // setting the collected ones back, computes that in two statements instead
-    // of one request per run.
-    const repoIds = [...rowIds.values()];
-    if (repoIds.length > 0 && result.runs.length > 0) {
+    // it. Marking runs unavailable first, then setting the collected ones
+    // back, computes that in two statements instead of one request per run.
+    //
+    // Only a complete enumeration moves the flag, and the adapter says so
+    // itself (`result.complete`) rather than persist guessing from warnings —
+    // a source with a permanent benign warning must not lose retention
+    // forever. A complete cycle is the source's whole word: every run it did
+    // not repeat — including runs of repositories it stopped listing, and the
+    // all-files-deleted case where it reported nothing at all — is gone at
+    // the source, and retention may take it.
+    //
+    // An incomplete cycle moves nothing. Scoping a partial sweep to
+    // "repositories that returned runs" would still be wrong for a
+    // file-backed source, where one repository's runs span files: an
+    // unreadable file's runs would grey — and, with retention set, be
+    // deleted — because a readable file happened to hold the same
+    // repository. Silence until the next complete cycle costs only a delay
+    // in greying links; guessing costs history.
+    if (result.complete) {
       tx.run(sql`
         update renovate_run
            set log_available = 0
          where source_adapter_id = ${sourceAdapterId}
-           and repo_id in (${sql.join(repoIds.map((n) => sql`${n}`), sql`, `)})
       `);
     }
 
@@ -302,6 +321,15 @@ export function recordSyncFailure(
  * forge each row points at stay: they describe the present, not the past. A
  * run whose timestamps are all null is left alone rather than guessed at.
  *
+ * Only runs the source no longer lists are pruned (`log_available = 0` —
+ * persist flips it for exactly this fact). Pruning a run the source still
+ * reports would be theatre: the next sync re-inserts it under a new row id,
+ * breaking every link to the old one, and the row count never drops. For a
+ * server source the still-listed window is the server's own retention; for a
+ * file-backed source it is the files, which is the Task 4.5 rule — deleting
+ * the file is the operator's retention statement, and this is where it takes
+ * effect.
+ *
  * The delete alone frees pages inside the file without shrinking it —
  * `auto_vacuum = INCREMENTAL` (set in `openDatabase` before any table exists)
  * only marks them reusable. `incremental_vacuum` moves them out, and in WAL
@@ -313,6 +341,7 @@ export function pruneOldRuns(db: Db, cutoff: Date): number {
   const deleted = db.run(sql`
     delete from renovate_run
      where coalesce(completed_at, started_at, queued_at) < ${seconds}
+       and log_available = 0
   `).changes;
 
   if (deleted > 0) {

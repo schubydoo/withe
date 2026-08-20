@@ -181,6 +181,16 @@ sources:
   );
 });
 
+test('a jsonlog source without a path fails at startup, not at first sync', () => {
+  const path = file(`
+sources:
+  - id: cron-logs
+    kind: jsonlog
+`);
+
+  assert.throws(() => loadConfig({ WITHE_CONFIG: path }), /path: is required for a jsonlog source/);
+});
+
 test('a duplicate id is rejected, because it is the join key for every row', () => {
   const path = file(`
 sources:

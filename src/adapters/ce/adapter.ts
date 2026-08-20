@@ -156,6 +156,10 @@ export class CeAdapter implements SourceAdapter {
   async collect(): Promise<CollectResult> {
     const warnings: string[] = [];
     const repos: Repo[] = [];
+    // Whether every repository's runs were enumerated. Losing an org, a repo
+    // listing, or one repository's run pages clears it; a failed log fetch
+    // does not — the runs themselves were still fully read.
+    let complete = true;
 
     const orgs = await this.listOrgs();
     if (orgs.warning) {
@@ -163,7 +167,7 @@ export class CeAdapter implements SourceAdapter {
       // failure the adapter cannot degrade past, so it says so and returns
       // empty rather than throwing into the worker's face.
       warnings.push(orgs.warning);
-      return { repos: [], runs: [], updates: [], warnings };
+      return { repos: [], runs: [], updates: [], warnings, complete: false, authoritativeRepoList: true };
     }
 
     for (const name of orgs.names) {
@@ -177,6 +181,7 @@ export class CeAdapter implements SourceAdapter {
             ? `${name}: ${problem.detail}${problem.setting ? ` Set ${problem.setting}.` : ''}`
             : `Could not list repositories for ${name} (${result.response.status}).`,
         );
+        complete = false;
         continue;
       }
       const infos = result.data;
@@ -201,6 +206,7 @@ export class CeAdapter implements SourceAdapter {
         return await this.collectRuns(repo);
       } catch (cause) {
         warnings.push(`Could not read runs for ${repo.fullName}: ${describe(cause)}`);
+        complete = false;
         return [];
       }
     });
@@ -226,6 +232,10 @@ export class CeAdapter implements SourceAdapter {
       runs: runsPerRepo.flat(),
       updates: updatesPerRepo.flat(),
       warnings,
+      complete,
+      // The org repo listing is the full set of repositories, so an absent one
+      // has been uninstalled or made private.
+      authoritativeRepoList: true,
       meta: await this.forge(),
     };
   }
