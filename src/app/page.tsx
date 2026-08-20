@@ -213,8 +213,14 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
                   <td className="py-1 pr-4 text-neutral-600 dark:text-neutral-300">
                     <span className="tabular-nums">{row.packageFileCount}</span>
                     {row.packageFiles.length > 0 && (
-                      <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
-                        {row.packageFiles.join(', ')}
+                      // A Cargo workspace can carry a dozen manifests; the cell
+                      // names the first few and the title carries the rest.
+                      <span
+                        className="ml-2 text-xs text-neutral-500 dark:text-neutral-400"
+                        title={row.packageFiles.join(', ')}
+                      >
+                        {row.packageFiles.slice(0, 8).join(', ')}
+                        {row.packageFiles.length > 8 && ` +${row.packageFiles.length - 8} more`}
                       </span>
                     )}
                   </td>

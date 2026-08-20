@@ -138,9 +138,8 @@ export async function extractFromLog(
 
   // One dependency at one version pair appears once per package file. The live
   // probe found the same one seven times in a single repository, so the rows
-  // are merged here and the file count is carried on the row.
-  const byKey = new Map<string, Update>();
-  const filesByKey = new Map<string, Set<string>>();
+  // are merged here and the manifests are carried on the row.
+  const byKey = new Map<string, { update: Update; files: Set<string> }>();
   const abandoned = new Map<string, Date | null>();
 
   for await (const entry of ndjson(source)) {
@@ -182,42 +181,41 @@ export async function extractFromLog(
           const targetVersion = upgrade.newValue ?? upgrade.newVersion ?? null;
           const key = [name, currentVersion, targetVersion, updateType].join('\0');
 
-          const files = filesByKey.get(key) ?? new Set<string>();
-          if (upgrade.packageFile) files.add(upgrade.packageFile);
-          filesByKey.set(key, files);
-
-          const existing = byKey.get(key);
-          if (existing) {
+          let entry = byKey.get(key);
+          if (!entry) {
+            entry = {
+              update: {
+                id: `${context.sourceAdapterId}:${context.repoId}:${key.replaceAll('\0', ':')}`,
+                repoId: context.repoId,
+                dependencyName: name,
+                currentVersion,
+                targetVersion,
+                updateType,
+                datasource: upgrade.datasource ?? null,
+                // The registry name, not the display name: Renovate shows `uv`
+                // and looks up `astral-sh/uv`, and only the latter can be
+                // linked.
+                packageName: upgrade.packageName ?? upgrade.depName ?? null,
+                state: stateOf(branch),
+                pullRequestUrl: null,
+                pullRequestNumber: branch.prNo ?? null,
+                closedAt: null,
+                closeType: null,
+                detectedAt: context.detectedAt,
+                packageFileCount: 1,
+                packageFiles: [],
+                sourceAdapterId: context.sourceAdapterId,
+              },
+              files: new Set<string>(),
+            };
+            byKey.set(key, entry);
+          } else if (entry.update.pullRequestNumber === null && typeof branch.prNo === 'number') {
             // A pull request number seen on any branch of the group applies to
             // the merged row.
-            if (existing.pullRequestNumber === null && typeof branch.prNo === 'number') {
-              existing.pullRequestNumber = branch.prNo;
-              existing.state = 'pr-open';
-            }
-            continue;
+            entry.update.pullRequestNumber = branch.prNo;
+            entry.update.state = 'pr-open';
           }
-
-          byKey.set(key, {
-            id: `${context.sourceAdapterId}:${context.repoId}:${key.replaceAll('\0', ':')}`,
-            repoId: context.repoId,
-            dependencyName: name,
-            currentVersion,
-            targetVersion,
-            updateType,
-            datasource: upgrade.datasource ?? null,
-            // The registry name, not the display name: Renovate shows `uv` and
-            // looks up `astral-sh/uv`, and only the latter can be linked.
-            packageName: upgrade.packageName ?? upgrade.depName ?? null,
-            state: stateOf(branch),
-            pullRequestUrl: null,
-            pullRequestNumber: branch.prNo ?? null,
-            closedAt: null,
-            closeType: null,
-            detectedAt: context.detectedAt,
-            packageFileCount: 1,
-            packageFiles: [],
-            sourceAdapterId: context.sourceAdapterId,
-          });
+          if (upgrade.packageFile) entry.files.add(upgrade.packageFile);
         }
       }
     }
@@ -234,18 +232,17 @@ export async function extractFromLog(
     }
   }
 
-  for (const [key, update] of byKey) {
-    const files = filesByKey.get(key);
-    update.packageFileCount = Math.max(1, files?.size ?? 1);
+  for (const { update, files } of byKey.values()) {
+    update.packageFileCount = Math.max(1, files.size);
     // Sorted so the same log always produces the same row, whatever order the
     // branches reported the manifests in.
-    update.packageFiles = files ? [...files].sort() : [];
+    update.packageFiles = [...files].sort();
   }
 
   return {
     runnerVersion,
     totals,
-    updates: [...byKey.values()],
+    updates: [...byKey.values()].map((entry) => entry.update),
     abandoned: [...abandoned].map(([dependency, lastReleaseAt]) => ({ dependency, lastReleaseAt })),
   };
 }

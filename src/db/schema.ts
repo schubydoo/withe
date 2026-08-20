@@ -125,10 +125,11 @@ export const update = sqliteTable(
      */
     packageFileCount: integer('package_file_count').notNull().default(1),
     /**
-     * Those package files by path, as a JSON array. Null only on rows written
-     * before the column existed; persist rewrites the whole update set every
-     * sync, so the column fills itself within one interval and needs no
-     * backfill.
+     * Those package files by path, as a JSON array. Null on rows written
+     * before the column existed. For a repository the source still lists,
+     * persist rewrites its update set every sync, so the null clears within
+     * one interval and needs no backfill; a repository the source dropped
+     * keeps its rows — and this null — which the reader shows as no paths.
      */
     packageFiles: text('package_files', { mode: 'json' }).$type<string[]>(),
   },

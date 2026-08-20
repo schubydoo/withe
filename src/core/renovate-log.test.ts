@@ -193,19 +193,16 @@ test('two lock-file branches stay two refreshes', async () => {
 
   const extract = await extractFromLog(lines(log), CONTEXT);
   assert.equal(extract.updates.length, 2);
-  assert.deepEqual(
-    extract.updates.map((u) => [u.dependencyName, u.packageFileCount]).sort(),
-    [
-      ['renovate/lock-file-maintenance', 2],
-      ['renovate/lock-file-maintenance-docs', 1],
-    ],
-  );
+
   // Each branch names only its own manifests: a text search over the log could
   // not separate them, which is why the paths are carried on the row.
-  assert.deepEqual(
-    extract.updates.map((u) => u.packageFiles).sort(),
-    [['Cargo.toml', 'crates/cli/Cargo.toml'], ['docs/requirements.in']],
-  );
+  const byBranch = new Map(extract.updates.map((u) => [u.dependencyName, u]));
+  const workspace = byBranch.get('renovate/lock-file-maintenance');
+  assert.equal(workspace?.packageFileCount, 2);
+  assert.deepEqual(workspace?.packageFiles, ['Cargo.toml', 'crates/cli/Cargo.toml']);
+  const docs = byBranch.get('renovate/lock-file-maintenance-docs');
+  assert.equal(docs?.packageFileCount, 1);
+  assert.deepEqual(docs?.packageFiles, ['docs/requirements.in']);
 });
 
 test('a lock-file refresh on an unnamed branch falls back to its manifest', async () => {
