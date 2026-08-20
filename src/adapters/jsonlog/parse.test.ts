@@ -189,3 +189,33 @@ test('line numbers address the slice in the original file', () => {
   assert.equal(runs[0]?.firstLine, 3);
   assert.equal(runs[0]?.lastLine, 5);
 });
+
+test('an array line is not an entry, and a line missing every optional field parses', () => {
+  const text = [
+    header(),
+    JSON.stringify(['not', 'an', 'object']),          // an array: typeof object, but not an entry
+    JSON.stringify({ repository: 'acme/widget' }),     // no time, level, or msg
+    finish('acme/widget', 2),
+  ].join('\n');
+
+  const { runs, malformedLines } = parseLogFile(text);
+  assert.equal(malformedLines, 1, 'the array line is counted, not an entry');
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0]?.repository, 'acme/widget');
+  assert.equal(runs[0]?.status, 'success');
+});
+
+test('a slice with no timestamps reports null start and completion', () => {
+  // No `time` on any line and no finish line: the run is unknown, with null
+  // start and completion rather than a guessed instant.
+  const text = [
+    line({ msg: 'Renovate started', renovateVersion: '44.11.4' }),
+    line({ repository: 'acme/widget' }),
+  ].join('\n');
+
+  const { runs } = parseLogFile(text);
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0]?.status, 'unknown');
+  assert.equal(runs[0]?.startedAt, null);
+  assert.equal(runs[0]?.completedAt, null);
+});
