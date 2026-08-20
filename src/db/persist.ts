@@ -130,11 +130,25 @@ export function persist(
     };
 
     // A run the source no longer lists has been purged there, and its log with
-    // it. Marking every touched repository's runs unavailable first, then
-    // setting the collected ones back, computes that in two statements instead
-    // of one request per run.
+    // it. Marking runs unavailable first, then setting the collected ones
+    // back, computes that in two statements instead of one request per run.
+    //
+    // How wide the marking sweeps depends on how much this cycle can be
+    // trusted. A clean cycle is the source's complete word, so every run it
+    // did not repeat — including runs of repositories it stopped listing, and
+    // the all-files-deleted case where it reported nothing at all — is gone at
+    // the source, and retention may take it. A degraded cycle (warnings) may
+    // be missing whole families of data, so it only speaks for repositories
+    // it actually returned runs for; sweeping wider would grey every log link
+    // over a transient outage.
     const repoIds = [...rowIds.values()];
-    if (repoIds.length > 0 && result.runs.length > 0) {
+    if (result.warnings.length === 0) {
+      tx.run(sql`
+        update renovate_run
+           set log_available = 0
+         where source_adapter_id = ${sourceAdapterId}
+      `);
+    } else if (repoIds.length > 0 && result.runs.length > 0) {
       tx.run(sql`
         update renovate_run
            set log_available = 0

@@ -521,6 +521,41 @@ test('forges reports what each source said about its forge, or nulls', () => {
   sqlite.close();
 });
 
+test('a clean cycle that reports nothing releases every old run to retention', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  // Every log file was deleted (or the server purged everything): the next
+  // clean cycle reports no repos and no runs. The old runs must flip to
+  // log-unavailable, or retention stays a permanent no-op at the exact moment
+  // the operator's file deletion says it should start.
+  persist(db, SOURCE, 'ce', { repos: [], runs: [], updates: [], warnings: [] }, new Date());
+
+  const available = db.all<{ n: number }>(sql`
+    select count(*) as n from renovate_run where log_available = 1
+  `);
+  assert.equal(available[0]?.n, 0, 'a run a clean cycle did not repeat is gone at the source');
+  sqlite.close();
+});
+
+test('a degraded cycle does not grey every log link over a transient outage', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+  // The jobs family broke: repos still list, runs are empty, and a warning
+  // says so. Nothing has been purged at the source; the logs must stay offered.
+  persist(db, SOURCE, 'ce', {
+    repos: FLEET.repos,
+    runs: [],
+    updates: [],
+    warnings: ['Could not read runs for acme/widget: 500'],
+  }, new Date());
+
+  const available = db.all<{ n: number }>(sql`
+    select count(*) as n from renovate_run where log_available = 1
+  `);
+  assert.equal(available[0]?.n, FLEET.runs.length, 'a transient outage must not mark logs gone');
+  sqlite.close();
+});
+
 test('migrationState counts the applied migrations and dates the newest', () => {
   const { sqlite, db } = fresh();
   const state = migrationState(db);
