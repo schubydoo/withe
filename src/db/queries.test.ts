@@ -9,6 +9,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import type { CollectResult } from '../adapters/types.ts';
 import type { RenovateRun, Repo, Update } from '../core/model.ts';
+import { groupByFullName } from '../core/group.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist, recomputeStalled } from './persist.ts';
@@ -596,6 +597,31 @@ test('a removed repository does not appear in triage', () => {
   sqlite.close();
 });
 
+test('triage names each source, so the dashboard groups a repo two sources watch to one entry', () => {
+  const { sqlite, db } = fresh();
+  // A CE server sees acme/gadget failing; a log directory watches the same
+  // repository and has a later successful run (Q-7, Task 4.8).
+  persist(db, SOURCE, 'ce', {
+    repos: [makeRepo('acme/gadget')],
+    runs: [makeRun('acme/gadget', 'a1', 'failed', '2026-08-06T17:00:00Z')],
+    updates: [], warnings: [], complete: true, authoritativeRepoList: true,
+  }, new Date());
+  const B = 'logs';
+  persist(db, B, 'jsonlog', {
+    repos: [{ ...makeRepo('acme/gadget'), id: `${B}:acme/gadget`, sourceAdapterId: B }],
+    runs: [{ ...makeRun('acme/gadget', 'b1', 'success', '2026-08-06T18:00:00Z'), id: `${B}:b1`, repoId: `${B}:acme/gadget`, sourceAdapterId: B }],
+    updates: [], warnings: [], complete: true, authoritativeRepoList: false,
+  }, new Date());
+
+  const gadget = triage(db).filter((r) => r.fullName === 'acme/gadget');
+  assert.equal(gadget.length, 2, 'triage returns one row per source before grouping');
+  assert.deepEqual(gadget.map((r) => r.sourceAdapterId).sort(), ['logs', 'src']);
+
+  const grouped = groupByFullName(triage(db)).filter((g) => g.primary.fullName === 'acme/gadget');
+  assert.equal(grouped.length, 1, 'the dashboard collapses the shared repository to one entry');
+  sqlite.close();
+});
+
 test('forges reports what each source said about its forge, or nulls', () => {
   const { sqlite, db } = fresh();
   persist(db, SOURCE, 'ce', {
@@ -723,6 +749,7 @@ test('sourceSystems reports the runner facts a sync recorded, and nulls before o
     {
       sourceAdapterId: 'quiet',
       kind: 'ce',
+      reportsSystemFacts: true,
       queueDepth: null,
       oldestQueuedAt: null,
       oldestQueuedRepo: null,
@@ -732,6 +759,7 @@ test('sourceSystems reports the runner facts a sync recorded, and nulls before o
     {
       sourceAdapterId: SOURCE,
       kind: 'ce',
+      reportsSystemFacts: true,
       queueDepth: 3,
       oldestQueuedAt: new Date('2026-08-20T10:00:00Z'),
       oldestQueuedRepo: 'acme/widget',
@@ -739,6 +767,18 @@ test('sourceSystems reports the runner facts a sync recorded, and nulls before o
       bootedAt: new Date('2026-08-19T06:00:00Z'),
     },
   ]);
+  sqlite.close();
+});
+
+test('sourceSystems marks a log-directory source as reporting no system facts', () => {
+  const { sqlite, db } = fresh();
+  // A jsonlog source has no server to query, so its empty system panel is
+  // expected rather than a setting left off (Task 4.3).
+  persist(db, 'logs', 'jsonlog', { repos: [], runs: [], updates: [], warnings: [], complete: true, authoritativeRepoList: false }, new Date());
+
+  const [row] = sourceSystems(db);
+  assert.equal(row?.kind, 'jsonlog');
+  assert.equal(row?.reportsSystemFacts, false);
   sqlite.close();
 });
 

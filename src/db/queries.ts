@@ -6,6 +6,7 @@
  */
 import { sql } from 'drizzle-orm';
 
+import { reportsSystemFacts, type SourceKind } from '../adapters/types.ts';
 import type { UpdateType } from '../core/model.ts';
 import type { Db } from './client.ts';
 
@@ -42,7 +43,7 @@ export interface RepoHealthRow {
 }
 
 /**
- * Every pending update, newest repository first.
+ * Every pending update, by repository name.
  *
  * Lock-file refreshes are excluded here and counted separately. They were 7 of
  * 9 on the author's install and would bury everything that names a dependency.
@@ -334,6 +335,9 @@ export function runLocation(db: Db, id: number): RunLocation | null {
 }
 
 export interface TriageRow {
+  /** Which source contributed this row, so a repo two sources watch groups to
+   * one entry at display time rather than listing twice (Q-7, Task 4.8). */
+  sourceAdapterId: string;
   fullName: string;
   org: string;
   name: string;
@@ -355,6 +359,7 @@ export interface TriageRow {
  */
 export function triage(db: Db): TriageRow[] {
   const rows = db.all<{
+    sourceAdapterId: string;
     fullName: string;
     org: string;
     name: string;
@@ -365,7 +370,7 @@ export function triage(db: Db): TriageRow[] {
     lastSuccessAt: number | null;
     pendingCount: number;
   }>(sql`
-    select r.full_name as fullName, r.org, r.name, r.stalled,
+    select r.source_adapter_id as sourceAdapterId, r.full_name as fullName, r.org, r.name, r.stalled,
            (select rr.status from renovate_run rr
              where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastRunStatus,
            (select rr.completed_at from renovate_run rr
@@ -398,6 +403,7 @@ export function triage(db: Db): TriageRow[] {
   });
 
   return withFirstFailure.map((row) => ({
+    sourceAdapterId: row.sourceAdapterId,
     fullName: row.fullName,
     org: row.org,
     name: row.name,
@@ -426,6 +432,9 @@ export function forges(db: Db): Map<string, ForgeInfo> {
 export interface SourceSystem {
   sourceAdapterId: string;
   kind: string;
+  /** Whether this source's kind has a server that reports system facts. A false
+   * value means the empty panel is expected, not a setting left off (Task 4.3). */
+  reportsSystemFacts: boolean;
   queueDepth: number | null;
   oldestQueuedAt: Date | null;
   oldestQueuedRepo: string | null;
@@ -435,9 +444,11 @@ export interface SourceSystem {
 
 /**
  * What each source's runner said about itself: queue depth, oldest waiting
- * job, version and boot time (F-08, Task 4.6). All null for a source whose
- * system API is off — the page shows the preflight pointer for those instead
- * of an empty panel.
+ * job, version and boot time (F-08, Task 4.6). All null has two causes now:
+ * a server whose system API is off, and a source with no server at all (a log
+ * directory). `reportsSystemFacts` separates them — the page points the first
+ * at the preflight check and tells the second there is nothing to enable
+ * (Task 4.3), instead of an empty panel for either.
  */
 export function sourceSystems(db: Db): SourceSystem[] {
   const rows = db.all<{
@@ -457,6 +468,7 @@ export function sourceSystems(db: Db): SourceSystem[] {
   `);
   return rows.map((row) => ({
     ...row,
+    reportsSystemFacts: reportsSystemFacts(row.kind as SourceKind),
     oldestQueuedAt: row.oldestQueuedAt === null ? null : new Date(row.oldestQueuedAt * 1000),
     bootedAt: row.bootedAt === null ? null : new Date(row.bootedAt * 1000),
   }));

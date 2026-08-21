@@ -12,6 +12,26 @@ import type { RenovateRun, Repo, SourceAdapterId, Update } from '../core/model.t
 export type SourceKind = 'ce' | 'jsonlog' | 'forge';
 
 /**
+ * Whether a source of this kind has a running server that reports its own
+ * queue, version and boot time (the system API behind F-08). A log directory
+ * has none — it is files, not a runner — so an empty system panel there is
+ * expected rather than a setting left off. The health page reads this, computed
+ * once here, so no page has to branch on the kind itself (Task 4.3).
+ */
+export function reportsSystemFacts(kind: SourceKind): boolean {
+  switch (kind) {
+    case 'ce':
+      return true;
+    // A log directory is files, not a runner; a forge is asked about
+    // repositories, not about Renovate's queue. An exhaustive switch makes a
+    // fourth kind a typecheck failure here rather than a silent "no server".
+    case 'jsonlog':
+    case 'forge':
+      return false;
+  }
+}
+
+/**
  * Something the operator must fix, named precisely enough to act on.
  *
  * Metric M-5 requires that at least 90% of empty dashboards name the exact
