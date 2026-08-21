@@ -61,9 +61,9 @@ function read() {
 // The dependency and its version pair name the update; the source that reported
 // it does not. Two sources describing one repository report the same pending
 // update, so this key collapses the copies to one row. dedupeBy keeps the
-// first, and the queries order a PR-bearing row ahead of a PR-less one for the
-// same update, so the kept copy carries the pull request, not an arbitrary
-// source's view of it.
+// first, and the queries order the copies so the kept one is the most useful:
+// a source with a forge first (so info() can link the repository), then a
+// PR-bearing row — rather than an arbitrary source's view.
 const FIELD = '\u0000';
 function updateIdentity(u: PendingUpdateRow): string {
   return [u.repoFullName, u.dependencyName, u.currentVersion, u.targetVersion, u.updateType].join(FIELD);
