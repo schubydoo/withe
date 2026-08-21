@@ -7,6 +7,7 @@ import { repoUrl } from '../../core/links.ts';
 import { openDatabase } from '../../db/client.ts';
 import { forges, repoInventory, type ForgeInfo, type InventoryRow } from '../../db/queries.ts';
 import { ago } from '../format.ts';
+import { distinctSources, groupByFullName } from './group.ts';
 import { filterRepos, isActive, readFilter, REPO_STATES, repoState, type RepoFilter, type RepoState } from './filter.ts';
 
 export const dynamic = 'force-dynamic';
@@ -102,28 +103,71 @@ function Filters({ filter, shown, total }: { filter: RepoFilter; shown: number; 
 }
 
 interface Props {
-  // Next hands every query key through as `string | string[]`; `readFilter`
-  // narrows it. Typing it as a plain string here would be a lie that `?q=a&q=b`
-  // turns into a crash.
-  searchParams: Promise<{ q?: string | string[]; state?: string | string[] }>;
+  // Next hands every query key through as `string | string[]`, and the source
+  // filter and the search/state filter share this query string, so it is read
+  // wide and each filter narrows what it needs.
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+/** This page's URL with the source filter changed and every other filter kept. */
+function sourceHref(params: Record<string, string | string[] | undefined>, source: string | null): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (key === 'source' || value === undefined) continue;
+    for (const one of Array.isArray(value) ? value : [value]) query.append(key, one);
+  }
+  if (source !== null) query.set('source', source);
+  const text = query.toString();
+  return text === '' ? '/repos' : `/repos?${text}`;
 }
 
 export default async function Repos({ searchParams }: Props) {
+  const params = await searchParams;
   const { rows, forge } = read();
-  const filter = readFilter(await searchParams);
-  const shown = filterRepos(rows, filter);
-  const orgs = [...new Set(rows.map((r) => r.org))];
-  const removed = rows.filter((r) => r.removedAt).length;
+  // Source filter (Task 4.4), applied before grouping.
+  const sources = distinctSources(rows);
+  const rawSource = Array.isArray(params.source) ? params.source.at(-1) : params.source;
+  const source = typeof rawSource === 'string' && sources.includes(rawSource) ? rawSource : null;
+  const grouped = groupByFullName(source ? rows.filter((r) => r.sourceAdapterId === source) : rows);
+  // Search/state filter (Task 4.7), applied to each group's primary so the
+  // group structure (contributors, pending count) survives the filter.
+  const filter = readFilter(params);
+  const shownGroups = grouped.filter((g) => filterRepos([g.primary], filter).length > 0);
+  const shown = shownGroups.map((g) => g.primary);
+  const orgs = [...new Set(shown.map((r) => r.org))];
+  const removed = shown.filter((r) => r.removedAt).length;
 
   return (
     <main className="mx-auto max-w-5xl p-8">
       <h1 className="text-2xl font-semibold">Repositories</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        {rows.length} across {orgs.length} {orgs.length === 1 ? 'organization' : 'organizations'}
+        {shown.length} across {orgs.length} {orgs.length === 1 ? 'organization' : 'organizations'}
         {removed > 0 && `, ${removed} removed at the source and kept for their history`}
       </p>
 
-      {rows.length > 0 && <Filters filter={filter} shown={shown.length} total={rows.length} />}
+      {rows.length > 0 && <Filters filter={filter} shown={shown.length} total={grouped.length} />}
+
+      {sources.length > 1 && (
+        // Only a multi-source install is offered the source filter: with one
+        // source the labels would name the same thing on every row (Task 4.4).
+        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
+          Source:{' '}
+          {source === null ? (
+            <span className="font-medium">all</span>
+          ) : (
+            <a className="underline" href={sourceHref(params, null)}>all</a>
+          )}
+          {sources.map((id) => (
+            <span key={id} className="ml-2">
+              {source === id ? (
+                <span className="font-medium">{id}</span>
+              ) : (
+                <a className="underline" href={sourceHref(params, id)}>{id}</a>
+              )}
+            </span>
+          ))}
+        </p>
+      )}
 
       <table className="mt-6 w-full text-sm">
         <caption className="sr-only">
@@ -140,10 +184,16 @@ export default async function Repos({ searchParams }: Props) {
           </tr>
         </thead>
         <tbody>
-          {shown.map((row) => {
+          {shownGroups.map(({ primary: row, rows: group, sources: contributors }) => {
             const label = repoState(row);
+            // One contributor can know what another does not: take the fuller
+            // pending count, and the first forge link any contributor carries.
+            const pendingCount = Math.max(...group.map((r) => r.pendingCount));
+            const forgeHref = group
+              .map((r) => repoUrl(forge.get(r.sourceAdapterId)?.webBaseUrl ?? null, r.fullName))
+              .find((href) => href !== null) ?? null;
             return (
-              <tr key={`${row.sourceAdapterId}/${row.fullName}`} className="border-b border-neutral-200 dark:border-neutral-800">
+              <tr key={row.fullName} className="border-b border-neutral-200 dark:border-neutral-800">
                 <td className="py-1.5 pr-4">
                   <a
                     className="underline decoration-neutral-300 dark:decoration-neutral-700 hover:decoration-neutral-600"
@@ -152,26 +202,25 @@ export default async function Repos({ searchParams }: Props) {
                     <span className="text-neutral-500 dark:text-neutral-400">{row.org}/</span>
                     <span className="font-medium">{row.name}</span>
                   </a>
-                  {(() => {
-                    // The name goes to Withe's own history; this goes to the
-                    // forge. Two destinations, so two targets rather than one
-                    // link the operator has to guess about.
-                    const href = repoUrl(
-                      forge.get(row.sourceAdapterId)?.webBaseUrl ?? null,
-                      row.fullName,
-                    );
-                    return href ? (
-                      <a
-                        className="ml-2 text-xs text-neutral-500 dark:text-neutral-400 underline"
-                        href={href}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        title="Open on the forge"
-                      >
-                        forge
-                      </a>
-                    ) : null;
-                  })()}
+                  {/* The name goes to Withe's own history; this goes to the
+                      forge. Two destinations, so two targets rather than one
+                      link the operator has to guess about. */}
+                  {forgeHref && (
+                    <a
+                      className="ml-2 text-xs text-neutral-500 dark:text-neutral-400 underline"
+                      href={forgeHref}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      title="Open on the forge"
+                    >
+                      forge
+                    </a>
+                  )}
+                  {sources.length > 1 && (
+                    <span className="ml-2 text-xs text-neutral-500 dark:text-neutral-400">
+                      {contributors.join(' + ')}
+                    </span>
+                  )}
                 </td>
                 <td className="py-1.5 pr-4">
                   <span className={`rounded px-1.5 py-0.5 text-xs ${TONES[label]}`}>{label}</span>
@@ -185,7 +234,7 @@ export default async function Repos({ searchParams }: Props) {
                   )}
                 </td>
                 <td className="py-1.5 tabular-nums text-neutral-600 dark:text-neutral-300">
-                  {row.pendingCount === 0 ? '—' : row.pendingCount}
+                  {pendingCount === 0 ? '—' : pendingCount}
                 </td>
               </tr>
             );
@@ -202,7 +251,7 @@ export default async function Repos({ searchParams }: Props) {
 
       {rows.length > 0 && shown.length === 0 && (
         <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
-          No repository matches this filter. <a className="underline" href="/repos">Show all {rows.length}</a>.
+          No repository matches this filter. <a className="underline" href="/repos">Show all {grouped.length}</a>.
         </p>
       )}
 
