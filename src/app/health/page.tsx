@@ -155,7 +155,10 @@ export default function HealthPage() {
         )}
       </section>
 
-      {systems.length > 0 && (
+      {/* Only when a source actually has a server: the heading names one, so a
+          log-directory-only instance must not raise it. In a mixed install the
+          server rows show their facts and a log-directory row explains its blank. */}
+      {systems.some((system) => system.reportsSystemFacts) && (
         <section className="mt-8">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Renovate server</h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
