@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { distinctSources, groupByFullName } from './group.ts';
+import { dedupeBy, distinctSources, groupByFullName } from './group.ts';
 
 interface Row {
   sourceAdapterId: string;
@@ -54,4 +54,21 @@ test('distinctSources names each source once, sorted', () => {
     distinctSources([row(), row({ sourceAdapterId: 'cron-logs' }), row()]),
     ['ce', 'cron-logs'],
   );
+});
+
+test('dedupeBy keeps the first of each identity and holds the order', () => {
+  const rows = [
+    { id: 'a', src: 'ce' },
+    { id: 'b', src: 'ce' },
+    { id: 'a', src: 'logs' },
+  ];
+  assert.deepEqual(
+    dedupeBy(rows, (r) => r.id),
+    [{ id: 'a', src: 'ce' }, { id: 'b', src: 'ce' }],
+  );
+});
+
+test('dedupeBy leaves distinct rows untouched', () => {
+  const rows = [{ id: 'a' }, { id: 'b' }];
+  assert.deepEqual(dedupeBy(rows, (r) => r.id), rows);
 });

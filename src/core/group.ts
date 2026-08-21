@@ -3,18 +3,21 @@
  *
  * A server API and a log directory can both watch the same runner, so the same
  * `org/name` arrives once per source. Listing it twice reads as two
- * repositories; the inventory groups by full name and names the contributors
- * instead. Grouping happens at display time — the rows stay separate in the
- * database, keyed by source, which is what keeps a later write-time merge
- * decision (PRD Q-7, Task 4.8) open.
+ * repositories; a page groups by full name and names the contributors instead.
+ * Grouping happens at display time — the rows stay separate in the database,
+ * keyed by source. Q-7 is closed on that basis (Task 4.8): display-time
+ * grouping, no write-time merge, so provenance and per-source health survive.
+ *
+ * Lives in core because both the inventory (/repos) and the dashboard read it.
  */
 
-/** The fields grouping reads. The page's row type satisfies this. */
+/** The fields grouping reads. A page's row type satisfies this. */
 export interface SourcedRow {
   sourceAdapterId: string;
   fullName: string;
   lastRunAt: Date | null;
-  removedAt: Date | null;
+  /** Absent on rows a query already filters to the living, present elsewhere. */
+  removedAt?: Date | null;
 }
 
 export interface Grouped<T extends SourcedRow> {
@@ -59,4 +62,22 @@ export function groupByFullName<T extends SourcedRow>(rows: T[]): Grouped<T>[] {
  * source is worth a column at all. One source needs no labels. */
 export function distinctSources(rows: readonly { sourceAdapterId: string }[]): string[] {
   return [...new Set(rows.map((row) => row.sourceAdapterId))].sort();
+}
+
+/**
+ * Drop rows a second source repeats: the same update or refresh, seen once per
+ * source that watches the repository (Q-7, Task 4.8). Two sources compute the
+ * same pending state, so the copies are equal for display and identity — not
+ * source — decides which to keep. The first wins, and the caller's order holds.
+ */
+export function dedupeBy<T>(rows: readonly T[], identity: (row: T) => string): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    const id = identity(row);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(row);
+  }
+  return out;
 }

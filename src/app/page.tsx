@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { redirect } from 'next/navigation';
 
 import { loadConfig } from '../config/load.ts';
+import { dedupeBy, groupByFullName } from '../core/group.ts';
 import { dependencyLink, pullRequestUrl, repoUrl } from '../core/links.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from '../db/client.ts';
@@ -35,9 +36,12 @@ function read() {
   const { sqlite, db } = openDatabase(config.dbPath);
   try {
     return {
-      updates: pendingUpdates(db),
-      locks: lockFileRefreshes(db),
-      repos: triage(db),
+      // A repository two sources both watch arrives once per source. Group it
+      // to one entry and drop the updates each repeats, so the dashboard counts
+      // and lists it once (Q-7 — display-time grouping, Task 4.8).
+      updates: dedupeBy(pendingUpdates(db), updateIdentity),
+      locks: dedupeBy(lockFileRefreshes(db), lockIdentity),
+      repos: groupByFullName(triage(db)).map((group) => group.primary),
       forge: forges(db),
       schedule: schedules(db),
       compareUrl: config.compareUrl,
@@ -47,6 +51,17 @@ function read() {
   } finally {
     sqlite.close();
   }
+}
+
+// The dependency and its version pair name the update; the source that reported
+// it does not. Two sources describing one repository report the same pending
+// update, so this key collapses the copies to one row.
+const FIELD = '\u0000';
+function updateIdentity(u: PendingUpdateRow): string {
+  return [u.repoFullName, u.dependencyName, u.currentVersion, u.targetVersion, u.updateType].join(FIELD);
+}
+function lockIdentity(l: LockFileRefreshRow): string {
+  return [l.repoFullName, l.branchName].join(FIELD);
 }
 
 function age(from: Date | null): string {

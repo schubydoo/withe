@@ -5,9 +5,9 @@ import { redirect } from 'next/navigation';
 import { loadConfig } from '../../config/load.ts';
 import { repoUrl } from '../../core/links.ts';
 import { openDatabase } from '../../db/client.ts';
+import { distinctSources, groupByFullName } from '../../core/group.ts';
 import { forges, repoInventory, type ForgeInfo, type InventoryRow } from '../../db/queries.ts';
 import { ago } from '../format.ts';
-import { distinctSources, groupByFullName } from './group.ts';
 import { filterRepos, isActive, readFilter, REPO_STATES, repoState, type RepoFilter, type RepoState } from './filter.ts';
 
 export const dynamic = 'force-dynamic';
