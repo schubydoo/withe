@@ -19,7 +19,16 @@ export type SourceKind = 'ce' | 'jsonlog' | 'forge';
  * once here, so no page has to branch on the kind itself (Task 4.3).
  */
 export function reportsSystemFacts(kind: SourceKind): boolean {
-  return kind === 'ce';
+  switch (kind) {
+    case 'ce':
+      return true;
+    // A log directory is files, not a runner; a forge is asked about
+    // repositories, not about Renovate's queue. An exhaustive switch makes a
+    // fourth kind a typecheck failure here rather than a silent "no server".
+    case 'jsonlog':
+    case 'forge':
+      return false;
+  }
 }
 
 /**
