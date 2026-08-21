@@ -9,6 +9,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import type { CollectResult } from '../adapters/types.ts';
 import type { RenovateRun, Repo, Update } from '../core/model.ts';
+import { groupByFullName } from '../core/group.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist, recomputeStalled } from './persist.ts';
@@ -593,6 +594,57 @@ test('a removed repository does not appear in triage', () => {
 
   const names = triage(db).map((r) => r.fullName);
   assert.deepEqual(names, ['acme/widget'], 'an uninstalled repository is not something to fix');
+  sqlite.close();
+});
+
+test('triage names each source, so the dashboard groups a repo two sources watch to one entry', () => {
+  const { sqlite, db } = fresh();
+  // A CE server sees acme/gadget failing; a log directory watches the same
+  // repository and has a later successful run (Q-7, Task 4.8).
+  persist(db, SOURCE, 'ce', {
+    repos: [makeRepo('acme/gadget')],
+    runs: [makeRun('acme/gadget', 'a1', 'failed', '2026-08-06T17:00:00Z')],
+    updates: [], warnings: [], complete: true, authoritativeRepoList: true,
+  }, new Date());
+  const B = 'logs';
+  persist(db, B, 'jsonlog', {
+    repos: [{ ...makeRepo('acme/gadget'), id: `${B}:acme/gadget`, sourceAdapterId: B }],
+    runs: [{ ...makeRun('acme/gadget', 'b1', 'success', '2026-08-06T18:00:00Z'), id: `${B}:b1`, repoId: `${B}:acme/gadget`, sourceAdapterId: B }],
+    updates: [], warnings: [], complete: true, authoritativeRepoList: false,
+  }, new Date());
+
+  const gadget = triage(db).filter((r) => r.fullName === 'acme/gadget');
+  assert.equal(gadget.length, 2, 'triage returns one row per source before grouping');
+  assert.deepEqual(gadget.map((r) => r.sourceAdapterId).sort(), ['logs', 'src']);
+
+  const grouped = groupByFullName(triage(db)).filter((g) => g.primary.fullName === 'acme/gadget');
+  assert.equal(grouped.length, 1, 'the dashboard collapses the shared repository to one entry');
+  sqlite.close();
+});
+
+test('pendingUpdates lists a shared update PR-first, so the dashboard keeps the pull request', () => {
+  const { sqlite, db } = fresh();
+  const dep = { dependencyName: 'left-pad', currentVersion: '1.0.0', targetVersion: '1.0.1', updateType: 'patch' as const };
+  // The CE server knows the pull request; the log directory saw the same update
+  // without one. The dashboard keeps the first row, so the query must sort the
+  // PR-bearing one ahead (Q-7, Task 4.8).
+  persist(db, SOURCE, 'ce', {
+    repos: [makeRepo('acme/gadget')],
+    runs: [],
+    updates: [makeUpdate('acme/gadget', { ...dep, pullRequestNumber: 42, state: 'pr-open' })],
+    warnings: [], complete: true, authoritativeRepoList: true,
+  }, new Date());
+  const B = 'logs';
+  persist(db, B, 'jsonlog', {
+    repos: [{ ...makeRepo('acme/gadget'), id: `${B}:acme/gadget`, sourceAdapterId: B }],
+    runs: [],
+    updates: [{ ...makeUpdate('acme/gadget', dep), id: `${B}:acme/gadget:left-pad`, repoId: `${B}:acme/gadget`, sourceAdapterId: B, pullRequestNumber: null }],
+    warnings: [], complete: true, authoritativeRepoList: false,
+  }, new Date());
+
+  const rows = pendingUpdates(db).filter((u) => u.repoFullName === 'acme/gadget' && u.dependencyName === 'left-pad');
+  assert.equal(rows.length, 2, 'both source rows are present before the page dedupes');
+  assert.equal(rows[0]?.prNumber, 42, 'the row that already saw a pull request sorts first');
   sqlite.close();
 });
 

@@ -63,7 +63,10 @@ export function pendingUpdates(db: Db): PendingUpdateRow[] {
       join repo r on r.id = u.repo_id
      where u.update_type is not 'lock-file-maintenance'
        and r.removed_at is null
-     order by r.full_name, u.dependency_name
+     -- When two sources report one repository's update, the dashboard keeps the
+     -- first (Q-7, Task 4.8). The row that already saw a pull request sorts
+     -- first, so the kept copy carries the PR link rather than an arbitrary one.
+     order by r.full_name, u.dependency_name, (u.pr_number is null)
   `);
 }
 
@@ -86,7 +89,9 @@ export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
       join repo r on r.id = u.repo_id
      where u.update_type is 'lock-file-maintenance'
        and r.removed_at is null
-     order by r.full_name, u.dependency_name
+     -- Same tiebreak as the named updates: a refresh two sources both report is
+     -- kept once by the dashboard, and the row that saw a PR sorts first.
+     order by r.full_name, u.dependency_name, (u.pr_number is null)
   `);
   // Stored as a JSON column. A malformed value must not take the page down
   // with it, so it degrades to no paths.
