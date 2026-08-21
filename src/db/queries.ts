@@ -6,6 +6,7 @@
  */
 import { sql } from 'drizzle-orm';
 
+import { reportsSystemFacts, type SourceKind } from '../adapters/types.ts';
 import type { UpdateType } from '../core/model.ts';
 import type { Db } from './client.ts';
 
@@ -426,6 +427,9 @@ export function forges(db: Db): Map<string, ForgeInfo> {
 export interface SourceSystem {
   sourceAdapterId: string;
   kind: string;
+  /** Whether this source's kind has a server that reports system facts. A false
+   * value means the empty panel is expected, not a setting left off (Task 4.3). */
+  reportsSystemFacts: boolean;
   queueDepth: number | null;
   oldestQueuedAt: Date | null;
   oldestQueuedRepo: string | null;
@@ -435,9 +439,11 @@ export interface SourceSystem {
 
 /**
  * What each source's runner said about itself: queue depth, oldest waiting
- * job, version and boot time (F-08, Task 4.6). All null for a source whose
- * system API is off — the page shows the preflight pointer for those instead
- * of an empty panel.
+ * job, version and boot time (F-08, Task 4.6). All null has two causes now:
+ * a server whose system API is off, and a source with no server at all (a log
+ * directory). `reportsSystemFacts` separates them — the page points the first
+ * at the preflight check and tells the second there is nothing to enable
+ * (Task 4.3), instead of an empty panel for either.
  */
 export function sourceSystems(db: Db): SourceSystem[] {
   const rows = db.all<{
@@ -457,6 +463,7 @@ export function sourceSystems(db: Db): SourceSystem[] {
   `);
   return rows.map((row) => ({
     ...row,
+    reportsSystemFacts: reportsSystemFacts(row.kind as SourceKind),
     oldestQueuedAt: row.oldestQueuedAt === null ? null : new Date(row.oldestQueuedAt * 1000),
     bootedAt: row.bootedAt === null ? null : new Date(row.bootedAt * 1000),
   }));
