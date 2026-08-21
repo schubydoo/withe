@@ -215,7 +215,16 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
             {manifests === 1 ? 'manifest' : 'manifests'}. Each refreshes every transitive pin on its
             branch, so it names no dependency.
           </p>
-          <table className="mt-2 w-full text-sm">
+          {/* Fixed layout with set column widths: a long branch slug or a
+              dozen manifest paths wraps inside its own column instead of
+              stretching the table and squeezing the others. */}
+          <table className="mt-2 w-full table-fixed text-sm">
+            <colgroup>
+              <col className="w-1/4" />
+              <col className="w-1/3" />
+              <col />
+              <col className="w-20" />
+            </colgroup>
             <thead>
               <tr className="text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 <th scope="col" className="py-1 pr-4 font-medium">Repository</th>
@@ -227,13 +236,13 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
             <tbody>
               {rows.map((row) => (
                 <tr key={`${row.repoFullName}/${row.branchName}`} className="border-t border-neutral-200 dark:border-neutral-800">
-                  <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">
+                  <td className="py-1 pr-4 align-top break-words text-neutral-500 dark:text-neutral-400">
                     <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
                       {row.repoFullName}
                     </Maybe>
                   </td>
-                  <td className="py-1 pr-4 font-medium">{row.branchName}</td>
-                  <td className="py-1 pr-4 text-neutral-600 dark:text-neutral-300">
+                  <td className="py-1 pr-4 align-top break-words font-medium">{row.branchName}</td>
+                  <td className="py-1 pr-4 align-top break-words text-neutral-600 dark:text-neutral-300">
                     <span className="tabular-nums">{row.packageFileCount}</span>
                     {/* An unnamed branch is already named for its one manifest,
                         so repeating the path says nothing new. */}
@@ -255,7 +264,7 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
                         </details>
                       ))}
                   </td>
-                  <td className="py-1 text-neutral-500 dark:text-neutral-400">
+                  <td className="py-1 align-top text-neutral-500 dark:text-neutral-400">
                     {row.prNumber === null ? '' : (
                       <Maybe
                         href={pullRequestUrl(
