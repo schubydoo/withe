@@ -90,7 +90,7 @@ export default function HealthPage() {
     <main className="mx-auto max-w-5xl p-8">
       <h1 className="text-2xl font-semibold">Renovate health</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        Whether Withe is reaching your Renovate server and staying current — not the
+        Whether Withe is reaching your Renovate sources and staying current — not the
         state of the repositories Renovate scans.
       </p>
       <p className="mt-3">
@@ -101,8 +101,9 @@ export default function HealthPage() {
       <section className="mt-8">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Renovate sources</h2>
         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-          The Renovate server(s) Withe pulls from. A failure here is Withe not reaching that
-          server — not an error Renovate hit while scanning your repositories.
+          The Renovate sources Withe pulls from — a server's API or a log directory. A failure
+          here is Withe not reaching a source — not an error Renovate hit while scanning your
+          repositories.
         </p>
         {sources.length === 0 ? (
           <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">
@@ -110,7 +111,7 @@ export default function HealthPage() {
           </p>
         ) : (
           <table className="mt-2 w-full text-sm">
-            <caption className="sr-only">Each Renovate server Withe pulls from, with its most recent sync.</caption>
+            <caption className="sr-only">Each Renovate source Withe pulls from, with its most recent sync.</caption>
             <thead>
               <tr className="border-b border-neutral-300 dark:border-neutral-700 text-left text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                 <th scope="col" className="py-2 pr-4 font-medium">Source</th>
