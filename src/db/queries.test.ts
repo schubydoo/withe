@@ -622,63 +622,6 @@ test('triage names each source, so the dashboard groups a repo two sources watch
   sqlite.close();
 });
 
-const SHARED_DEP = { dependencyName: 'left-pad', currentVersion: '1.0.0', targetVersion: '1.0.1', updateType: 'patch' as const };
-const FORGE_META = { platform: 'github', webBaseUrl: 'https://github.example', scheduleCron: null, scheduleLastAt: null, system: null };
-
-test('pendingUpdates lists a shared update PR-first, so the dashboard keeps the pull request', () => {
-  const { sqlite, db } = fresh();
-  const B = 'logs';
-  // Persist the PR-less copy FIRST, so insertion order alone would keep it —
-  // only the `(u.pr_number is null)` tiebreak makes the PR-bearing copy win.
-  // Neither source has a forge here, so the PR is the only tiebreak in play
-  // (Q-7, Task 4.8).
-  persist(db, B, 'jsonlog', {
-    repos: [{ ...makeRepo('acme/gadget'), id: `${B}:acme/gadget`, sourceAdapterId: B }],
-    runs: [],
-    updates: [{ ...makeUpdate('acme/gadget', SHARED_DEP), id: `${B}:acme/gadget:left-pad`, repoId: `${B}:acme/gadget`, sourceAdapterId: B, pullRequestNumber: null }],
-    warnings: [], complete: true, authoritativeRepoList: false,
-  }, new Date());
-  persist(db, SOURCE, 'ce', {
-    repos: [makeRepo('acme/gadget')],
-    runs: [],
-    updates: [makeUpdate('acme/gadget', { ...SHARED_DEP, pullRequestNumber: 42, state: 'pr-open' })],
-    warnings: [], complete: true, authoritativeRepoList: true,
-  }, new Date());
-
-  const rows = pendingUpdates(db).filter((u) => u.repoFullName === 'acme/gadget' && u.dependencyName === 'left-pad');
-  assert.equal(rows.length, 2, 'both source rows are present before the page dedupes');
-  assert.equal(rows[0]?.prNumber, 42, 'the PR-bearing row sorts first despite being inserted second');
-  sqlite.close();
-});
-
-test('pendingUpdates lists a shared update forge-first, so the dashboard keeps the repository link', () => {
-  const { sqlite, db } = fresh();
-  const B = 'logs';
-  // A queued update: neither copy has a PR, so the PR tiebreak cannot decide.
-  // The log directory has no forge and is persisted first; only the
-  // `(s.web_base_url is null)` tiebreak makes the forge-bearing server win, so
-  // info() links the repository rather than rendering plain text (Q-7, Task 4.8).
-  persist(db, B, 'jsonlog', {
-    repos: [{ ...makeRepo('acme/gadget'), id: `${B}:acme/gadget`, sourceAdapterId: B }],
-    runs: [],
-    updates: [{ ...makeUpdate('acme/gadget', SHARED_DEP), id: `${B}:acme/gadget:left-pad`, repoId: `${B}:acme/gadget`, sourceAdapterId: B }],
-    warnings: [], complete: true, authoritativeRepoList: false,
-  }, new Date());
-  persist(db, SOURCE, 'ce', {
-    repos: [makeRepo('acme/gadget')],
-    runs: [],
-    updates: [makeUpdate('acme/gadget', SHARED_DEP)],
-    warnings: [], complete: true, authoritativeRepoList: true,
-    meta: FORGE_META,
-  }, new Date());
-
-  const rows = pendingUpdates(db).filter((u) => u.repoFullName === 'acme/gadget' && u.dependencyName === 'left-pad');
-  assert.equal(rows.length, 2);
-  assert.equal(rows[0]?.prNumber, null, 'the tie is on a queued update, so the PR tiebreak is not what decides');
-  assert.equal(rows[0]?.sourceAdapterId, SOURCE, 'the source with a forge sorts first, so info() can link the repository');
-  sqlite.close();
-});
-
 test('forges reports what each source said about its forge, or nulls', () => {
   const { sqlite, db } = fresh();
   persist(db, SOURCE, 'ce', {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { dedupeBy, distinctSources, groupByFullName } from './group.ts';
+import { collapseBy, distinctSources, groupByFullName } from './group.ts';
 
 interface Row {
   sourceAdapterId: string;
@@ -56,19 +56,23 @@ test('distinctSources names each source once, sorted', () => {
   );
 });
 
-test('dedupeBy keeps the first of each identity and holds the order', () => {
+test('collapseBy folds each identity group and holds first-seen order', () => {
   const rows = [
-    { id: 'a', src: 'ce' },
-    { id: 'b', src: 'ce' },
-    { id: 'a', src: 'logs' },
+    { id: 'a', n: 1 },
+    { id: 'b', n: 2 },
+    { id: 'a', n: 5 },
   ];
+  // fold takes the whole group; here it sums, to prove both copies reach it.
   assert.deepEqual(
-    dedupeBy(rows, (r) => r.id),
-    [{ id: 'a', src: 'ce' }, { id: 'b', src: 'ce' }],
+    collapseBy(rows, (r) => r.id, (g) => ({ id: g[0]!.id, n: g.reduce((s, r) => s + r.n, 0) })),
+    [{ id: 'a', n: 6 }, { id: 'b', n: 2 }],
   );
 });
 
-test('dedupeBy leaves distinct rows untouched', () => {
-  const rows = [{ id: 'a' }, { id: 'b' }];
-  assert.deepEqual(dedupeBy(rows, (r) => r.id), rows);
+test('collapseBy passes a one-row group for a distinct identity', () => {
+  const rows = [{ id: 'a', n: 1 }, { id: 'b', n: 2 }];
+  assert.deepEqual(
+    collapseBy(rows, (r) => r.id, (g) => g[0]!),
+    rows,
+  );
 });

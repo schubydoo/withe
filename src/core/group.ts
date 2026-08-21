@@ -65,19 +65,20 @@ export function distinctSources(rows: readonly { sourceAdapterId: string }[]): s
 }
 
 /**
- * Drop rows a second source repeats: the same update or refresh, seen once per
- * source that watches the repository (Q-7, Task 4.8). Two sources compute the
- * same pending state, so the copies are equal for display and identity — not
- * source — decides which to keep. The first wins, and the caller's order holds.
+ * Collapse rows that share an identity to one (Q-7, Task 4.8). Two sources
+ * report the same update or refresh once each, and the facts can differ between
+ * copies — a forge link on one, a pull request on another, whichever is fresher.
+ * Keeping a whole row would drop the facts on the row not kept, so `fold` takes
+ * the group and returns one merged row. Groups appear in first-seen order, so
+ * the caller's ordering holds.
  */
-export function dedupeBy<T>(rows: readonly T[], identity: (row: T) => string): T[] {
-  const seen = new Set<string>();
-  const out: T[] = [];
+export function collapseBy<T>(rows: readonly T[], identity: (row: T) => string, fold: (group: T[]) => T): T[] {
+  const groups = new Map<string, T[]>();
   for (const row of rows) {
     const id = identity(row);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    out.push(row);
+    const group = groups.get(id);
+    if (group) group.push(row);
+    else groups.set(id, [row]);
   }
-  return out;
+  return [...groups.values()].map(fold);
 }

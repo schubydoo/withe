@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { redirect } from 'next/navigation';
 
 import { loadConfig } from '../config/load.ts';
-import { dedupeBy, groupByFullName } from '../core/group.ts';
+import { collapseBy, groupByFullName } from '../core/group.ts';
 import { dependencyLink, pullRequestUrl, repoUrl } from '../core/links.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from '../db/client.ts';
@@ -18,6 +18,7 @@ import {
   type PendingUpdateRow,
   type TriageRow,
 } from '../db/queries.ts';
+import { foldLock, foldUpdate } from './collapse.ts';
 import { soonestNextRun } from './next-run.ts';
 import { NextRun } from './next-run.tsx';
 
@@ -35,19 +36,21 @@ function read() {
   // server makes this stale rather than broken.
   const { sqlite, db } = openDatabase(config.dbPath);
   try {
+    const forge = forges(db);
     return {
-      // A repository two sources both watch arrives once per source. Group it
-      // to one entry and drop the updates each repeats, so the dashboard counts
-      // and lists it once (Q-7 — display-time grouping, Task 4.8).
-      updates: dedupeBy(pendingUpdates(db), updateIdentity),
-      locks: dedupeBy(lockFileRefreshes(db), lockIdentity),
+      // A repository two sources both watch reports each update once per source.
+      // Collapse the copies to one row, merging their facts — a forge on one, a
+      // pull request on another — so the dashboard counts and links it once
+      // (Q-7 — display-time grouping, Task 4.8).
+      updates: collapseBy(pendingUpdates(db), updateIdentity, (group) => foldUpdate(group, forge)),
+      locks: collapseBy(lockFileRefreshes(db), lockIdentity, (group) => foldLock(group, forge)),
       // The primary is the freshest observer, so the trouble list reads its
       // latest state — a fresher success hides a staler source's failure, which
       // is the true current state on a single-runner install and keeps this page
       // agreeing with /repos. Deliberate; union semantics would report failures
       // a fresher run has already cleared.
       repos: groupByFullName(triage(db)).map((group) => group.primary),
-      forge: forges(db),
+      forge,
       schedule: schedules(db),
       compareUrl: config.compareUrl,
       intervalSeconds: config.syncIntervalSeconds,
@@ -60,10 +63,7 @@ function read() {
 
 // The dependency and its version pair name the update; the source that reported
 // it does not. Two sources describing one repository report the same pending
-// update, so this key collapses the copies to one row. dedupeBy keeps the
-// first, and the queries order the copies so the kept one is the most useful:
-// a source with a forge first (so info() can link the repository), then a
-// PR-bearing row — rather than an arbitrary source's view.
+// update, so this key groups the copies for collapseBy to merge (foldUpdate).
 const FIELD = '\u0000';
 function updateIdentity(u: PendingUpdateRow): string {
   return [u.repoFullName, u.dependencyName, u.currentVersion, u.targetVersion, u.updateType].join(FIELD);

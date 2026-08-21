@@ -62,15 +62,9 @@ export function pendingUpdates(db: Db): PendingUpdateRow[] {
            u.package_file_count as packageFileCount
       from "update" u
       join repo r on r.id = u.repo_id
-      join source s on s.id = u.source_adapter_id
      where u.update_type is not 'lock-file-maintenance'
        and r.removed_at is null
-     -- When two sources report one repository's update, the dashboard keeps the
-     -- first (Q-7, Task 4.8). A source with a forge sorts first, so the kept row
-     -- can link the repository and its PR — a log directory has no forge, and
-     -- info() would render the name as plain text. A PR-bearing row breaks a
-     -- remaining tie (two servers), so the kept copy still carries the PR link.
-     order by r.full_name, u.dependency_name, (s.web_base_url is null), (u.pr_number is null)
+     order by r.full_name, u.dependency_name
   `);
 }
 
@@ -91,13 +85,9 @@ export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
            u.pr_number           as prNumber
       from "update" u
       join repo r on r.id = u.repo_id
-      join source s on s.id = u.source_adapter_id
      where u.update_type is 'lock-file-maintenance'
        and r.removed_at is null
-     -- Same tiebreak as the named updates: a refresh two sources both report is
-     -- kept once by the dashboard, and a source with a forge (then a PR) sorts
-     -- first, so the kept row can link the repository and its PR.
-     order by r.full_name, u.dependency_name, (s.web_base_url is null), (u.pr_number is null)
+     order by r.full_name, u.dependency_name
   `);
   // Stored as a JSON column. A malformed value must not take the page down
   // with it, so it degrades to no paths.
