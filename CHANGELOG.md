@@ -1,3 +1,22 @@
+## 1.2.0 (2026-08-21)
+
+### Features
+
+- Read plain Renovate from a mounted directory of JSON Lines logs — no server API needed ([#52](https://github.com/schubydoo/withe/pull/52))
+- Name the manifests a lock-file refresh covers on the dashboard, not only count them ([#46](https://github.com/schubydoo/withe/pull/46))
+- Show which source contributed each repository and run, filter by it, and group a repository seen by two sources into one row ([#53](https://github.com/schubydoo/withe/pull/53))
+- Show the Renovate server's queue depth, oldest waiting job, version and boot time on the health page ([#51](https://github.com/schubydoo/withe/pull/51))
+- Search and filter the repository list by name and state, with the filter kept in the URL ([#49](https://github.com/schubydoo/withe/pull/49))
+
+### Fixes
+
+- Group a repository two sources both watch into one entry on the dashboard instead of listing it twice ([#55](https://github.com/schubydoo/withe/pull/55))
+- Call the health page's sources "Renovate sources", not "server", so a log-directory-only install is not told it has a server ([#56](https://github.com/schubydoo/withe/pull/56))
+- Say a log-directory source has no server to query on the health page, instead of naming a system-API setting it does not have ([#54](https://github.com/schubydoo/withe/pull/54))
+- Give the lock-file refreshes table fixed column widths so a long branch name or a workspace's many manifest paths wraps in its column instead of stretching the table ([#58](https://github.com/schubydoo/withe/pull/58))
+- List a lock-file refresh's manifest paths one per line, with an expander past the first three, so a workspace's many paths read cleanly instead of wrapping mid-path ([#59](https://github.com/schubydoo/withe/pull/59))
+- Drop a removed repository's pending updates instead of listing them forever ([#47](https://github.com/schubydoo/withe/pull/47))
+
 ## 1.1.0 (2026-08-18)
 
 ### Features
