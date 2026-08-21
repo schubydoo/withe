@@ -6,6 +6,7 @@
  */
 import { sql } from 'drizzle-orm';
 
+import { reportsSystemFacts, type SourceKind } from '../adapters/types.ts';
 import type { UpdateType } from '../core/model.ts';
 import type { Db } from './client.ts';
 
@@ -426,6 +427,9 @@ export function forges(db: Db): Map<string, ForgeInfo> {
 export interface SourceSystem {
   sourceAdapterId: string;
   kind: string;
+  /** Whether this source's kind has a server that reports system facts. A false
+   * value means the empty panel is expected, not a setting left off (Task 4.3). */
+  reportsSystemFacts: boolean;
   queueDepth: number | null;
   oldestQueuedAt: Date | null;
   oldestQueuedRepo: string | null;
@@ -457,6 +461,7 @@ export function sourceSystems(db: Db): SourceSystem[] {
   `);
   return rows.map((row) => ({
     ...row,
+    reportsSystemFacts: reportsSystemFacts(row.kind as SourceKind),
     oldestQueuedAt: row.oldestQueuedAt === null ? null : new Date(row.oldestQueuedAt * 1000),
     bootedAt: row.bootedAt === null ? null : new Date(row.bootedAt * 1000),
   }));

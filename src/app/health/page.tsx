@@ -190,9 +190,19 @@ export default function HealthPage() {
                   <dt className="text-neutral-500 dark:text-neutral-400">Booted</dt>
                   <dd>{ago(system.bootedAt, '—')}</dd>
                 </dl>
+              ) : !system.reportsSystemFacts ? (
+                // Some sources have no server to query — a log directory is
+                // files, not a runner — so an empty panel is expected, not a
+                // setting left off. The capability comes from the data (Task
+                // 4.3); the page does not name the kind, which the architecture
+                // forbids (check-boundaries: no-adapter-branching-in-web).
+                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                  This source has no server to query — Withe reads it directly, so it reports no
+                  queue, version or boot time, and there is nothing to enable.
+                </p>
               ) : (
-                // No fact at all means the system API is off (or the source has
-                // never synced). Naming the check beats an empty panel.
+                // A server-backed source with no fact at all means the system
+                // API is off. Naming the check beats an empty panel.
                 <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
                   This server reports nothing about itself — its system status API is likely not
                   enabled. The <a className="underline" href="/preflight">setup check</a> names the
