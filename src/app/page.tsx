@@ -41,6 +41,11 @@ function read() {
       // and lists it once (Q-7 — display-time grouping, Task 4.8).
       updates: dedupeBy(pendingUpdates(db), updateIdentity),
       locks: dedupeBy(lockFileRefreshes(db), lockIdentity),
+      // The primary is the freshest observer, so the trouble list reads its
+      // latest state — a fresher success hides a staler source's failure, which
+      // is the true current state on a single-runner install and keeps this page
+      // agreeing with /repos. Deliberate; union semantics would report failures
+      // a fresher run has already cleared.
       repos: groupByFullName(triage(db)).map((group) => group.primary),
       forge: forges(db),
       schedule: schedules(db),
