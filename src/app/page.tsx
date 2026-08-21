@@ -197,37 +197,6 @@ function info(forge: Map<string, ForgeInfo>, row: { sourceAdapterId: string }): 
  * every update that a person has to decide about. Listed here rather than only
  * counted, so an operator can see which repositories are waiting.
  */
-/**
- * The manifest paths a refresh touches, one per line. A Cargo workspace can
- * carry a dozen; the cell names the first three and hides the rest behind an
- * expander that stays reachable by keyboard, which a title tooltip would not
- * be. One path per line reads better than a comma-joined run that wraps
- * mid-path.
- */
-function ManifestPaths({ files }: { files: string[] }) {
-  const head = files.slice(0, 3);
-  const rest = files.slice(3);
-  return (
-    <div className="min-w-0 text-xs text-neutral-500 dark:text-neutral-400">
-      {head.map((file) => (
-        <div key={file} className="break-words">
-          {file}
-        </div>
-      ))}
-      {rest.length > 0 && (
-        <details className="break-words">
-          <summary className="cursor-pointer">+{rest.length} more</summary>
-          {rest.map((file) => (
-            <div key={file} className="break-words">
-              {file}
-            </div>
-          ))}
-        </details>
-      )}
-    </div>
-  );
-}
-
 function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string, ForgeInfo> }) {
   const repos = new Set(rows.map((r) => r.repoFullName)).size;
   const manifests = rows.reduce((sum, r) => sum + r.packageFileCount, 0);
@@ -278,7 +247,7 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
                   </td>
                   <td className="py-1 pr-4 align-top break-words font-medium">{row.branchName}</td>
                   <td className="py-1 pr-4 align-top break-words text-neutral-600 dark:text-neutral-300">
-                    <div className="flex gap-2">
+                    <div className="flex items-baseline gap-2">
                       <span className="tabular-nums">{row.packageFileCount}</span>
                       {/* An unnamed branch is already named for its one manifest,
                           so repeating the path says nothing new. */}
@@ -309,6 +278,37 @@ function Locks({ rows, forge }: { rows: LockFileRefreshRow[]; forge: Map<string,
         </>
       )}
     </section>
+  );
+}
+
+/**
+ * The manifest paths a refresh touches, one per line. A Cargo workspace can
+ * carry a dozen; the cell names the first three and hides the rest behind an
+ * expander that stays reachable by keyboard, which a title tooltip would not
+ * be. One path per line reads better than a comma-joined run that wraps
+ * mid-path.
+ */
+function ManifestPaths({ files }: { files: string[] }) {
+  const head = files.slice(0, 3);
+  const rest = files.slice(3);
+  return (
+    <div className="min-w-0 text-xs text-neutral-500 dark:text-neutral-400">
+      {head.map((file) => (
+        <div key={file} className="break-words">
+          {file}
+        </div>
+      ))}
+      {rest.length > 0 && (
+        <details className="break-words">
+          <summary className="cursor-pointer">+{rest.length} more</summary>
+          {rest.map((file) => (
+            <div key={file} className="break-words">
+              {file}
+            </div>
+          ))}
+        </details>
+      )}
+    </div>
   );
 }
 
