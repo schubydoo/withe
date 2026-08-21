@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs';
 import { redirect } from 'next/navigation';
 
 import { loadConfig } from '../config/load.ts';
+import { collapseBy, groupByFullName } from '../core/group.ts';
 import { dependencyLink, pullRequestUrl, repoUrl } from '../core/links.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from '../db/client.ts';
@@ -17,6 +18,7 @@ import {
   type PendingUpdateRow,
   type TriageRow,
 } from '../db/queries.ts';
+import { foldLock, foldUpdate } from './collapse.ts';
 import { soonestNextRun } from './next-run.ts';
 import { NextRun } from './next-run.tsx';
 
@@ -34,11 +36,21 @@ function read() {
   // server makes this stale rather than broken.
   const { sqlite, db } = openDatabase(config.dbPath);
   try {
+    const forge = forges(db);
     return {
-      updates: pendingUpdates(db),
-      locks: lockFileRefreshes(db),
-      repos: triage(db),
-      forge: forges(db),
+      // A repository two sources both watch reports each update once per source.
+      // Collapse the copies to one row, merging their facts — a forge on one, a
+      // pull request on another — so the dashboard counts and links it once
+      // (Q-7 — display-time grouping, Task 4.8).
+      updates: collapseBy(pendingUpdates(db), updateIdentity, (group) => foldUpdate(group, forge)),
+      locks: collapseBy(lockFileRefreshes(db), lockIdentity, (group) => foldLock(group, forge)),
+      // The primary is the freshest observer, so the trouble list reads its
+      // latest state — a fresher success hides a staler source's failure, which
+      // is the true current state on a single-runner install and keeps this page
+      // agreeing with /repos. Deliberate; union semantics would report failures
+      // a fresher run has already cleared.
+      repos: groupByFullName(triage(db)).map((group) => group.primary),
+      forge,
       schedule: schedules(db),
       compareUrl: config.compareUrl,
       intervalSeconds: config.syncIntervalSeconds,
@@ -47,6 +59,17 @@ function read() {
   } finally {
     sqlite.close();
   }
+}
+
+// The dependency and its version pair name the update; the source that reported
+// it does not. Two sources describing one repository report the same pending
+// update, so this key groups the copies for collapseBy to merge (foldUpdate).
+const FIELD = '\u0000';
+function updateIdentity(u: PendingUpdateRow): string {
+  return [u.repoFullName, u.dependencyName, u.currentVersion, u.targetVersion, u.updateType].join(FIELD);
+}
+function lockIdentity(l: LockFileRefreshRow): string {
+  return [l.repoFullName, l.branchName].join(FIELD);
 }
 
 function age(from: Date | null): string {

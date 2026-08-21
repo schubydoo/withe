@@ -3,10 +3,10 @@ import { existsSync } from 'node:fs';
 import { notFound, redirect } from 'next/navigation';
 
 import { loadConfig } from '../../../../config/load.ts';
+import { groupByFullName } from '../../../../core/group.ts';
 import { openDatabase } from '../../../../db/client.ts';
 import { repoInventory, runsForRepo, RUNS_PER_PAGE, type RunRow } from '../../../../db/queries.ts';
 import { runWhen } from '../../../format.ts';
-import { groupByFullName } from '../../group.ts';
 
 export const dynamic = 'force-dynamic';
 

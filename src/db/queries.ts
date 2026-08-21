@@ -43,7 +43,7 @@ export interface RepoHealthRow {
 }
 
 /**
- * Every pending update, newest repository first.
+ * Every pending update, by repository name.
  *
  * Lock-file refreshes are excluded here and counted separately. They were 7 of
  * 9 on the author's install and would bury everything that names a dependency.
@@ -335,6 +335,9 @@ export function runLocation(db: Db, id: number): RunLocation | null {
 }
 
 export interface TriageRow {
+  /** Which source contributed this row, so a repo two sources watch groups to
+   * one entry at display time rather than listing twice (Q-7, Task 4.8). */
+  sourceAdapterId: string;
   fullName: string;
   org: string;
   name: string;
@@ -356,6 +359,7 @@ export interface TriageRow {
  */
 export function triage(db: Db): TriageRow[] {
   const rows = db.all<{
+    sourceAdapterId: string;
     fullName: string;
     org: string;
     name: string;
@@ -366,7 +370,7 @@ export function triage(db: Db): TriageRow[] {
     lastSuccessAt: number | null;
     pendingCount: number;
   }>(sql`
-    select r.full_name as fullName, r.org, r.name, r.stalled,
+    select r.source_adapter_id as sourceAdapterId, r.full_name as fullName, r.org, r.name, r.stalled,
            (select rr.status from renovate_run rr
              where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastRunStatus,
            (select rr.completed_at from renovate_run rr
@@ -399,6 +403,7 @@ export function triage(db: Db): TriageRow[] {
   });
 
   return withFirstFailure.map((row) => ({
+    sourceAdapterId: row.sourceAdapterId,
     fullName: row.fullName,
     org: row.org,
     name: row.name,
