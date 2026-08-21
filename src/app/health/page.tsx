@@ -12,6 +12,7 @@ import { openDatabase } from '../../db/client.ts';
 import { migrationState, sourceHealth, sourceSystems, type MigrationState, type SourceHealth, type SourceSystem } from '../../db/queries.ts';
 import { ago } from '../format.ts';
 import { describeAge } from '../staleness.ts';
+import { systemPanel } from './system-panel.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,16 +51,6 @@ function size(bytes: number | null): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} kB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-/** Whether the source reported anything at all from its system API. */
-function hasSystemFacts(system: SourceSystem): boolean {
-  return (
-    system.queueDepth !== null ||
-    system.runnerVersion !== null ||
-    system.bootedAt !== null ||
-    system.oldestQueuedAt !== null
-  );
 }
 
 function duration(seconds: number | null): string {
@@ -155,52 +146,67 @@ export default function HealthPage() {
         )}
       </section>
 
-      {systems.length > 0 && (
+      {/* Only when a source actually has a server: the heading names one, so a
+          log-directory-only instance must not raise it. In a mixed install the
+          server rows show their facts and a log-directory row explains its blank. */}
+      {systems.some((system) => system.reportsSystemFacts) && (
         <section className="mt-8">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Renovate server</h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             What the server reports about itself: its job queue, version and boot time.
             Values refresh with each sync.
           </p>
-          {systems.map((system) => (
-            <div key={system.sourceAdapterId} className="mt-2">
-              {systems.length > 1 && <h3 className="text-sm font-medium">{system.sourceAdapterId}</h3>}
-              {!everSynced.has(system.sourceAdapterId) ? (
-                // All-null facts on a source that has never synced mean nothing
-                // about the system API; blaming a setting here would send the
-                // operator to fix the wrong thing.
-                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                  No sync has completed yet, so nothing has been reported. The table above says how
-                  the syncs are going.
-                </p>
-              ) : hasSystemFacts(system) ? (
-                <dl className="mt-1 grid grid-cols-[12rem_1fr] gap-y-1 text-sm">
-                  <dt className="text-neutral-500 dark:text-neutral-400">Queue depth</dt>
-                  <dd className="tabular-nums">
-                    {system.queueDepth === null ? '—' : system.queueDepth === 0 ? '0 — nothing waiting' : system.queueDepth}
-                  </dd>
-                  <dt className="text-neutral-500 dark:text-neutral-400">Oldest waiting job</dt>
-                  <dd>
-                    {system.oldestQueuedAt === null
-                      ? '—'
-                      : `${system.oldestQueuedRepo ?? 'unknown repository'}, queued ${ago(system.oldestQueuedAt, '—')}`}
-                  </dd>
-                  <dt className="text-neutral-500 dark:text-neutral-400">Renovate version</dt>
-                  <dd className="tabular-nums">{system.runnerVersion ?? '—'}</dd>
-                  <dt className="text-neutral-500 dark:text-neutral-400">Booted</dt>
-                  <dd>{ago(system.bootedAt, '—')}</dd>
-                </dl>
-              ) : (
-                // No fact at all means the system API is off (or the source has
-                // never synced). Naming the check beats an empty panel.
-                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-                  This server reports nothing about itself — its system status API is likely not
-                  enabled. The <a className="underline" href="/preflight">setup check</a> names the
-                  setting.
-                </p>
-              )}
-            </div>
-          ))}
+          {systems.map((system) => {
+            // The branch order lives in systemPanel (system-panel.ts), tested
+            // there; the page only renders each outcome. `no-server` is decided
+            // before `never-synced`, so a log directory is never told facts are
+            // still coming.
+            const panel = systemPanel(system, everSynced.has(system.sourceAdapterId));
+            return (
+              <div key={system.sourceAdapterId} className="mt-2">
+                {systems.length > 1 && <h3 className="text-sm font-medium">{system.sourceAdapterId}</h3>}
+                {panel === 'facts' ? (
+                  <dl className="mt-1 grid grid-cols-[12rem_1fr] gap-y-1 text-sm">
+                    <dt className="text-neutral-500 dark:text-neutral-400">Queue depth</dt>
+                    <dd className="tabular-nums">
+                      {system.queueDepth === null ? '—' : system.queueDepth === 0 ? '0 — nothing waiting' : system.queueDepth}
+                    </dd>
+                    <dt className="text-neutral-500 dark:text-neutral-400">Oldest waiting job</dt>
+                    <dd>
+                      {system.oldestQueuedAt === null
+                        ? '—'
+                        : `${system.oldestQueuedRepo ?? 'unknown repository'}, queued ${ago(system.oldestQueuedAt, '—')}`}
+                    </dd>
+                    <dt className="text-neutral-500 dark:text-neutral-400">Renovate version</dt>
+                    <dd className="tabular-nums">{system.runnerVersion ?? '—'}</dd>
+                    <dt className="text-neutral-500 dark:text-neutral-400">Booted</dt>
+                    <dd>{ago(system.bootedAt, '—')}</dd>
+                  </dl>
+                ) : panel === 'no-server' ? (
+                  // A log directory is files, not a runner, so an empty panel is
+                  // expected, not a setting left off. The page names no kind,
+                  // which check-boundaries (no-adapter-branching-in-web) forbids.
+                  <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                    This source has no server to query — Withe reads it directly, so it reports no
+                    queue, version or boot time, and there is nothing to enable.
+                  </p>
+                ) : panel === 'never-synced' ? (
+                  <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                    No sync has completed yet, so nothing has been reported. The table above says how
+                    the syncs are going.
+                  </p>
+                ) : (
+                  // api-off: a server-backed source that reports nothing. Naming
+                  // the check beats an empty panel.
+                  <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                    This server reports nothing about itself — its system status API is likely not
+                    enabled. The <a className="underline" href="/preflight">setup check</a> names the
+                    setting.
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </section>
       )}
 

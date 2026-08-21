@@ -806,6 +806,7 @@ test('sourceSystems reports the runner facts a sync recorded, and nulls before o
     {
       sourceAdapterId: 'quiet',
       kind: 'ce',
+      reportsSystemFacts: true,
       queueDepth: null,
       oldestQueuedAt: null,
       oldestQueuedRepo: null,
@@ -815,6 +816,7 @@ test('sourceSystems reports the runner facts a sync recorded, and nulls before o
     {
       sourceAdapterId: SOURCE,
       kind: 'ce',
+      reportsSystemFacts: true,
       queueDepth: 3,
       oldestQueuedAt: new Date('2026-08-20T10:00:00Z'),
       oldestQueuedRepo: 'acme/widget',
@@ -822,6 +824,18 @@ test('sourceSystems reports the runner facts a sync recorded, and nulls before o
       bootedAt: new Date('2026-08-19T06:00:00Z'),
     },
   ]);
+  sqlite.close();
+});
+
+test('sourceSystems marks a log-directory source as reporting no system facts', () => {
+  const { sqlite, db } = fresh();
+  // A jsonlog source has no server to query, so its empty system panel is
+  // expected rather than a setting left off (Task 4.3).
+  persist(db, 'logs', 'jsonlog', { repos: [], runs: [], updates: [], warnings: [], complete: true, authoritativeRepoList: false }, new Date());
+
+  const [row] = sourceSystems(db);
+  assert.equal(row?.kind, 'jsonlog');
+  assert.equal(row?.reportsSystemFacts, false);
   sqlite.close();
 });
 
