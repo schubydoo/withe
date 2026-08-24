@@ -1,3 +1,13 @@
+## 1.3.0 (2026-08-24)
+
+### Features
+
+- Add WITHE_ACKNOWLEDGE_EXPOSURE to silence the no-password exposure warning for a deployment that controls access in front of Withe (a reverse proxy, an identity-aware gateway, a tailnet). It hides the startup line and the banner without setting credentials Withe would then also check; the warning itself keeps naming the real fixes rather than advertising the switch that hides it ([#64](https://github.com/schubydoo/withe/pull/64))
+
+### Fixes
+
+- Rename the dashboard's "Held for your review" section to "Major & 0.x updates" and mark each row's pull-request state, so a read-only operator who runs no Dependency Dashboard is not told to review a pull request that may not exist. A held row with no pull request now names the upstream changelog as the one review Withe can offer, and a note states that a no-pull-request row is not stuck ([#62](https://github.com/schubydoo/withe/pull/62))
+
 ## 1.2.0 (2026-08-21)
 
 ### Features
