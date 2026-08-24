@@ -23,7 +23,7 @@ export default function RootLayout({
   // NFR-13b. The same sentence the supervisor prints at startup, on every page,
   // because the startup line scrolls away and this does not.
   const config = loadConfig();
-  const warning = exposureWarning(config.bind, config.auth !== null);
+  const warning = exposureWarning(config.bind, config.auth !== null, config.exposureAcknowledged);
 
   return (
     <html lang="en" suppressHydrationWarning>

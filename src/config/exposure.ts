@@ -72,15 +72,35 @@ export function beyondLoopback(bind: string): boolean {
 }
 
 /**
+ * Whether the operator has acknowledged running Withe open with no password.
+ *
+ * For a deployment that authenticates in front of Withe — a reverse proxy, a
+ * VPN, an identity-aware gateway — the port is not really open, but Withe cannot
+ * see that layer. This flag lets such an operator silence the warning without
+ * setting credentials Withe would then also check. It hides the message; it adds
+ * no protection.
+ */
+export function acknowledgeExposure(env: Env): boolean {
+  const value = env.WITHE_ACKNOWLEDGE_EXPOSURE?.trim();
+  return value ? TRUTHY.test(value) : false;
+}
+
+/**
  * The one sentence an operator needs when Withe is open to the network.
  *
  * It names the risk and both variables that close it. Returned rather than
  * printed so the same words appear at startup and in the banner — an operator
  * who reads one and then the other should not have to work out that they are
- * the same problem.
+ * the same problem. An operator who has acknowledged the exposure (secured it
+ * outside Withe) gets no warning; the sentence keeps naming the real fixes
+ * rather than advertising the switch that hides it.
  */
-export function exposureWarning(bind: string, hasCredentials: boolean): string | null {
-  if (hasCredentials || !beyondLoopback(bind)) return null;
+export function exposureWarning(
+  bind: string,
+  hasCredentials: boolean,
+  acknowledged = false,
+): string | null {
+  if (hasCredentials || acknowledged || !beyondLoopback(bind)) return null;
   return (
     `Withe is listening on ${bind} with no password. ` +
     `Anyone who can reach this port can read every repository, run and log it holds. ` +

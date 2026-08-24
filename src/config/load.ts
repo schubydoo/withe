@@ -12,7 +12,15 @@ import { parse as parseYaml } from 'yaml';
 
 import type { SourceConfig, SourceKind } from '../adapters/types.ts';
 import { fillCompareTemplate } from '../core/links.ts';
-import { bindAddress, exposureWarning, inContainer, systemProbe, type ContainerProbe, type Env } from './exposure.ts';
+import {
+  acknowledgeExposure,
+  bindAddress,
+  exposureWarning,
+  inContainer,
+  systemProbe,
+  type ContainerProbe,
+  type Env,
+} from './exposure.ts';
 
 export class ConfigError extends Error {
   readonly field: string;
@@ -41,6 +49,9 @@ export interface WitheConfig {
   container: boolean;
   /** Where Withe answers: the TLS proxy when there is one, the web server otherwise. */
   bind: string;
+  /** The operator has acknowledged an open bind (WITHE_ACKNOWLEDGE_EXPOSURE), so
+   * the exposure warning is silenced even without credentials. */
+  exposureAcknowledged: boolean;
   port: number;
   /** Where the Next.js server itself listens, which is not the same behind TLS. */
   webBind: string;
@@ -86,8 +97,10 @@ export function loadConfig(env: Env = process.env, probe: ContainerProbe = syste
 
   // NFR-13b. The operator is told once at startup and again on every page,
   // because a warning scrolled past during a container start is a warning
-  // nobody read.
-  const exposed = exposureWarning(bind, auth !== null);
+  // nobody read. An operator who secures Withe outside the process can
+  // acknowledge the exposure to silence both.
+  const exposureAcknowledged = acknowledgeExposure(env);
+  const exposed = exposureWarning(bind, auth !== null, exposureAcknowledged);
   if (exposed) warnings.push(exposed);
 
   return {
@@ -102,6 +115,7 @@ export function loadConfig(env: Env = process.env, probe: ContainerProbe = syste
     tls,
     container,
     bind,
+    exposureAcknowledged,
     port,
     // Behind TLS the proxy answers on the configured address and the Next
     // server moves to loopback one port up, where only the proxy can reach it.

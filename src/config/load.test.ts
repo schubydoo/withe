@@ -326,6 +326,18 @@ test('a bind beyond loopback is warned about wherever Withe runs', () => {
   assert.equal(config.warnings.length, 1);
 });
 
+test('acknowledging the exposure silences the warning while the bind stays open', () => {
+  const config = loadConfig(
+    { WITHE_CONFIG: NO_FILE, WITHE_ACKNOWLEDGE_EXPOSURE: 'true' },
+    CONTAINER,
+  );
+
+  // The port is still open — the flag only quiets the warning, it protects nothing.
+  assert.equal(config.bind, '0.0.0.0');
+  assert.equal(config.exposureAcknowledged, true);
+  assert.deepEqual(config.warnings, []);
+});
+
 test('behind TLS the web server moves to loopback and the proxy takes the port', () => {
   const config = loadConfig(
     {

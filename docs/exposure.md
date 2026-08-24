@@ -20,6 +20,16 @@ put Withe behind it:
 - [Authentik](https://goauthentik.io/)
 - [Tailscale](https://tailscale.com/), so Withe is only reachable on your tailnet.
 
+## Acknowledging the exposure
+
+When you authenticate in front of Withe — a reverse proxy, an identity-aware gateway, a tailnet — the
+port is not really open, but Withe cannot see that layer, so it still warns. Set
+`WITHE_ACKNOWLEDGE_EXPOSURE=true` to silence the startup line and the banner.
+
+The flag hides the message; it adds no protection. Use it only when access is controlled outside Withe.
+If nothing sits in front, set `WITHE_AUTH_USER`/`WITHE_AUTH_PASS` or bind to loopback instead — those
+close the port; this only quiets the warning about it.
+
 ## TLS
 
 Set `WITHE_TLS_CERT` and `WITHE_TLS_KEY` to two mounted certificate files, and Withe terminates HTTPS
