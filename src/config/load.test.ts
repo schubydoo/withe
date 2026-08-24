@@ -326,6 +326,22 @@ test('a bind beyond loopback is warned about wherever Withe runs', () => {
   assert.equal(config.warnings.length, 1);
 });
 
+test('acknowledging the exposure drops the banner but records a startup notice', () => {
+  const config = loadConfig(
+    { WITHE_CONFIG: NO_FILE, WITHE_ACKNOWLEDGE_EXPOSURE: 'true' },
+    CONTAINER,
+  );
+
+  // The port is still open — the flag only quiets the page warning.
+  assert.equal(config.bind, '0.0.0.0');
+  // No banner: the computed warning the layout reads is null.
+  assert.equal(config.exposureWarning, null);
+  // But the log still records that a warning was silenced, so an acknowledged
+  // open Withe does not look identical to a closed one.
+  assert.equal(config.warnings.length, 1);
+  assert.match(config.warnings[0] as string, /silenced by WITHE_ACKNOWLEDGE_EXPOSURE/);
+});
+
 test('behind TLS the web server moves to loopback and the proxy takes the port', () => {
   const config = loadConfig(
     {

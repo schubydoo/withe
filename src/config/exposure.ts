@@ -72,18 +72,58 @@ export function beyondLoopback(bind: string): boolean {
 }
 
 /**
+ * Whether the operator has acknowledged running Withe open with no password.
+ *
+ * For a deployment that authenticates in front of Withe — a reverse proxy, a
+ * VPN, an identity-aware gateway — the port is not really open, but Withe cannot
+ * see that layer. This flag lets such an operator silence the warning without
+ * setting credentials Withe would then also check. It hides the message; it adds
+ * no protection.
+ */
+export function acknowledgeExposure(env: Env): boolean {
+  const value = env.WITHE_ACKNOWLEDGE_EXPOSURE?.trim();
+  return value ? TRUTHY.test(value) : false;
+}
+
+/**
  * The one sentence an operator needs when Withe is open to the network.
  *
  * It names the risk and both variables that close it. Returned rather than
  * printed so the same words appear at startup and in the banner — an operator
  * who reads one and then the other should not have to work out that they are
- * the same problem.
+ * the same problem. An operator who has acknowledged the exposure (secured it
+ * outside Withe) gets no warning; the sentence keeps naming the real fixes
+ * rather than advertising the switch that hides it.
  */
-export function exposureWarning(bind: string, hasCredentials: boolean): string | null {
-  if (hasCredentials || !beyondLoopback(bind)) return null;
+export function exposureWarning(
+  bind: string,
+  hasCredentials: boolean,
+  acknowledged = false,
+): string | null {
+  if (hasCredentials || acknowledged || !beyondLoopback(bind)) return null;
   return (
     `Withe is listening on ${bind} with no password. ` +
     `Anyone who can reach this port can read every repository, run and log it holds. ` +
     `Set WITHE_AUTH_USER and WITHE_AUTH_PASS, or set WITHE_BIND=127.0.0.1 to close it.`
+  );
+}
+
+/**
+ * The startup line that records a warning was silenced, so an acknowledged-open
+ * Withe does not look identical to a closed one in the logs. Printed at startup
+ * only, never bannered — the flag suppresses the page warning, not the audit
+ * trail. Null unless the flag actually hid a real warning: an acknowledgement
+ * that suppresses nothing (loopback, or credentials set) records nothing.
+ */
+export function suppressionNotice(
+  bind: string,
+  hasCredentials: boolean,
+  acknowledged: boolean,
+): string | null {
+  if (!acknowledged) return null;
+  if (exposureWarning(bind, hasCredentials, false) === null) return null;
+  return (
+    `Withe is open on ${bind} with no password; its exposure warning is silenced ` +
+    `by WITHE_ACKNOWLEDGE_EXPOSURE. Access must be controlled in front of Withe.`
   );
 }

@@ -17,6 +17,7 @@ no breaking change.
 | `WITHE_COMPARE_URL` | forge compare | Send a dependency's compare link to your own template instead of the forge — see [Compare links](#compare-links) |
 | `WITHE_AUTH_USER` / `WITHE_AUTH_PASS` | unset | Enable HTTP basic authentication — see [Exposure](exposure.md) |
 | `WITHE_TLS_CERT` / `WITHE_TLS_KEY` | unset | Enable the TLS proxy — see [Exposure](exposure.md) |
+| `WITHE_ACKNOWLEDGE_EXPOSURE` | unset | Silence the no-password warning when access is controlled in front of Withe — see [Exposure](exposure.md). Hides the warning; adds no protection |
 | `WITHE_DB_PATH` | `/data/withe.db` | Database location |
 | `WITHE_CONFIG` | `/data/withe.yaml` | Config file path, used when the file exists |
 | `WITHE_BIND` | `127.0.0.1` | Listen address. Inside a container Withe binds `0.0.0.0`; containment comes from the published address |

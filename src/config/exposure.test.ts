@@ -2,10 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  acknowledgeExposure,
   beyondLoopback,
   bindAddress,
   exposureWarning,
   inContainer,
+  suppressionNotice,
   type ContainerProbe,
 } from './exposure.ts';
 
@@ -71,4 +73,44 @@ test('the warning fires only when reachable and unprotected', () => {
   assert.match(warning, /WITHE_AUTH_USER/);
   assert.match(warning, /WITHE_AUTH_PASS/);
   assert.match(warning, /WITHE_BIND/);
+});
+
+test('an acknowledged exposure silences the warning without credentials', () => {
+  // The open, unprotected case that would otherwise fire.
+  assert.ok(exposureWarning('0.0.0.0', false, false));
+  assert.equal(exposureWarning('0.0.0.0', false, true), null);
+});
+
+test('the warning never advertises the switch that hides it', () => {
+  // Naming WITHE_ACKNOWLEDGE_EXPOSURE in the sentence would turn a security
+  // warning into a how-to for ignoring it.
+  const warning = exposureWarning('0.0.0.0', false);
+  assert.ok(warning);
+  assert.doesNotMatch(warning, /ACKNOWLEDGE/);
+});
+
+test('the exposure acknowledgement reads the truthy forms', () => {
+  assert.equal(acknowledgeExposure({}), false);
+  assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: '' }), false);
+  assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: 'false' }), false);
+  assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: '0' }), false);
+  assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: '1' }), true);
+  assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: 'true' }), true);
+  assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: ' YES ' }), true);
+});
+
+test('acknowledging an open bind leaves a startup notice, so it is not invisible', () => {
+  const notice = suppressionNotice('0.0.0.0', false, true);
+  assert.ok(notice);
+  assert.match(notice, /0\.0\.0\.0/);
+  assert.match(notice, /no password/);
+  assert.match(notice, /WITHE_ACKNOWLEDGE_EXPOSURE/);
+});
+
+test('the suppression notice records nothing when nothing was suppressed', () => {
+  // Acknowledged but not actually exposed: loopback, or credentials set.
+  assert.equal(suppressionNotice('127.0.0.1', false, true), null);
+  assert.equal(suppressionNotice('0.0.0.0', true, true), null);
+  // Not acknowledged: the real warning fires instead, so no notice here.
+  assert.equal(suppressionNotice('0.0.0.0', false, false), null);
 });
