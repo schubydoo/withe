@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { exposureWarning } from '../config/exposure.ts';
 import { loadConfig } from '../config/load.ts';
 import { StalenessBanner } from './staleness-banner.tsx';
 import { ThemeToggle } from './theme-toggle.tsx';
@@ -21,9 +20,10 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   // NFR-13b. The same sentence the supervisor prints at startup, on every page,
-  // because the startup line scrolls away and this does not.
+  // because the startup line scrolls away and this does not. Computed once in
+  // loadConfig and read here, so the banner and the startup log cannot drift.
   const config = loadConfig();
-  const warning = exposureWarning(config.bind, config.auth !== null, config.exposureAcknowledged);
+  const warning = config.exposureWarning;
 
   return (
     <html lang="en" suppressHydrationWarning>

@@ -107,3 +107,23 @@ export function exposureWarning(
     `Set WITHE_AUTH_USER and WITHE_AUTH_PASS, or set WITHE_BIND=127.0.0.1 to close it.`
   );
 }
+
+/**
+ * The startup line that records a warning was silenced, so an acknowledged-open
+ * Withe does not look identical to a closed one in the logs. Printed at startup
+ * only, never bannered — the flag suppresses the page warning, not the audit
+ * trail. Null unless the flag actually hid a real warning: an acknowledgement
+ * that suppresses nothing (loopback, or credentials set) records nothing.
+ */
+export function suppressionNotice(
+  bind: string,
+  hasCredentials: boolean,
+  acknowledged: boolean,
+): string | null {
+  if (!acknowledged) return null;
+  if (exposureWarning(bind, hasCredentials, false) === null) return null;
+  return (
+    `Withe is open on ${bind} with no password; its exposure warning is silenced ` +
+    `by WITHE_ACKNOWLEDGE_EXPOSURE. Access must be controlled in front of Withe.`
+  );
+}

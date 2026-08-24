@@ -17,6 +17,7 @@ import {
   bindAddress,
   exposureWarning,
   inContainer,
+  suppressionNotice,
   systemProbe,
   type ContainerProbe,
   type Env,
@@ -49,9 +50,10 @@ export interface WitheConfig {
   container: boolean;
   /** Where Withe answers: the TLS proxy when there is one, the web server otherwise. */
   bind: string;
-  /** The operator has acknowledged an open bind (WITHE_ACKNOWLEDGE_EXPOSURE), so
-   * the exposure warning is silenced even without credentials. */
-  exposureAcknowledged: boolean;
+  /** The exposure warning to banner on every page, or null when Withe is not
+   * exposed, credentials are set, or the exposure is acknowledged. Computed once
+   * here so the banner and the startup log show the same words (NFR-13b). */
+  exposureWarning: string | null;
   port: number;
   /** Where the Next.js server itself listens, which is not the same behind TLS. */
   webBind: string;
@@ -97,11 +99,16 @@ export function loadConfig(env: Env = process.env, probe: ContainerProbe = syste
 
   // NFR-13b. The operator is told once at startup and again on every page,
   // because a warning scrolled past during a container start is a warning
-  // nobody read. An operator who secures Withe outside the process can
-  // acknowledge the exposure to silence both.
-  const exposureAcknowledged = acknowledgeExposure(env);
-  const exposed = exposureWarning(bind, auth !== null, exposureAcknowledged);
-  if (exposed) warnings.push(exposed);
+  // nobody read. Computed once here and carried on the config so the banner
+  // renders the same string rather than recomputing it — one computation, no
+  // second call site to keep in step. An operator who secures Withe outside the
+  // process can acknowledge the exposure to silence the warning; a startup-only
+  // notice still records that it was silenced.
+  const acknowledged = acknowledgeExposure(env);
+  const exposure = exposureWarning(bind, auth !== null, acknowledged);
+  if (exposure) warnings.push(exposure);
+  const silenced = suppressionNotice(bind, auth !== null, acknowledged);
+  if (silenced) warnings.push(silenced);
 
   return {
     sources,
@@ -115,7 +122,7 @@ export function loadConfig(env: Env = process.env, probe: ContainerProbe = syste
     tls,
     container,
     bind,
-    exposureAcknowledged,
+    exposureWarning: exposure,
     port,
     // Behind TLS the proxy answers on the configured address and the Next
     // server moves to loopback one port up, where only the proxy can reach it.

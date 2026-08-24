@@ -159,7 +159,8 @@ volumes:
 **Do not publish Withe to the internet without authentication and TLS in front of it.** It is
 read-only against Renovate, but it shows every repository, run, and log your Renovate can see, and by
 default it has no password. When Withe detects it is reachable beyond loopback with no credentials, it
-warns at startup and banners every page.
+warns at startup and banners every page. If you control access in front of Withe, set
+`WITHE_ACKNOWLEDGE_EXPOSURE=true` to silence that warning — it hides the message, it adds no protection.
 
 <details>
 <summary><b>The two dials (both off by default) and what to put in front</b></summary>

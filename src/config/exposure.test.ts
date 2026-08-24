@@ -7,6 +7,7 @@ import {
   bindAddress,
   exposureWarning,
   inContainer,
+  suppressionNotice,
   type ContainerProbe,
 } from './exposure.ts';
 
@@ -96,4 +97,20 @@ test('the exposure acknowledgement reads the truthy forms', () => {
   assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: '1' }), true);
   assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: 'true' }), true);
   assert.equal(acknowledgeExposure({ WITHE_ACKNOWLEDGE_EXPOSURE: ' YES ' }), true);
+});
+
+test('acknowledging an open bind leaves a startup notice, so it is not invisible', () => {
+  const notice = suppressionNotice('0.0.0.0', false, true);
+  assert.ok(notice);
+  assert.match(notice, /0\.0\.0\.0/);
+  assert.match(notice, /no password/);
+  assert.match(notice, /WITHE_ACKNOWLEDGE_EXPOSURE/);
+});
+
+test('the suppression notice records nothing when nothing was suppressed', () => {
+  // Acknowledged but not actually exposed: loopback, or credentials set.
+  assert.equal(suppressionNotice('127.0.0.1', false, true), null);
+  assert.equal(suppressionNotice('0.0.0.0', true, true), null);
+  // Not acknowledged: the real warning fires instead, so no notice here.
+  assert.equal(suppressionNotice('0.0.0.0', false, false), null);
 });
