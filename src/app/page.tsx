@@ -107,18 +107,33 @@ function Group({
   empty,
   forge,
   compareUrl,
+  held = false,
 }: {
   title: string;
   rows: PendingUpdateRow[];
   empty: string;
   forge: Map<string, ForgeInfo>;
   compareUrl: string | null;
+  // The held group mixes rows that have a pull request with rows that do not,
+  // so it marks each row's state in the last cell and prints a note that names
+  // the review. The version cell already links the upstream change, so the note
+  // points there rather than linking it a second time. The other groups are
+  // already split by pull-request state in their title, so they leave the flag off.
+  held?: boolean;
 }) {
   return (
     <section className="mt-8">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {title} <span className="font-normal">({rows.length})</span>
       </h2>
+      {held && rows.length > 0 && (
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          These updates need a person to decide; Withe does not merge them. To review one, follow its
+          version link to the upstream change, then act on your forge. A row with no pull request is
+          usually not stuck &mdash; Renovate opens one itself once its rate limit, schedule window, or
+          release-age hold clears, unless your Renovate config holds majors for approval.
+        </p>
+      )}
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">{empty}</p>
       ) : (
@@ -162,7 +177,7 @@ function Group({
                   </td>
                   <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
                   <td className="py-1 text-neutral-500 dark:text-neutral-400">
-                    {row.prNumber === null ? '' : (
+                    {row.prNumber !== null ? (
                       <Maybe
                         href={pullRequestUrl(
                           info(forge, row).webBaseUrl,
@@ -173,6 +188,13 @@ function Group({
                       >
                         PR #{row.prNumber}
                       </Maybe>
+                    ) : held ? (
+                      // No pull request yet. Mark the state so a held major does
+                      // not read as a PR that never arrived; the review link lives
+                      // in the version cell, which the section note points to.
+                      'No PR yet'
+                    ) : (
+                      ''
                     )}
                   </td>
                 </tr>
@@ -415,11 +437,12 @@ export default function Home() {
       <Trouble failing={failing} stalled={stalled} />
 
       <Group
-        title="Held for your review"
+        title="Major & 0.x updates"
         rows={held}
+        held
         forge={forge}
         compareUrl={compareUrl}
-        empty="Nothing is waiting on a decision. Majors and 0.x minors appear here."
+        empty="Nothing here. Major updates and 0.x minors — the ones most likely to need a person — appear in this section."
       />
       <Group
         title="Open pull requests"

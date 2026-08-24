@@ -48,7 +48,7 @@ The landing page is your whole fleet on one screen, ordered the way you act on i
 | Section | What you get |
 |---|---|
 | **Failing repositories** | Repos with failing runs, oldest failure first, the error attached |
-| **Held for your review** | Updates Renovate is holding for you to act on |
+| **Major & 0.x updates** | Major and 0.x-minor updates — the ones most likely to need a person |
 | **Open pull requests** | Updates with a live PR, linked to your forge — what is waiting to merge |
 | **Queued, no PR yet** | Updates coming that Renovate has not opened a pull request for |
 
@@ -62,8 +62,8 @@ Plus, per source and per repository:
 | **Log viewer** | The full JSON-Lines log for any run, via Renovate's documented log endpoint |
 
 ![The landing page: a staleness banner, then the repositories that are failing ordered by how long
-they have been failing with each error attached, above the updates held for your
-review.](docs/images/failure-triage.png)
+they have been failing with each error attached, above the updates that need a person to
+act.](docs/images/failure-triage.png)
 
 ## What it is not
 
