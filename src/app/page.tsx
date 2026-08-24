@@ -115,9 +115,10 @@ function Group({
   forge: Map<string, ForgeInfo>;
   compareUrl: string | null;
   // The held group mixes rows that have a pull request with rows that do not,
-  // so it marks each row's state and names the changelog as the one review
-  // Withe can offer. The other groups are already split by pull-request state
-  // in their title, so they leave the flag off.
+  // so it marks each row's state in the last cell and prints a note that names
+  // the review. The version cell already links the upstream change, so the note
+  // points there rather than linking it a second time. The other groups are
+  // already split by pull-request state in their title, so they leave the flag off.
   held?: boolean;
 }) {
   return (
@@ -127,9 +128,10 @@ function Group({
       </h2>
       {held && rows.length > 0 && (
         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-          These updates need a person to decide; Withe does not merge them. A row with no pull request
-          is not stuck &mdash; Renovate opens one itself once its rate limit, schedule window, or
-          release-age hold clears.
+          These updates need a person to decide; Withe does not merge them. To review one, follow its
+          version link to the upstream change, then act on your forge. A row with no pull request is
+          usually not stuck &mdash; Renovate opens one itself once its rate limit, schedule window, or
+          release-age hold clears, unless your Renovate config holds majors for approval.
         </p>
       )}
       {rows.length === 0 ? (
@@ -187,17 +189,10 @@ function Group({
                         PR #{row.prNumber}
                       </Maybe>
                     ) : held ? (
-                      // No pull request yet. Name the review Withe can offer —
-                      // the upstream changelog — rather than leave the cell blank
-                      // and let a held major read as a PR that never arrived. Fall
-                      // back to plain text when the datasource has no compare link.
-                      link?.kind === 'compare' ? (
-                        <Maybe href={link.href} title="Read the upstream changelog for this version range">
-                          No PR yet · read changelog
-                        </Maybe>
-                      ) : (
-                        <span>No PR yet</span>
-                      )
+                      // No pull request yet. Mark the state so a held major does
+                      // not read as a PR that never arrived; the review link lives
+                      // in the version cell, which the section note points to.
+                      'No PR yet'
                     ) : (
                       ''
                     )}
@@ -447,7 +442,7 @@ export default function Home() {
         held
         forge={forge}
         compareUrl={compareUrl}
-        empty="Nothing here. Major updates, and 0.x minors, appear in this section — the ones most likely to need a person."
+        empty="Nothing here. Major updates and 0.x minors — the ones most likely to need a person — appear in this section."
       />
       <Group
         title="Open pull requests"
