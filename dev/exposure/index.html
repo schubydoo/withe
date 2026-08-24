@@ -418,6 +418,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#acknowledging-the-exposure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acknowledging the exposure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tls" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -593,6 +604,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#acknowledging-the-exposure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acknowledging the exposure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#tls" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -651,6 +673,13 @@ put Withe behind it:</p>
 <li><a href="https://goauthentik.io/">Authentik</a></li>
 <li><a href="https://tailscale.com/">Tailscale</a>, so Withe is only reachable on your tailnet.</li>
 </ul>
+<h2 id="acknowledging-the-exposure">Acknowledging the exposure<a class="headerlink" href="#acknowledging-the-exposure" title="Permanent link">&para;</a></h2>
+<p>When you authenticate in front of Withe — a reverse proxy, an identity-aware gateway, a tailnet — the
+port is not really open, but Withe cannot see that layer, so it still warns. Set
+<code>WITHE_ACKNOWLEDGE_EXPOSURE=true</code> to silence the startup line and the banner.</p>
+<p>The flag hides the message; it adds no protection. Use it only when access is controlled outside Withe.
+If nothing sits in front, set <code>WITHE_AUTH_USER</code>/<code>WITHE_AUTH_PASS</code> or bind to loopback instead — those
+close the port; this only quiets the warning about it.</p>
 <h2 id="tls">TLS<a class="headerlink" href="#tls" title="Permanent link">&para;</a></h2>
 <p>Set <code>WITHE_TLS_CERT</code> and <code>WITHE_TLS_KEY</code> to two mounted certificate files, and Withe terminates HTTPS
 itself in a separate proxy process. It uses TLS 1.2 as a floor and 1.3 when the client offers it, and
