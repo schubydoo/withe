@@ -107,18 +107,31 @@ function Group({
   empty,
   forge,
   compareUrl,
+  held = false,
 }: {
   title: string;
   rows: PendingUpdateRow[];
   empty: string;
   forge: Map<string, ForgeInfo>;
   compareUrl: string | null;
+  // The held group mixes rows that have a pull request with rows that do not,
+  // so it marks each row's state and names the changelog as the one review
+  // Withe can offer. The other groups are already split by pull-request state
+  // in their title, so they leave the flag off.
+  held?: boolean;
 }) {
   return (
     <section className="mt-8">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {title} <span className="font-normal">({rows.length})</span>
       </h2>
+      {held && rows.length > 0 && (
+        <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+          These updates need a person to decide; Withe does not merge them. A row with no pull request
+          is not stuck &mdash; Renovate opens one itself once its rate limit, schedule window, or
+          release-age hold clears.
+        </p>
+      )}
       {rows.length === 0 ? (
         <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-400">{empty}</p>
       ) : (
@@ -162,7 +175,7 @@ function Group({
                   </td>
                   <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
                   <td className="py-1 text-neutral-500 dark:text-neutral-400">
-                    {row.prNumber === null ? '' : (
+                    {row.prNumber !== null ? (
                       <Maybe
                         href={pullRequestUrl(
                           info(forge, row).webBaseUrl,
@@ -173,6 +186,20 @@ function Group({
                       >
                         PR #{row.prNumber}
                       </Maybe>
+                    ) : held ? (
+                      // No pull request yet. Name the review Withe can offer —
+                      // the upstream changelog — rather than leave the cell blank
+                      // and let a held major read as a PR that never arrived. Fall
+                      // back to plain text when the datasource has no compare link.
+                      link?.kind === 'compare' ? (
+                        <Maybe href={link.href} title="Read the upstream changelog for this version range">
+                          No PR yet · read changelog
+                        </Maybe>
+                      ) : (
+                        <span>No PR yet</span>
+                      )
+                    ) : (
+                      ''
                     )}
                   </td>
                 </tr>
@@ -415,11 +442,12 @@ export default function Home() {
       <Trouble failing={failing} stalled={stalled} />
 
       <Group
-        title="Held for your review"
+        title="Major & 0.x updates"
         rows={held}
+        held
         forge={forge}
         compareUrl={compareUrl}
-        empty="Nothing is waiting on a decision. Majors and 0.x minors appear here."
+        empty="Nothing here. Major updates, and 0.x minors, appear in this section — the ones most likely to need a person."
       />
       <Group
         title="Open pull requests"
