@@ -1,0 +1,31 @@
+# Gitleaks configuration for Withe: the default rule set, plus one allowlist.
+#
+# The scheduled run of the `secret scan` job in .github/workflows/security.yml
+# passes no --log-opts, so gitleaks reads every commit. A fixture that was
+# committed once is therefore reported every week. This allowlist applies to
+# every commit; a .gitleaksignore fingerprint pins one commit and one line
+# number, and stops matching as soon as the file moves.
+#
+# Use the singular [allowlist] table. gitleaks 8.24.3, the version the pinned
+# gitleaks-action installs, reads it; it ignores the plural [[allowlists]] form
+# at the top level and reports the findings anyway.
+
+[extend]
+useDefault = true
+
+# Both files hold credential-shaped strings on purpose.
+#
+# redact.test.ts proves that redact() removes a GitLab PAT, a GitHub token, a
+# bearer token and a credential inside a URL, so each fixture must carry the
+# shape of the thing it stands for. Rule gitlab-pat reports the GitLab fixture.
+#
+# redact.property.test.ts builds its generated tokens from an alphabet written
+# out as one string. Rule generic-api-key reads that alphabet as a key.
+#
+# Put no real credential in either file: nothing in them is scanned.
+[allowlist]
+description = "Credential-shaped fixtures in the redaction tests"
+paths = [
+  '''^src/core/redact\.test\.ts$''',
+  '''^src/core/redact\.property\.test\.ts$''',
+]
