@@ -777,6 +777,26 @@ no breaking change.</p>
 <td>Silence the no-password warning when access is controlled in front of Withe — see <a href="../exposure/">Exposure</a>. Hides the warning; adds no protection</td>
 </tr>
 <tr>
+<td><code>WITHE_GITHUB_TOKEN</code></td>
+<td>unset</td>
+<td>Turn on reading live pull-request state from GitHub, so a merged Renovate pull request leaves the dashboard within one sync. Use a fine-grained token with read-only access to pull requests and commit statuses. Withe never stores it</td>
+</tr>
+<tr>
+<td><code>WITHE_GITHUB_API_URL</code></td>
+<td>github.com</td>
+<td>A GitHub Enterprise Server API base, for example <code>https://ghe.example/api/v3</code></td>
+</tr>
+<tr>
+<td><code>WITHE_RENOVATE_BRANCH_PREFIX</code></td>
+<td><code>renovate/</code></td>
+<td>The Renovate branch prefix that Renovate writes</td>
+</tr>
+<tr>
+<td><code>WITHE_RENOVATE_PR_AUTHORS</code></td>
+<td><code>renovate[bot]</code>, <code>renovate</code></td>
+<td>Extra pull-request author logins that count as Renovate, comma separated</td>
+</tr>
+<tr>
 <td><code>WITHE_DB_PATH</code></td>
 <td><code>/data/withe.db</code></td>
 <td>Database location</td>
