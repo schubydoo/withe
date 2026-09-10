@@ -407,3 +407,59 @@ test('start runs a cycle each interval, once, and stop ends them', async (t) => 
   assert.equal(cycles, 2, 'a stopped loop must not keep syncing');
   sqlite.close();
 });
+
+test('enrichForge runs before persist, so a merged update is written merged and warnings fold in', async () => {
+  const { sqlite, db } = fresh();
+  const source = 'ce1';
+  const at = Date.parse('2026-09-01T00:00:00Z');
+  const result: CollectResult = {
+    repos: [repoOf(source, 'acme/widget')],
+    runs: [runOf(source, 'acme/widget', 'j1', 'success', at)],
+    updates: [
+      {
+        id: `${source}:acme/widget:next`,
+        repoId: `${source}:acme/widget`,
+        dependencyName: 'next',
+        currentVersion: '15.0.0',
+        targetVersion: '16.0.0',
+        updateType: 'major',
+        datasource: 'npm',
+        packageName: 'next',
+        state: 'pr-open',
+        pullRequestUrl: null,
+        pullRequestNumber: 42,
+        closedAt: null,
+        closeType: null,
+        detectedAt: new Date(at),
+        packageFileCount: 1,
+        packageFiles: [],
+        sourceAdapterId: source,
+      },
+    ],
+    warnings: [],
+    complete: true,
+    authoritativeRepoList: true,
+  };
+
+  const loop = new SyncLoop(db, [stub(source, async () => result)], {
+    intervalMs: 1000,
+    stalledAfterMs: 7 * DAY,
+    enrichForge: async (r) => {
+      // The step the worker calls: mutate in place, return a warning.
+      const u = r.updates[0];
+      if (u) {
+        u.state = 'pr-merged';
+        u.closeType = 'merge';
+        u.closedAt = new Date('2026-09-01T10:00:00Z');
+      }
+      return ['one pull-request state was refreshed'];
+    },
+  });
+
+  const report = await loop.runCycle();
+  assert.equal(report.sources[0]?.outcome, 'partial', 'a forge warning makes the cycle partial');
+
+  const stored = db.all<{ state: string }>(sql`select state from "update"`);
+  assert.equal(stored[0]?.state, 'pr-merged', 'the enriched state is what persist wrote');
+  sqlite.close();
+});

@@ -89,12 +89,30 @@ interface RawStatus {
  */
 export class ForgeError extends Error {
   readonly status: number;
+  /**
+   * True only when the status is a spent rate limit, not any 403. GitHub answers
+   * 403 for a missing grant, SAML enforcement, and a token without the
+   * repository, none of which a caller should treat as "back off the whole
+   * pass". A caller reads this to tell a limit apart from a permission problem.
+   */
+  readonly rateLimited: boolean;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, rateLimited = false) {
     super(message);
     this.name = 'ForgeError';
     this.status = status;
+    this.rateLimited = rateLimited;
   }
+}
+
+/**
+ * Whether a failing response is a rate limit rather than a permission problem.
+ * A spent primary limit carries `x-ratelimit-remaining: 0`; a secondary limit
+ * carries `retry-after`; a permission 403 carries neither.
+ */
+function isRateLimit(response: Response): boolean {
+  if (response.status !== 403 && response.status !== 429) return false;
+  return response.headers.get('x-ratelimit-remaining') === '0' || response.headers.has('retry-after');
 }
 
 export function createGithubForge(config: GithubForgeConfig): GithubForge {
@@ -122,7 +140,7 @@ export function createGithubForge(config: GithubForgeConfig): GithubForge {
       const response = await get(`/repos/${enc(owner)}/${enc(repo)}/pulls/${number}`);
       if (response.status === 404) return null;
       if (!response.ok) {
-        throw new ForgeError(response.status, `GitHub responded ${response.status} for pull ${owner}/${repo}#${number}`);
+        throw new ForgeError(response.status, `GitHub responded ${response.status} for pull ${owner}/${repo}#${number}`, isRateLimit(response));
       }
       return toSnapshot((await response.json()) as RawPull);
     },
@@ -131,7 +149,7 @@ export function createGithubForge(config: GithubForgeConfig): GithubForge {
       const response = await get(`/repos/${enc(owner)}/${enc(repo)}/commits/${encPath(ref)}/status`);
       if (response.status === 404) return 'none';
       if (!response.ok) {
-        throw new ForgeError(response.status, `GitHub responded ${response.status} for status ${owner}/${repo}@${ref}`);
+        throw new ForgeError(response.status, `GitHub responded ${response.status} for status ${owner}/${repo}@${ref}`, isRateLimit(response));
       }
       return toCiStatus((await response.json()) as RawStatus);
     },

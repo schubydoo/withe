@@ -854,3 +854,53 @@ test('runLocation reports a null instant when the run has no timestamps', () => 
   assert.equal(location.at, null);
   sqlite.close();
 });
+
+test('a merged update is not pending and does not count, so it leaves the dashboard', () => {
+  const { sqlite, db } = fresh();
+  const result: CollectResult = {
+    repos: [makeRepo('acme/widget')],
+    runs: [makeRun('acme/widget', 'j1', 'success', '2026-09-01T00:00:00Z')],
+    updates: [
+      makeUpdate('acme/widget', { dependencyName: 'next', pullRequestNumber: 42, state: 'pr-open' }),
+      makeUpdate('acme/widget', {
+        dependencyName: 'tsx',
+        pullRequestNumber: 43,
+        state: 'pr-merged',
+        closeType: 'merge',
+        closedAt: new Date('2026-09-01T10:00:00Z'),
+      }),
+    ],
+    warnings: [], complete: true, authoritativeRepoList: true,
+  };
+  persist(db, SOURCE, 'ce', result, new Date('2026-09-01T00:00:00Z'));
+
+  const pending = pendingUpdates(db);
+  assert.deepEqual(pending.map((u) => u.dependencyName), ['next'], 'the merged update is gone, the open one stays');
+
+  const widget = repoHealth(db).find((r) => r.fullName === 'acme/widget');
+  assert.equal(widget?.pendingCount, 1, 'the count matches the visible rows, not the stored rows');
+  sqlite.close();
+});
+
+test('the close time and close type survive a round trip', () => {
+  const { sqlite, db } = fresh();
+  const closedAt = new Date('2026-09-02T09:30:00Z');
+  const result: CollectResult = {
+    repos: [makeRepo('acme/widget')],
+    runs: [makeRun('acme/widget', 'j1', 'success', '2026-09-02T00:00:00Z')],
+    updates: [
+      makeUpdate('acme/widget', { dependencyName: 'next', pullRequestNumber: 42, state: 'pr-closed', closeType: 'close', closedAt }),
+    ],
+    warnings: [], complete: true, authoritativeRepoList: true,
+  };
+  persist(db, SOURCE, 'ce', result, new Date('2026-09-02T00:00:00Z'));
+
+  const stored = db.all<{ state: string; closeType: string | null; closedAt: number | null }>(sql`
+    select state, close_type as closeType, closed_at as closedAt from "update"
+  `);
+  assert.equal(stored.length, 1);
+  assert.equal(stored[0]?.state, 'pr-closed');
+  assert.equal(stored[0]?.closeType, 'close');
+  assert.equal(stored[0]?.closedAt, Math.floor(closedAt.getTime() / 1000));
+  sqlite.close();
+});
