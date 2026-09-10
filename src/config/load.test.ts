@@ -100,6 +100,11 @@ test('a GitHub token turns the forge on with the documented defaults', () => {
   assert.deepEqual(config.forge?.authorLogins, ['renovate[bot]', 'renovate']);
 });
 
+test('a GitHub token keeps no trailing newline from a Docker secret', () => {
+  const config = loadConfig({ WITHE_CONFIG: NO_FILE, WITHE_GITHUB_TOKEN: 'ghp_x\n' }, HOST);
+  assert.equal(config.forge?.token, 'ghp_x');
+});
+
 test('the forge prefix, authors and Enterprise base can be overridden', () => {
   const config = loadConfig(
     {

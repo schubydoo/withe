@@ -69,6 +69,17 @@ test('the secrets come from the sources and the password', () => {
   assert.deepEqual(secretsFrom({ sources: [], auth: null }), []);
 });
 
+test('the GitHub token is a secret too, so it never reaches a log or a column', () => {
+  assert.deepEqual(
+    secretsFrom({
+      sources: [{ token: 'ce-token-value' }],
+      auth: null,
+      forge: { token: 'github-token-value' },
+    }),
+    ['ce-token-value', 'github-token-value'],
+  );
+});
+
 test('every console level is filtered, including a thrown Error', () => {
   const written: string[] = [];
   const fake = {

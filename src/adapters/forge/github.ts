@@ -128,7 +128,7 @@ export function createGithubForge(config: GithubForgeConfig): GithubForge {
     },
 
     async commitStatus(owner, repo, ref) {
-      const response = await get(`/repos/${enc(owner)}/${enc(repo)}/commits/${enc(ref)}/status`);
+      const response = await get(`/repos/${enc(owner)}/${enc(repo)}/commits/${encPath(ref)}/status`);
       if (response.status === 404) return 'none';
       if (!response.ok) {
         throw new ForgeError(response.status, `GitHub responded ${response.status} for status ${owner}/${repo}@${ref}`);
@@ -170,10 +170,17 @@ function toCiStatus(status: RawStatus): CiStatus {
 }
 
 function readHeadroom(headers: Headers): RateLimitHeadroom | null {
-  const limit = Number(headers.get('x-ratelimit-limit'));
-  const remaining = Number(headers.get('x-ratelimit-remaining'));
+  // `headers.get` returns null when absent, and Number(null) is 0, which is
+  // finite. Read each header as a string first, so a response missing the
+  // remaining count reads as unknown (null) rather than as full exhaustion (0).
+  const limitRaw = headers.get('x-ratelimit-limit');
+  const remainingRaw = headers.get('x-ratelimit-remaining');
+  if (limitRaw === null || remainingRaw === null) return null;
+  const limit = Number(limitRaw);
+  const remaining = Number(remainingRaw);
   if (!Number.isFinite(limit) || !Number.isFinite(remaining) || limit <= 0) return null;
-  const reset = Number(headers.get('x-ratelimit-reset'));
+  const resetRaw = headers.get('x-ratelimit-reset');
+  const reset = resetRaw === null ? Number.NaN : Number(resetRaw);
   return {
     limit,
     remaining,
@@ -190,6 +197,15 @@ function parseDate(value: string | null | undefined): Date | null {
 
 function enc(segment: string): string {
   return encodeURIComponent(segment);
+}
+
+/**
+ * Encode a ref that may hold slashes. A branch like `renovate/next-16.x` is a
+ * path of segments to GitHub, so each segment is encoded but the slashes stay.
+ * `encodeURIComponent` alone would escape the slash and change the route.
+ */
+function encPath(ref: string): string {
+  return ref.split('/').map(enc).join('/');
 }
 
 function stripTrailingSlash(url: string): string {

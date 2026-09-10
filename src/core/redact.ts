@@ -77,9 +77,11 @@ export function redact(text: string, secrets: readonly string[] = []): string {
 export function secretsFrom(config: {
   sources: readonly { token?: string }[];
   auth: { pass: string } | null;
+  forge?: { token: string } | null;
 }): string[] {
   const secrets = config.sources.map((source) => source.token).filter((t): t is string => !!t);
   if (config.auth) secrets.push(config.auth.pass);
+  if (config.forge) secrets.push(config.forge.token);
   return secrets;
 }
 

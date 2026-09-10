@@ -323,7 +323,10 @@ function forgeFrom(env: Env): ForgeConfig | null {
   const authorLogins = [...new Set([...DEFAULT_RENOVATE_AUTHORS, ...extra])];
 
   return {
-    token,
+    // Trimmed: a token from a Docker secret or `$(cat …)` keeps a trailing
+    // newline, and a bearer header ending in a newline is not a legal header
+    // value, so fetch throws instead of returning a clean 401.
+    token: token.trim(),
     apiBaseUrl: apiBaseUrl && apiBaseUrl !== '' ? apiBaseUrl : null,
     branchPrefix: prefix && prefix !== '' ? prefix : DEFAULT_RENOVATE_BRANCH_PREFIX,
     authorLogins,

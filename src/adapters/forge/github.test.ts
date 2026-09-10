@@ -120,6 +120,20 @@ test('a server error on the status endpoint throws', async () => {
   await assert.rejects(() => forge.commitStatus('o', 'r', 'sha'), ForgeError);
 });
 
+test('a branch ref keeps its slash in the path, not an escaped one', async () => {
+  const { calls } = stub(() => ({ body: { state: 'success', total_count: 1 } }));
+  const forge = createGithubForge({ token: 't' });
+  await forge.commitStatus('owner', 'repo', 'renovate/next-16.x');
+  assert.match(calls[0]?.url ?? '', /\/commits\/renovate\/next-16\.x\/status$/);
+});
+
+test('a response missing the remaining header reads as unknown, not full exhaustion', async () => {
+  stub(() => ({ body: { state: 'open' }, headers: { 'x-ratelimit-limit': '5000' } }));
+  const forge = createGithubForge({ token: 't' });
+  await forge.pullRequest('owner', 'repo', 7);
+  assert.equal(forge.headroom(), null, 'a missing remaining count must not read as remaining: 0');
+});
+
 test('headroom is null before the first call and reads the rate-limit headers after', async () => {
   stub(() => ({ body: { state: 'open' }, headers: RATE_HEADERS }));
   const forge = createGithubForge({ token: 't' });
