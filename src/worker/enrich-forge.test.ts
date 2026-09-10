@@ -171,6 +171,27 @@ test('a source that cannot say its platform is skipped when no host is named', a
   assert.deepEqual(warnings, []);
 });
 
+test('a GitHub Enterprise source is not read against public GitHub until the host is named', async () => {
+  // GHES reports platform 'github' with its own host, so the kind alone is not
+  // enough: the default api.github.com is wrong for it.
+  const ghes: SourceMeta = { ...GITHUB_META, webBaseUrl: 'https://ghe.example.com' };
+
+  const unnamed = fleet([update('acme/widget', { pullRequestNumber: 7 })], ghes);
+  const calls: string[] = [];
+  await enrichForgeState(unnamed, fakeForge({}, calls), RULE, false);
+  assert.deepEqual(calls, [], 'a non-github.com host with no named base is not read');
+  assert.equal(unnamed.updates[0]?.state, 'pr-open');
+
+  const named = fleet([update('acme/widget', { pullRequestNumber: 7 })], ghes);
+  await enrichForgeState(
+    named,
+    fakeForge({ 'acme/widget#7': { state: 'merged', closeType: 'merge', closedAt: new Date(), ...RENOVATE } }),
+    RULE,
+    true,
+  );
+  assert.equal(named.updates[0]?.state, 'pr-merged', 'naming the host with WITHE_GITHUB_API_URL enables GHES');
+});
+
 test('a source that cannot say its platform is enriched when the host is named', async () => {
   const result = fleet([update('acme/widget', { pullRequestNumber: 7 })], null);
   await enrichForgeState(

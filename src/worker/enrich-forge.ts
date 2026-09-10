@@ -36,15 +36,19 @@ export async function enrichForgeState(
   namedHost = false,
 ): Promise<string[]> {
   // Enrich only when this source's repositories live on the GitHub the token
-  // points at. A source that reports 'github' is clear. A source that cannot say
-  // its platform (a log directory, or a CE server with its status endpoint off)
-  // is enriched only when the operator named the host with WITHE_GITHUB_API_URL;
-  // without that, a private fleet's repository names must not reach public
-  // GitHub (NFR-9). A mismatch is a permanent configuration fact, so this is a
-  // silent skip, not a per-cycle warning that would pin a healthy source to
-  // "partial" with a remedy that does not apply.
+  // points at, matching the host rather than the forge kind. A reported
+  // non-GitHub forge is a permanent mismatch and is skipped. GitHub Enterprise
+  // Server also reports platform 'github', with its own host in webBaseUrl, so
+  // the default api.github.com is safe only for a public github.com source. A
+  // source on any other host (GitHub Enterprise, or one that names no host, like
+  // a log directory) is read only when the operator named the API base with
+  // WITHE_GITHUB_API_URL; without that, a private fleet's repository names and
+  // token must not reach public GitHub (NFR-9). A mismatch is a silent skip, not
+  // a per-cycle warning that would pin a healthy source to "partial".
   const platform = result.meta?.platform ?? null;
-  if (platform !== 'github' && !(platform === null && namedHost)) return [];
+  if (platform !== null && platform !== 'github') return [];
+  const publicGithub = platform === 'github' && hostOf(result.meta?.webBaseUrl) === 'github.com';
+  if (!publicGithub && !namedHost) return [];
 
   const warnings: string[] = [];
   const candidates = result.updates.filter(
@@ -95,4 +99,14 @@ export async function enrichForgeState(
   });
 
   return warnings;
+}
+
+/** The lowercase hostname of a browsable base URL, or null when it has none. */
+function hostOf(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
 }
