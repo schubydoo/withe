@@ -33,24 +33,24 @@ export async function enrichForgeState(
   result: CollectResult,
   forge: GithubForge,
   rule: RenovatePrRule,
+  namedHost = false,
 ): Promise<string[]> {
+  // Enrich only when this source's repositories live on the GitHub the token
+  // points at. A source that reports 'github' is clear. A source that cannot say
+  // its platform (a log directory, or a CE server with its status endpoint off)
+  // is enriched only when the operator named the host with WITHE_GITHUB_API_URL;
+  // without that, a private fleet's repository names must not reach public
+  // GitHub (NFR-9). A mismatch is a permanent configuration fact, so this is a
+  // silent skip, not a per-cycle warning that would pin a healthy source to
+  // "partial" with a remedy that does not apply.
+  const platform = result.meta?.platform ?? null;
+  if (platform !== 'github' && !(platform === null && namedHost)) return [];
+
   const warnings: string[] = [];
   const candidates = result.updates.filter(
     (u) => u.state === 'pr-open' && u.pullRequestNumber !== null,
   );
   if (candidates.length === 0) return warnings;
-
-  // Ask the GitHub the token points at only about repositories the source says
-  // live on GitHub. A source that reports another forge, or none, keeps the
-  // log's state, so a GitHub Enterprise token set without WITHE_GITHUB_API_URL
-  // does not send private repository names to public GitHub (NFR-9).
-  if (result.meta?.platform !== 'github') {
-    warnings.push(
-      'Skipped reading live pull-request state: this source does not report a GitHub platform. ' +
-        'Set WITHE_GITHUB_API_URL for a GitHub Enterprise Server install.',
-    );
-    return warnings;
-  }
 
   const repoById = new Map(result.repos.map((repo) => [repo.id, repo]));
 

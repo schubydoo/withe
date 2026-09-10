@@ -82,7 +82,7 @@ function fakeForge(
   };
 }
 
-function fleet(updates: Update[], meta: SourceMeta | undefined = GITHUB_META): CollectResult {
+function fleet(updates: Update[], meta: SourceMeta | null = GITHUB_META): CollectResult {
   const names = [...new Set(updates.map((u) => u.repoId.slice(2)))];
   return {
     repos: names.map(repo),
@@ -153,14 +153,33 @@ test('an update with no pull request is never probed', async () => {
   assert.equal(result.updates[0]?.state, 'detected');
 });
 
-test('a source that does not report GitHub is skipped, and nothing is read', async () => {
+test('a source that reports another forge is skipped silently, with no read and no warning', async () => {
   const result = fleet([update('acme/widget', { pullRequestNumber: 7 })], { ...GITHUB_META, platform: 'gitlab' });
   const calls: string[] = [];
-  const warnings = await enrichForgeState(result, fakeForge({}, calls), RULE);
-  assert.deepEqual(calls, [], 'the token points at GitHub, so a non-GitHub source is not read');
+  const warnings = await enrichForgeState(result, fakeForge({}, calls), RULE, true);
+  assert.deepEqual(calls, [], 'a non-GitHub source is not read');
   assert.equal(result.updates[0]?.state, 'pr-open');
-  assert.equal(warnings.length, 1);
-  assert.match(warnings[0] ?? '', /GitHub Enterprise Server|does not report a GitHub platform/);
+  assert.deepEqual(warnings, [], 'a permanent config mismatch is not a per-cycle degradation');
+});
+
+test('a source that cannot say its platform is skipped when no host is named', async () => {
+  const result = fleet([update('acme/widget', { pullRequestNumber: 7 })], null);
+  const calls: string[] = [];
+  const warnings = await enrichForgeState(result, fakeForge({}, calls), RULE, false);
+  assert.deepEqual(calls, [], 'without a named host an unknown-forge source is not read');
+  assert.equal(result.updates[0]?.state, 'pr-open');
+  assert.deepEqual(warnings, []);
+});
+
+test('a source that cannot say its platform is enriched when the host is named', async () => {
+  const result = fleet([update('acme/widget', { pullRequestNumber: 7 })], null);
+  await enrichForgeState(
+    result,
+    fakeForge({ 'acme/widget#7': { state: 'merged', closeType: 'merge', closedAt: new Date(), ...RENOVATE } }),
+    RULE,
+    true,
+  );
+  assert.equal(result.updates[0]?.state, 'pr-merged', 'a named host lets a log-directory GitHub fleet refresh');
 });
 
 test('a permission 403 warns about one repository and does not stop the others', async () => {

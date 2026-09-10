@@ -19,7 +19,7 @@ no breaking change.
 | `WITHE_TLS_CERT` / `WITHE_TLS_KEY` | unset | Enable the TLS proxy — see [Exposure](exposure.md) |
 | `WITHE_ACKNOWLEDGE_EXPOSURE` | unset | Silence the no-password warning when access is controlled in front of Withe — see [Exposure](exposure.md). Hides the warning; adds no protection |
 | `WITHE_GITHUB_TOKEN` | unset | Turn on reading live pull-request state from GitHub, so a merged Renovate pull request leaves the dashboard within one sync. Use a fine-grained token with read-only access to pull requests and commit statuses. Withe never stores it |
-| `WITHE_GITHUB_API_URL` | github.com | A GitHub Enterprise Server API base, for example `https://ghe.example/api/v3` |
+| `WITHE_GITHUB_API_URL` | github.com | A GitHub Enterprise Server API base, for example `https://ghe.example/api/v3`. Also set this for a jsonlog source, which cannot report its forge, to let Withe read live state for it |
 | `WITHE_RENOVATE_BRANCH_PREFIX` | `renovate/` | The Renovate branch prefix that Renovate writes |
 | `WITHE_RENOVATE_PR_AUTHORS` | `renovate[bot]`, `renovate` | Extra pull-request author logins that count as Renovate, comma separated |
 | `WITHE_DB_PATH` | `/data/withe.db` | Database location |

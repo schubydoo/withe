@@ -89,6 +89,10 @@ const forge = config.forge
 const forgeRule = config.forge
   ? { branchPrefix: config.forge.branchPrefix, authorLogins: config.forge.authorLogins }
   : null;
+// The operator named the GitHub host when they set WITHE_GITHUB_API_URL. A
+// source that does not report its platform is enriched only then, so a log
+// directory watching a private fleet does not reach public GitHub by default.
+const forgeNamedHost = config.forge?.apiBaseUrl != null;
 
 const loop = new SyncLoop(db, toSync, {
   intervalMs: config.syncIntervalSeconds * 1000,
@@ -97,7 +101,7 @@ const loop = new SyncLoop(db, toSync, {
   // Unset keeps every run forever; set, it prunes at the end of each cycle.
   ...(config.retentionDays !== null ? { retentionMs: config.retentionDays * DAY_MS } : {}),
   ...(forge && forgeRule
-    ? { enrichForge: (result) => enrichForgeState(result, forge, forgeRule) }
+    ? { enrichForge: (result) => enrichForgeState(result, forge, forgeRule, forgeNamedHost) }
     : {}),
 });
 
