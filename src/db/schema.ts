@@ -1,5 +1,5 @@
 /**
- * The store. One SQLite file, five tables, every domain row tagged with the
+ * The store. One SQLite file, six tables, every domain row tagged with the
  * source that produced it.
  */
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -168,4 +168,22 @@ export const syncStatus = sqliteTable('sync_status', {
   error: text('error'),
   repoCount: integer('repo_count'),
   runCount: integer('run_count'),
+});
+
+/**
+ * The forge API rate limit Withe last saw, for the health page (F-10).
+ *
+ * A single row (id is always 1): the limit is the GitHub token's, one per
+ * install, not per source or per org, so there is nothing to key it by. The
+ * worker overwrites it each cycle it reads the forge; it is absent until the
+ * first read.
+ */
+export const forgeRateLimit = sqliteTable('forge_rate_limit', {
+  id: integer('id').primaryKey(),
+  remaining: integer('remaining').notNull(),
+  limit: integer('limit').notNull(),
+  /** When the window resets. Null when the forge did not say. */
+  resetAt: integer('reset_at', { mode: 'timestamp' }),
+  /** When Withe last read this from the forge. */
+  checkedAt: integer('checked_at', { mode: 'timestamp' }).notNull(),
 });

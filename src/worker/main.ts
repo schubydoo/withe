@@ -13,6 +13,7 @@ import type { SourceAdapter } from '../adapters/types.ts';
 import { ConfigError, loadConfig } from '../config/load.ts';
 import { installRedaction, secretsFrom } from '../core/redact.ts';
 import { openDatabase } from '../db/client.ts';
+import { recordForgeStatus } from '../db/persist.ts';
 import { enrichForgeState } from './enrich-forge.ts';
 import { SyncLoop } from './sync.ts';
 
@@ -101,7 +102,18 @@ const loop = new SyncLoop(db, toSync, {
   // Unset keeps every run forever; set, it prunes at the end of each cycle.
   ...(config.retentionDays !== null ? { retentionMs: config.retentionDays * DAY_MS } : {}),
   ...(forge && forgeRule
-    ? { enrichForge: (result) => enrichForgeState(result, forge, forgeRule, forgeNamedHost) }
+    ? {
+        enrichForge: async (result) => {
+          const warnings = await enrichForgeState(result, forge, forgeRule, forgeNamedHost);
+          // Record the rate-limit headroom the forge reported this cycle, for
+          // the health page (F-10). It is install-wide, so it is written here
+          // rather than per source, and only once the forge has actually
+          // answered (headroom is null before the first read).
+          const headroom = forge.headroom();
+          if (headroom) recordForgeStatus(db, headroom, new Date());
+          return warnings;
+        },
+      }
     : {}),
 });
 

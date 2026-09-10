@@ -8,8 +8,9 @@ import { existsSync, statSync } from 'node:fs';
 
 import { loadConfig } from '../../config/load.ts';
 import { assess, STALE_AFTER_INTERVALS } from '../../core/health.ts';
+import { headroomPercent, isLow } from '../../core/rate-limit.ts';
 import { openDatabase } from '../../db/client.ts';
-import { migrationState, sourceHealth, sourceSystems, type MigrationState, type SourceHealth, type SourceSystem } from '../../db/queries.ts';
+import { forgeRateLimit, migrationState, sourceHealth, sourceSystems, type ForgeRateLimit, type MigrationState, type SourceHealth, type SourceSystem } from '../../db/queries.ts';
 import { ago } from '../format.ts';
 import { describeAge } from '../staleness.ts';
 import { systemPanel } from './system-panel.ts';
@@ -21,6 +22,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 interface Report {
   sources: SourceHealth[];
   systems: SourceSystem[];
+  forge: ForgeRateLimit | null;
   migrations: MigrationState;
   databaseBytes: number | null;
   intervalSeconds: number;
@@ -29,7 +31,7 @@ interface Report {
 function read(): Report {
   const config = loadConfig();
   if (!existsSync(config.dbPath)) {
-    return { sources: [], systems: [], migrations: { applied: 0, newestAt: null }, databaseBytes: null, intervalSeconds: config.syncIntervalSeconds };
+    return { sources: [], systems: [], forge: null, migrations: { applied: 0, newestAt: null }, databaseBytes: null, intervalSeconds: config.syncIntervalSeconds };
   }
 
   const { sqlite, db } = openDatabase(config.dbPath);
@@ -37,6 +39,7 @@ function read(): Report {
     return {
       sources: sourceHealth(db, new Date(Date.now() - DAY_MS)),
       systems: sourceSystems(db),
+      forge: forgeRateLimit(db),
       migrations: migrationState(db),
       databaseBytes: statSync(config.dbPath).size,
       intervalSeconds: config.syncIntervalSeconds,
@@ -44,6 +47,16 @@ function read(): Report {
   } finally {
     sqlite.close();
   }
+}
+
+/** "in 42 minutes", or "—" when there is no future reset to name. */
+function until(when: Date | null): string {
+  if (!when) return '—';
+  const minutes = Math.round((when.getTime() - Date.now()) / 60_000);
+  if (minutes <= 0) return 'now';
+  if (minutes < 60) return `in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
+  const hours = Math.round(minutes / 60);
+  return `in ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
 }
 
 function size(bytes: number | null): string {
@@ -59,7 +72,7 @@ function duration(seconds: number | null): string {
 }
 
 export default function HealthPage() {
-  const { sources, systems, migrations, databaseBytes, intervalSeconds } = read();
+  const { sources, systems, forge, migrations, databaseBytes, intervalSeconds } = read();
   const health = assess(sources, intervalSeconds);
   // Sources with at least one successful sync: only those can be said to have
   // "reported nothing" — the rest simply have not reported at all.
@@ -208,6 +221,41 @@ export default function HealthPage() {
               </div>
             );
           })}
+        </section>
+      )}
+
+      {/* Only when a forge is configured and has answered at least once. The
+          limit is the GitHub token's, shared with Renovate, so it is install-wide
+          rather than per source. */}
+      {forge && (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">Forge rate limit</h2>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            The GitHub API rate limit Renovate and Withe share. Withe reads pull-request state within
+            it, so a spent limit leaves merged pull requests on screen until it resets.
+          </p>
+          {isLow(forge.remaining, forge.limit) && (
+            // NFR-18: the word "Low" carries the state; the colour repeats it.
+            <p className="mt-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+              Low: {forge.remaining} of {forge.limit} requests left
+              {headroomPercent(forge.remaining, forge.limit) !== null && ` (${headroomPercent(forge.remaining, forge.limit)}%)`}
+              , resetting {until(forge.resetAt)}. Withe backs off before the limit runs out; while it is
+              spent, pull-request state is not refreshed.
+            </p>
+          )}
+          <dl className="mt-2 grid grid-cols-[12rem_1fr] gap-y-1 text-sm">
+            <dt className="text-neutral-500 dark:text-neutral-400">Requests left</dt>
+            <dd className="tabular-nums">
+              {forge.remaining} of {forge.limit}
+              {headroomPercent(forge.remaining, forge.limit) !== null && (
+                <span className="ml-1 text-neutral-500 dark:text-neutral-400">({headroomPercent(forge.remaining, forge.limit)}%)</span>
+              )}
+            </dd>
+            <dt className="text-neutral-500 dark:text-neutral-400">Resets</dt>
+            <dd>{until(forge.resetAt)}</dd>
+            <dt className="text-neutral-500 dark:text-neutral-400">Checked</dt>
+            <dd>{ago(forge.checkedAt, 'never')}</dd>
+          </dl>
         </section>
       )}
 

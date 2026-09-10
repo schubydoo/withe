@@ -11,12 +11,37 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { CollectResult } from '../adapters/types.ts';
 import type { Db } from './client.ts';
-import { renovateRun, repo, source, syncStatus, update } from './schema.ts';
+import { forgeRateLimit, renovateRun, repo, source, syncStatus, update } from './schema.ts';
 
 export interface PersistCounts {
   repos: number;
   runs: number;
   updates: number;
+}
+
+/** The forge rate-limit headroom Withe last read from the forge. */
+export interface ForgeHeadroom {
+  remaining: number;
+  limit: number;
+  resetAt: Date | null;
+}
+
+/**
+ * Overwrite the one forge rate-limit row with the latest reading. Called once a
+ * cycle when a forge is configured. The row is install-wide, not per source, so
+ * it has a fixed id and the last read wins.
+ */
+export function recordForgeStatus(db: Db, headroom: ForgeHeadroom, checkedAt: Date): void {
+  const set = {
+    remaining: headroom.remaining,
+    limit: headroom.limit,
+    resetAt: headroom.resetAt,
+    checkedAt,
+  };
+  db.insert(forgeRateLimit)
+    .values({ id: 1, ...set })
+    .onConflictDoUpdate({ target: forgeRateLimit.id, set })
+    .run();
 }
 
 export function persist(

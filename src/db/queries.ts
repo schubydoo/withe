@@ -434,6 +434,31 @@ export function forges(db: Db): Map<string, ForgeInfo> {
   return new Map(rows.map((r) => [r.id, { platform: r.platform, webBaseUrl: r.webBaseUrl }]));
 }
 
+export interface ForgeRateLimit {
+  remaining: number;
+  limit: number;
+  resetAt: Date | null;
+  checkedAt: Date;
+}
+
+/**
+ * The forge rate-limit headroom Withe last read, or null before the first read
+ * (F-10). One row, install-wide: the limit is the GitHub token's, not a source's.
+ */
+export function forgeRateLimit(db: Db): ForgeRateLimit | null {
+  const rows = db.all<{ remaining: number; limit: number; resetAt: number | null; checkedAt: number }>(sql`
+    select remaining, "limit", reset_at as resetAt, checked_at as checkedAt from forge_rate_limit where id = 1
+  `);
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    remaining: row.remaining,
+    limit: row.limit,
+    resetAt: row.resetAt === null ? null : new Date(row.resetAt * 1000),
+    checkedAt: new Date(row.checkedAt * 1000),
+  };
+}
+
 export interface SourceSystem {
   sourceAdapterId: string;
   kind: string;
