@@ -22,6 +22,7 @@ import { existsSync } from 'node:fs';
 export const PLANTED = {
   token: 'planted-ce-token-8f21c4a97b3e',
   authPass: 'planted-auth-password-4d7e',
+  githubToken: 'planted-github-token-2b6a9f',
 };
 
 export interface Leak {
@@ -63,7 +64,7 @@ async function main(): Promise<void> {
     for (const route of routes) {
       const response = await fetch(`http://127.0.0.1:${PORT}${route}`, { redirect: 'follow' });
       const body = await response.text();
-      leaks.push(...checkBody(route, body, [PLANTED.token, PLANTED.authPass]));
+      leaks.push(...checkBody(route, body, [PLANTED.token, PLANTED.authPass, PLANTED.githubToken]));
       console.log(`payloads: ${route} → ${response.status}, ${body.length} bytes`);
     }
   } finally {
@@ -91,6 +92,10 @@ function start(database: string): ChildProcess {
       WITHE_DB_PATH: database,
       WITHE_CE_URL: 'http://127.0.0.1:1',
       WITHE_CE_TOKEN: PLANTED.token,
+      // The GitHub token turns the forge on, so a page that ever puts
+      // config.forge into a client prop would leak it. Plant it so the scan
+      // has a positive to catch, not only the CE token.
+      WITHE_GITHUB_TOKEN: PLANTED.githubToken,
       // Auth stays off. With it on every route answers 401 and the scan reads
       // the same eleven words each time.
       WITHE_AUTH_USER: '',
