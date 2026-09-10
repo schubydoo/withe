@@ -11,19 +11,30 @@
 import type { UpdateType } from '../../core/model.ts';
 import type { PendingUpdateRow } from '../../db/queries.ts';
 
+/** Every type the view can filter by: an UpdateType except lock-file-maintenance. */
+type FilterableType = Exclude<UpdateType, 'lock-file-maintenance'>;
+
 /**
- * The update types the view offers, most decisive first. `lock-file-maintenance`
- * is not here: `pendingUpdates` excludes it because it names no dependency, so it
- * never reaches this page.
+ * The filterable types and the order the control offers them, most decisive
+ * first. Keyed by every filterable type, so adding a member to `UpdateType` is a
+ * compile error here until this control offers it — the same guard the
+ * repo-state filter uses, and no test over hand-written rows can catch it.
+ * `lock-file-maintenance` is excluded in the type, not only a comment:
+ * `pendingUpdates` drops it because it names no dependency, so it never reaches
+ * this page.
  */
-export const UPDATE_TYPES: readonly UpdateType[] = [
-  'security',
-  'major',
-  'multiple-major',
-  'minor',
-  'patch',
-  'digest',
-];
+const ORDER: Record<FilterableType, number> = {
+  security: 0,
+  major: 1,
+  'multiple-major': 2,
+  minor: 3,
+  patch: 4,
+  digest: 5,
+};
+
+export const UPDATE_TYPES: readonly FilterableType[] = (Object.keys(ORDER) as FilterableType[]).sort(
+  (a, b) => ORDER[a] - ORDER[b],
+);
 
 export interface UpdateFilter {
   /** Null means every type. */

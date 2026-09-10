@@ -7,7 +7,7 @@ import { collapseBy } from '../../core/group.ts';
 import { dependencyLink, pullRequestUrl, repoUrl } from '../../core/links.ts';
 import { openDatabase } from '../../db/client.ts';
 import { forges, pendingUpdates, type ForgeInfo, type PendingUpdateRow } from '../../db/queries.ts';
-import { foldUpdate } from '../collapse.ts';
+import { foldUpdate, updateIdentity } from '../collapse.ts';
 import {
   filterByType,
   groupByDependency,
@@ -33,13 +33,6 @@ function read(): { updates: PendingUpdateRow[]; forge: Map<string, ForgeInfo>; c
   } finally {
     sqlite.close();
   }
-}
-
-// The per-repository identity to fold copies on: the dependency and its version
-// pair name the update; the source that reported it does not. A JSON tuple is
-// the key so no field value can collide with a separator.
-function updateIdentity(u: PendingUpdateRow): string {
-  return JSON.stringify([u.repoFullName, u.dependencyName, u.currentVersion, u.targetVersion, u.updateType]);
 }
 
 function info(forge: Map<string, ForgeInfo>, row: { sourceAdapterId: string }): ForgeInfo {
