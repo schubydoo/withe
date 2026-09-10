@@ -3,11 +3,19 @@ import { test } from 'node:test';
 
 import { ForgeError, type GithubForge, type PullRequestSnapshot } from '../adapters/forge/github.ts';
 import type { RenovatePrRule } from '../adapters/forge/renovate-pr.ts';
-import type { CollectResult } from '../adapters/types.ts';
+import type { CollectResult, SourceMeta } from '../adapters/types.ts';
 import type { Repo, Update } from '../core/model.ts';
 import { enrichForgeState } from './enrich-forge.ts';
 
 const RULE: RenovatePrRule = { branchPrefix: 'renovate/', authorLogins: ['renovate[bot]', 'renovate'] };
+
+const GITHUB_META: SourceMeta = {
+  platform: 'github',
+  webBaseUrl: 'https://github.com',
+  scheduleCron: null,
+  scheduleLastAt: null,
+  system: null,
+};
 
 function repo(fullName: string): Repo {
   const [org = '', name = ''] = fullName.split('/');
@@ -50,10 +58,17 @@ function update(fullName: string, over: Partial<Update>): Update {
 
 const RENOVATE = { headRef: 'renovate/dep-1.x', authorLogin: 'renovate[bot]' } as const;
 
-/** A forge that answers each `owner/repo#number` from a table. */
-function fakeForge(replies: Record<string, PullRequestSnapshot | null | Error>): GithubForge {
+/**
+ * A forge that answers each `owner/repo#number` from a table and records every
+ * read, so a test can assert what was and was not probed.
+ */
+function fakeForge(
+  replies: Record<string, PullRequestSnapshot | null | Error>,
+  calls: string[] = [],
+): GithubForge {
   return {
     async pullRequest(owner, name, number) {
+      calls.push(`${owner}/${name}#${number}`);
       const value = replies[`${owner}/${name}#${number}`];
       if (value instanceof Error) throw value;
       return value ?? null;
@@ -67,9 +82,17 @@ function fakeForge(replies: Record<string, PullRequestSnapshot | null | Error>):
   };
 }
 
-function fleet(updates: Update[]): CollectResult {
+function fleet(updates: Update[], meta: SourceMeta | undefined = GITHUB_META): CollectResult {
   const names = [...new Set(updates.map((u) => u.repoId.slice(2)))];
-  return { repos: names.map(repo), runs: [], updates, warnings: [], complete: true, authoritativeRepoList: true };
+  return {
+    repos: names.map(repo),
+    runs: [],
+    updates,
+    warnings: [],
+    complete: true,
+    authoritativeRepoList: true,
+    ...(meta ? { meta } : {}),
+  };
 }
 
 test('a merged pull request marks the update merged', async () => {
@@ -124,41 +147,57 @@ test('a gone pull request (404) keeps the log state', async () => {
 
 test('an update with no pull request is never probed', async () => {
   const result = fleet([update('acme/widget', { state: 'detected', pullRequestNumber: null })]);
-  await enrichForgeState(
-    result,
-    // Any read would be a bug, so answer with a throw that would surface as a warning.
-    fakeForge({}),
-    RULE,
-  );
+  const calls: string[] = [];
+  await enrichForgeState(result, fakeForge({}, calls), RULE);
+  assert.deepEqual(calls, [], 'a detected update carries no pull request, so nothing is read');
   assert.equal(result.updates[0]?.state, 'detected');
 });
 
-test('a forge error on one pull request is a warning, not a crash', async () => {
-  const result = fleet([update('acme/widget', { pullRequestNumber: 7 })]);
-  const warnings = await enrichForgeState(
-    result,
-    fakeForge({ 'acme/widget#7': new ForgeError(500, 'boom') }),
-    RULE,
-  );
+test('a source that does not report GitHub is skipped, and nothing is read', async () => {
+  const result = fleet([update('acme/widget', { pullRequestNumber: 7 })], { ...GITHUB_META, platform: 'gitlab' });
+  const calls: string[] = [];
+  const warnings = await enrichForgeState(result, fakeForge({}, calls), RULE);
+  assert.deepEqual(calls, [], 'the token points at GitHub, so a non-GitHub source is not read');
   assert.equal(result.updates[0]?.state, 'pr-open');
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0] ?? '', /acme\/widget#7/);
+  assert.match(warnings[0] ?? '', /GitHub Enterprise Server|does not report a GitHub platform/);
 });
 
-test('a rate-limit error stops further reads and warns once', async () => {
+test('a permission 403 warns about one repository and does not stop the others', async () => {
   const result = fleet([
-    update('acme/a', { pullRequestNumber: 1 }),
-    update('acme/b', { pullRequestNumber: 2 }),
+    update('acme/denied', { pullRequestNumber: 1 }),
+    update('acme/ok', { pullRequestNumber: 2 }),
   ]);
   const warnings = await enrichForgeState(
     result,
     fakeForge({
-      'acme/a#1': new ForgeError(403, 'rate limit'),
-      'acme/b#2': new ForgeError(403, 'rate limit'),
+      // rateLimited defaults to false: a missing grant, not a spent limit.
+      'acme/denied#1': new ForgeError(403, 'Resource not accessible by integration'),
+      'acme/ok#2': { state: 'merged', closeType: 'merge', closedAt: new Date(), ...RENOVATE },
     }),
     RULE,
   );
-  assert.equal(warnings.length, 1, 'one warning for the whole cycle, not one per pull request');
+  const denied = result.updates.find((u) => u.repoId === 's:acme/denied');
+  const ok = result.updates.find((u) => u.repoId === 's:acme/ok');
+  assert.equal(denied?.state, 'pr-open', 'the repository Withe cannot read keeps the log state');
+  assert.equal(ok?.state, 'pr-merged', 'a later repository is still refreshed');
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0] ?? '', /acme\/denied#1/);
+  assert.doesNotMatch(warnings[0] ?? '', /rate limit/i);
+});
+
+test('a rate-limit reply stops further reads and warns once', async () => {
+  // More candidates than CONCURRENCY (6), so a second wave exists to skip.
+  const updates = Array.from({ length: 8 }, (_, i) => update(`acme/r${i}`, { pullRequestNumber: i + 1 }));
+  const replies: Record<string, Error> = {};
+  for (let i = 0; i < 8; i += 1) replies[`acme/r${i}#${i + 1}`] = new ForgeError(403, 'rate limit', true);
+
+  const result = fleet(updates);
+  const calls: string[] = [];
+  const warnings = await enrichForgeState(result, fakeForge(replies, calls), RULE);
+
+  assert.equal(warnings.length, 1, 'one warning for the whole pass, not one per pull request');
   assert.match(warnings[0] ?? '', /rate limit/i);
   assert.ok(result.updates.every((u) => u.state === 'pr-open'));
+  assert.ok(calls.length < updates.length, 'the pass stopped early rather than reading every candidate');
 });

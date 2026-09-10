@@ -12,10 +12,10 @@
  * runs, so it is not a source. It composes the GitHub client with the model that
  * an adapter already returned.
  */
-import { mapWithLimit } from '../adapters/ce/limit.ts';
 import { ForgeError, type GithubForge } from '../adapters/forge/github.ts';
 import { isRenovatePr, type RenovatePrRule } from '../adapters/forge/renovate-pr.ts';
 import type { CollectResult } from '../adapters/types.ts';
+import { mapWithLimit } from '../core/concurrency.ts';
 
 /**
  * How many pull requests to read at once. GitHub allows far more, but a modest
@@ -35,14 +35,29 @@ export async function enrichForgeState(
   rule: RenovatePrRule,
 ): Promise<string[]> {
   const warnings: string[] = [];
-  const repoById = new Map(result.repos.map((repo) => [repo.id, repo]));
   const candidates = result.updates.filter(
     (u) => u.state === 'pr-open' && u.pullRequestNumber !== null,
   );
+  if (candidates.length === 0) return warnings;
 
-  // Once GitHub reports the limit is spent, stop rather than pile up failures.
-  // The states left unrefreshed keep the log's value, which is stale but not
-  // wrong, and the next cycle tries again.
+  // Ask the GitHub the token points at only about repositories the source says
+  // live on GitHub. A source that reports another forge, or none, keeps the
+  // log's state, so a GitHub Enterprise token set without WITHE_GITHUB_API_URL
+  // does not send private repository names to public GitHub (NFR-9).
+  if (result.meta?.platform !== 'github') {
+    warnings.push(
+      'Skipped reading live pull-request state: this source does not report a GitHub platform. ' +
+        'Set WITHE_GITHUB_API_URL for a GitHub Enterprise Server install.',
+    );
+    return warnings;
+  }
+
+  const repoById = new Map(result.repos.map((repo) => [repo.id, repo]));
+
+  // A spent rate limit stops the pass: further reads would only add failures,
+  // and the states left alone keep the log's value until the next cycle. A 403
+  // that is not a limit (a missing grant) is one repository's problem, so it
+  // falls through to a per-repository warning and the pass continues.
   let rateLimited = false;
 
   await mapWithLimit(candidates, CONCURRENCY, async (u) => {
@@ -65,12 +80,10 @@ export async function enrichForgeState(
       u.closedAt = snapshot.closedAt;
       u.closeType = snapshot.closeType;
     } catch (cause) {
-      if (cause instanceof ForgeError && (cause.status === 403 || cause.status === 429)) {
+      if (cause instanceof ForgeError && cause.rateLimited) {
         if (!rateLimited) {
           rateLimited = true;
-          warnings.push(
-            'GitHub rate limit reached; some pull-request states were not refreshed this cycle.',
-          );
+          warnings.push('GitHub rate limit reached; some pull-request states were not refreshed.');
         }
         return;
       }

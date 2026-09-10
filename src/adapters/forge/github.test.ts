@@ -79,6 +79,36 @@ test('a server error throws a ForgeError carrying the status', async () => {
   });
 });
 
+test('a 403 with the remaining count spent is marked a rate limit', async () => {
+  stub(() => ({ status: 403, body: {}, headers: { 'x-ratelimit-remaining': '0' } }));
+  const forge = createGithubForge({ token: 't' });
+  await assert.rejects(() => forge.pullRequest('o', 'r', 1), (error: unknown) => {
+    assert.ok(error instanceof ForgeError);
+    assert.equal(error.rateLimited, true);
+    return true;
+  });
+});
+
+test('a 403 carrying retry-after is marked a rate limit', async () => {
+  stub(() => ({ status: 403, body: {}, headers: { 'retry-after': '60' } }));
+  const forge = createGithubForge({ token: 't' });
+  await assert.rejects(() => forge.pullRequest('o', 'r', 1), (error: unknown) => {
+    assert.ok(error instanceof ForgeError);
+    assert.equal(error.rateLimited, true);
+    return true;
+  });
+});
+
+test('a 403 with neither header is a permission problem, not a rate limit', async () => {
+  stub(() => ({ status: 403, body: { message: 'Resource not accessible by integration' } }));
+  const forge = createGithubForge({ token: 't' });
+  await assert.rejects(() => forge.pullRequest('o', 'r', 1), (error: unknown) => {
+    assert.ok(error instanceof ForgeError);
+    assert.equal(error.rateLimited, false);
+    return true;
+  });
+});
+
 test('the request carries the bearer token and the API version', async () => {
   const { calls } = stub(() => ({ body: { state: 'open' } }));
   const forge = createGithubForge({ token: 'secret-token' });

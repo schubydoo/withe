@@ -170,7 +170,12 @@ export class SyncLoop {
       if (this.options.enrichForge) {
         try {
           const forgeWarnings = await this.options.enrichForge(result);
-          for (const warning of forgeWarnings) result.warnings.push(warning);
+          // Redacted like the catch below and like every other warning: these
+          // land in sync_status.error through persist, so a credential must not
+          // ride an upstream message into a column (NFR-8).
+          for (const warning of forgeWarnings) {
+            result.warnings.push(redact(warning, this.options.secrets ?? []));
+          }
         } catch (cause) {
           result.warnings.push(
             `forge enrichment failed: ${redact(
