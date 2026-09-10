@@ -101,14 +101,23 @@ async function timePage(path: string): Promise<Stats> {
   return stats(samples);
 }
 
-async function measurePage(label: string, repoCount: number, budget: number): Promise<string> {
+async function measurePages(
+  label: string,
+  repoCount: number,
+  budget: number,
+  paths: readonly string[],
+): Promise<string[]> {
   const dbPath = join(work, `perf${repoCount}.db`);
   generate(dbPath, repoCount, NOW);
   const server = startServer(dbPath);
   try {
     await waitForServer();
-    const s = await timePage('/');
-    return line(`${label} landing page, ${repoCount} repos`, s, budget);
+    const lines: string[] = [];
+    for (const p of paths) {
+      const where = p === '/' ? 'landing page' : p;
+      lines.push(line(`${label} ${where}, ${repoCount} repos`, await timePage(p), budget));
+    }
+    return lines;
   } finally {
     server.kill('SIGTERM');
     await once(server, 'exit');
@@ -163,8 +172,10 @@ function measureSyncWrite(): string {
 
 const results: string[] = [];
 try {
-  results.push(await measurePage('NFR-1', 50, 400));
-  results.push(await measurePage('NFR-2', 500, 1200));
+  results.push(...(await measurePages('NFR-1', 50, 400, ['/'])));
+  // NFR-2 covers the landing page and the cross-repo pending-updates view, both
+  // at 500 repos against the same dataset and one server boot (Task 5.5).
+  results.push(...(await measurePages('NFR-2', 500, 1200, ['/', '/updates'])));
   results.push(measureLogRender());
   results.push(measureSyncWrite());
 } finally {

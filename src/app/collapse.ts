@@ -12,6 +12,18 @@
  */
 import type { ForgeInfo, LockFileRefreshRow, PendingUpdateRow } from '../db/queries.ts';
 
+/**
+ * The identity a repository's per-source copies of one update share, so
+ * collapseBy folds them to a single row before either the dashboard or the
+ * /updates page counts them. The dependency and its version pair name the
+ * update; the source that reported it does not. A JSON tuple is the key so no
+ * field value can collide with a separator, and both pages import this one
+ * function so they cannot drift into folding differently.
+ */
+export function updateIdentity(u: PendingUpdateRow): string {
+  return JSON.stringify([u.repoFullName, u.dependencyName, u.currentVersion, u.targetVersion, u.updateType]);
+}
+
 /** A copy whose source reports a forge, so the page can build links from it; the
  * first copy otherwise (all-null links either way). */
 function forgeBearing<T extends { sourceAdapterId: string }>(group: T[], forge: Map<string, ForgeInfo>): T {

@@ -18,7 +18,7 @@ import {
   type PendingUpdateRow,
   type TriageRow,
 } from '../db/queries.ts';
-import { foldLock, foldUpdate } from './collapse.ts';
+import { foldLock, foldUpdate, updateIdentity } from './collapse.ts';
 import { soonestNextRun } from './next-run.ts';
 import { NextRun } from './next-run.tsx';
 
@@ -61,13 +61,11 @@ function read() {
   }
 }
 
-// The dependency and its version pair name the update; the source that reported
-// it does not. Two sources describing one repository report the same pending
-// update, so this key groups the copies for collapseBy to merge (foldUpdate).
+// Two sources describing one repository report the same lock-file refresh, so
+// this key groups the copies for collapseBy to merge (foldLock). The update
+// identity is the shared one from collapse.ts, so the dashboard and the
+// /updates page fold the same copies the same way.
 const FIELD = '\u0000';
-function updateIdentity(u: PendingUpdateRow): string {
-  return [u.repoFullName, u.dependencyName, u.currentVersion, u.targetVersion, u.updateType].join(FIELD);
-}
 function lockIdentity(l: LockFileRefreshRow): string {
   return [l.repoFullName, l.branchName].join(FIELD);
 }
@@ -418,7 +416,12 @@ export default function Home() {
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Withe</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        {repos.length} repositories · {updates.length + locks.length} pending updates ·{' '}
+        {repos.length} repositories ·{' '}
+        <a className="underline" href="/updates">
+          {updates.length} pending updates
+        </a>
+        {locks.length > 0 && ` · ${locks.length} lock-file refreshes`}
+        {' · '}
         <a className="underline" href="/repos">
           all repositories
         </a>{' '}

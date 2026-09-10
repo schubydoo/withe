@@ -125,7 +125,7 @@ async function waitForPort(): Promise<void> {
  */
 async function discoverRoutes(): Promise<string[]> {
   // The export endpoint returns the whole database; it must never carry a token.
-  const routes = ['/', '/repos', '/preflight', '/api/export'];
+  const routes = ['/', '/repos', '/updates', '/preflight', '/api/export'];
 
   const repos = await (await fetch(`http://127.0.0.1:${PORT}/repos`)).text();
   const repoHref = /href="(\/repos\/[^"]+\/[^"]+)"/.exec(repos)?.[1];

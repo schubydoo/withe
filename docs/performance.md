@@ -49,6 +49,7 @@ is visible in a diff rather than argued about.
 |-----|--------|----------|---------|
 | NFR-1 | Landing page, 50 repos, p95 <= 400 ms | p50 28.9, **p95 84.4**, max 144.5 ms | pass |
 | NFR-2 | Landing page, 500 repos, p95 <= 1,200 ms | p50 195.4, **p95 244.6**, max 294.5 ms | pass |
+| NFR-2 | Pending-updates view, 500 repos, p95 <= 1,200 ms | p50 140.6, **p95 236.9**, max 304.6 ms | pass |
 | NFR-3 | Log render, 5,000 lines, p95 <= 1,000 ms, no fetch | p50 1.5, **p95 2.0**, max 2.6 ms | pass |
 | NFR-4 | Full sync, 50 repos, <= 60 s | write half 38.8 ms; live 8-repo end-to-end ~1 s | pass |
 | NFR-5 | Idle memory <= 256 MB resident, arm64 | **232 MB** RSS-sum (133 MB PSS) on native arm64 | pass |
@@ -74,7 +75,7 @@ Two processes share one SQLite file — the web reader and the sync worker. The
 risk is a long sync transaction blocking readers past `busy_timeout` until
 pages fail. `npm run check:contention` runs the real shape: a standalone server
 reads while a separate process calls `persist()` for 500 repositories, 20 times
-back to back, with 8 concurrent readers hammering `/` and `/repos` throughout.
+back to back, with 8 concurrent readers hammering `/`, `/repos` and `/updates` throughout.
 
 | Metric | Result |
 |--------|--------|
