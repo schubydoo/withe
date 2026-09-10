@@ -240,6 +240,8 @@ export function persist(
           state: row.state,
           prUrl: row.pullRequestUrl,
           prNumber: row.pullRequestNumber,
+          closedAt: row.closedAt,
+          closeType: row.closeType,
           detectedAt: row.detectedAt,
           packageFileCount: row.packageFileCount,
           packageFiles: row.packageFiles,

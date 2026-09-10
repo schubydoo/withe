@@ -5,7 +5,7 @@
  * logger, the adapters — so a test can drive years of cycles in milliseconds
  * without a server or a real interval.
  */
-import type { SourceAdapter } from '../adapters/types.ts';
+import type { CollectResult, SourceAdapter } from '../adapters/types.ts';
 import { redact } from '../core/redact.ts';
 import type { Db } from '../db/client.ts';
 import { persist, pruneOldRuns, recomputeStalled, recordSyncFailure } from '../db/persist.ts';
@@ -26,6 +26,13 @@ export interface SyncOptions {
    * every run forever, which is the default (PRD Section 6.3.1).
    */
   retentionMs?: number;
+  /**
+   * Refresh pull-request state from the forge before persist, in place, and
+   * return any warnings. Unset when no GitHub token is configured, which leaves
+   * the worker reading state from the job log alone. Injected so a test drives
+   * it without a network.
+   */
+  enrichForge?: (result: CollectResult) => Promise<string[]>;
 }
 
 export interface SourceOutcome {
@@ -155,6 +162,25 @@ export class SyncLoop {
     const startedAt = new Date(this.now());
     try {
       const result = await adapter.collect();
+
+      // Read live pull-request state before persist, when a forge is
+      // configured. Wrapped so a forge fault degrades to a warning: the log's
+      // data is still worth writing, and enrichment is an enhancement, not a
+      // precondition.
+      if (this.options.enrichForge) {
+        try {
+          const forgeWarnings = await this.options.enrichForge(result);
+          for (const warning of forgeWarnings) result.warnings.push(warning);
+        } catch (cause) {
+          result.warnings.push(
+            `forge enrichment failed: ${redact(
+              cause instanceof Error ? cause.message : String(cause),
+              this.options.secrets ?? [],
+            )}`,
+          );
+        }
+      }
+
       // One transaction per source. A source that fails halfway leaves the
       // store as it was rather than half updated.
       const counts = persist(this.db, id, adapter.kind, result, startedAt);

@@ -7,11 +7,13 @@
  */
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
+import { createGithubForge } from '../adapters/forge/github.ts';
 import { createAdapter } from '../adapters/register.ts';
 import type { SourceAdapter } from '../adapters/types.ts';
 import { ConfigError, loadConfig } from '../config/load.ts';
 import { installRedaction, secretsFrom } from '../core/redact.ts';
 import { openDatabase } from '../db/client.ts';
+import { enrichForgeState } from './enrich-forge.ts';
 import { SyncLoop } from './sync.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -76,12 +78,27 @@ for (const adapter of adapters) {
 // broken Withe: the container crash-looped instead of explaining itself.
 const toSync = usable.length > 0 ? usable : adapters;
 
+// When a GitHub token is set, read live pull-request state each cycle. The
+// client and the identification rule are built once here from configuration.
+const forge = config.forge
+  ? createGithubForge({
+      token: config.forge.token,
+      ...(config.forge.apiBaseUrl ? { apiBaseUrl: config.forge.apiBaseUrl } : {}),
+    })
+  : null;
+const forgeRule = config.forge
+  ? { branchPrefix: config.forge.branchPrefix, authorLogins: config.forge.authorLogins }
+  : null;
+
 const loop = new SyncLoop(db, toSync, {
   intervalMs: config.syncIntervalSeconds * 1000,
   stalledAfterMs: config.stalledAfterDays * DAY_MS,
   secrets: secretsFrom(config),
   // Unset keeps every run forever; set, it prunes at the end of each cycle.
   ...(config.retentionDays !== null ? { retentionMs: config.retentionDays * DAY_MS } : {}),
+  ...(forge && forgeRule
+    ? { enrichForge: (result) => enrichForgeState(result, forge, forgeRule) }
+    : {}),
 });
 
 const first = await loop.runCycle();

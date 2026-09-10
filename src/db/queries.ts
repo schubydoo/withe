@@ -63,6 +63,7 @@ export function pendingUpdates(db: Db): PendingUpdateRow[] {
       from "update" u
       join repo r on r.id = u.repo_id
      where u.update_type is not 'lock-file-maintenance'
+       and u.state not in ('pr-merged', 'pr-closed')
        and r.removed_at is null
      order by r.full_name, u.dependency_name
   `);
@@ -86,6 +87,7 @@ export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
       from "update" u
       join repo r on r.id = u.repo_id
      where u.update_type is 'lock-file-maintenance'
+       and u.state not in ('pr-merged', 'pr-closed')
        and r.removed_at is null
      order by r.full_name, u.dependency_name
   `);
@@ -114,7 +116,8 @@ export function repoHealth(db: Db): RepoHealthRow[] {
            (select rr.completed_at from renovate_run rr
              where rr.repo_id = r.id
              order by rr.completed_at desc limit 1) as completedAt,
-           (select count(*) from "update" u where u.repo_id = r.id) as pendingCount
+           (select count(*) from "update" u where u.repo_id = r.id
+              and u.state not in ('pr-merged', 'pr-closed')) as pendingCount
       from repo r
      where r.removed_at is null
      order by r.full_name
@@ -173,7 +176,8 @@ export function repoInventory(db: Db): InventoryRow[] {
              where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastRunAt,
            (select rr.status from renovate_run rr
              where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastRunStatus,
-           (select count(*) from "update" u where u.repo_id = r.id) as pendingCount
+           (select count(*) from "update" u where u.repo_id = r.id
+              and u.state not in ('pr-merged', 'pr-closed')) as pendingCount
       from repo r
      order by r.org, r.name
   `);
@@ -379,7 +383,8 @@ export function triage(db: Db): TriageRow[] {
              where rr.repo_id = r.id order by rr.completed_at desc limit 1) as lastError,
            (select max(rr.completed_at) from renovate_run rr
              where rr.repo_id = r.id and rr.status = 'success') as lastSuccessAt,
-           (select count(*) from "update" u where u.repo_id = r.id) as pendingCount
+           (select count(*) from "update" u where u.repo_id = r.id
+              and u.state not in ('pr-merged', 'pr-closed')) as pendingCount
       from repo r
      where r.removed_at is null
      order by r.full_name
