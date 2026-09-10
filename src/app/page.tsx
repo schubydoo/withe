@@ -418,7 +418,11 @@ export default function Home() {
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Withe</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        {repos.length} repositories · {updates.length + locks.length} pending updates ·{' '}
+        {repos.length} repositories ·{' '}
+        <a className="underline" href="/updates">
+          {updates.length + locks.length} pending updates
+        </a>{' '}
+        ·{' '}
         <a className="underline" href="/repos">
           all repositories
         </a>{' '}

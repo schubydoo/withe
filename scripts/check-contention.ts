@@ -141,7 +141,7 @@ interface Sample {
 }
 
 async function driveReaders(deadline: () => boolean): Promise<Sample[]> {
-  const paths = ['/', '/repos'];
+  const paths = ['/', '/repos', '/updates'];
   const samples: Sample[] = [];
 
   async function worker(seed: number): Promise<void> {
@@ -231,7 +231,7 @@ if (process.argv[2] === '--writer') {
     console.log(`writer: ${wr.iterations} persist cycles, ${wr.busyErrors} busy errors, ` +
       `transaction p50 ${Math.round(wr.transactionP50Ms)} ms, max ${Math.round(wr.transactionMaxMs)} ms`);
     console.log(`readers: ${samples.length} requests over ${(elapsed / 1000).toFixed(1)} s, ` +
-      `${READERS} concurrent, across / and /repos`);
+      `${READERS} concurrent, across /, /repos and /updates`);
     console.log(`reader latency: p95 ${Math.round(p95)} ms, max ${Math.round(max)} ms`);
     console.log(`reader failures: ${failures.length}`);
 
