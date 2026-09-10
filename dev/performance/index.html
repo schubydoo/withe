@@ -755,6 +755,12 @@ is visible in a diff rather than argued about.</p>
 <td>pass</td>
 </tr>
 <tr>
+<td>NFR-2</td>
+<td>Pending-updates view, 500 repos, p95 &lt;= 1,200 ms</td>
+<td>p50 140.6, <strong>p95 236.9</strong>, max 304.6 ms</td>
+<td>pass</td>
+</tr>
+<tr>
 <td>NFR-3</td>
 <td>Log render, 5,000 lines, p95 &lt;= 1,000 ms, no fetch</td>
 <td>p50 1.5, <strong>p95 2.0</strong>, max 2.6 ms</td>
@@ -804,7 +810,7 @@ is visible in a diff rather than argued about.</p>
 risk is a long sync transaction blocking readers past <code>busy_timeout</code> until
 pages fail. <code>npm run check:contention</code> runs the real shape: a standalone server
 reads while a separate process calls <code>persist()</code> for 500 repositories, 20 times
-back to back, with 8 concurrent readers hammering <code>/</code> and <code>/repos</code> throughout.</p>
+back to back, with 8 concurrent readers hammering <code>/</code>, <code>/repos</code> and <code>/updates</code> throughout.</p>
 <table>
 <thead>
 <tr>
