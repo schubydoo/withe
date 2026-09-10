@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import { parse as parseYaml } from 'yaml';
 
+import { DEFAULT_RENOVATE_AUTHORS, DEFAULT_RENOVATE_BRANCH_PREFIX } from '../adapters/forge/renovate-pr.ts';
 import type { SourceConfig, SourceKind } from '../adapters/types.ts';
 import { fillCompareTemplate } from '../core/links.ts';
 import {
@@ -33,8 +34,26 @@ export class ConfigError extends Error {
   }
 }
 
+/**
+ * The GitHub credential and the rule for spotting Renovate's pull requests.
+ *
+ * Null when `WITHE_GITHUB_TOKEN` is unset, which leaves the worker reading
+ * pull-request state from the Renovate job log alone, as before. Setting the
+ * token turns on the enrichment step that reads live state from the forge.
+ */
+export interface ForgeConfig {
+  token: string;
+  /** A GitHub Enterprise Server API base, or null for github.com. */
+  apiBaseUrl: string | null;
+  /** The Renovate branch prefix. Default `renovate/`. */
+  branchPrefix: string;
+  /** The logins that count as Renovate, the two defaults plus any operator adds. */
+  authorLogins: string[];
+}
+
 export interface WitheConfig {
   sources: SourceConfig[];
+  forge: ForgeConfig | null;
   dbPath: string;
   configPath: string;
   syncIntervalSeconds: number;
@@ -112,6 +131,7 @@ export function loadConfig(env: Env = process.env, probe: ContainerProbe = syste
 
   return {
     sources,
+    forge: forgeFrom(env),
     dbPath: env.WITHE_DB_PATH ?? DEFAULTS.dbPath,
     configPath,
     syncIntervalSeconds: positive(env, 'WITHE_SYNC_INTERVAL_SECONDS', DEFAULTS.syncIntervalSeconds),
@@ -287,6 +307,27 @@ function tlsFrom(env: Env): WitheConfig['tls'] {
   if (!cert) throw new ConfigError('WITHE_TLS_CERT', 'is required when WITHE_TLS_KEY is set');
   if (!key) throw new ConfigError('WITHE_TLS_KEY', 'is required when WITHE_TLS_CERT is set');
   return { cert, key };
+}
+
+function forgeFrom(env: Env): ForgeConfig | null {
+  const token = env.WITHE_GITHUB_TOKEN;
+  if (!token || token.trim() === '') return null;
+
+  const prefix = env.WITHE_RENOVATE_BRANCH_PREFIX?.trim();
+  const extra = splitList(env.WITHE_RENOVATE_PR_AUTHORS) ?? [];
+  const apiBaseUrl = env.WITHE_GITHUB_API_URL?.trim();
+
+  // The defaults come first and duplicates drop, so an operator who lists a bot
+  // Withe already knows does not change the set. Order does not matter to the
+  // classifier, which tests membership.
+  const authorLogins = [...new Set([...DEFAULT_RENOVATE_AUTHORS, ...extra])];
+
+  return {
+    token,
+    apiBaseUrl: apiBaseUrl && apiBaseUrl !== '' ? apiBaseUrl : null,
+    branchPrefix: prefix && prefix !== '' ? prefix : DEFAULT_RENOVATE_BRANCH_PREFIX,
+    authorLogins,
+  };
 }
 
 function positive(env: Env, name: string, fallback: number): number {

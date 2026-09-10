@@ -87,6 +87,36 @@ test('every documented variable can be overridden', () => {
   assert.equal(config.port, 8080);
 });
 
+test('the forge is off until a GitHub token is set', () => {
+  const config = loadConfig({ WITHE_CONFIG: NO_FILE }, HOST);
+  assert.equal(config.forge, null);
+});
+
+test('a GitHub token turns the forge on with the documented defaults', () => {
+  const config = loadConfig({ WITHE_CONFIG: NO_FILE, WITHE_GITHUB_TOKEN: 'ghp_x' }, HOST);
+  assert.equal(config.forge?.token, 'ghp_x');
+  assert.equal(config.forge?.apiBaseUrl, null);
+  assert.equal(config.forge?.branchPrefix, 'renovate/');
+  assert.deepEqual(config.forge?.authorLogins, ['renovate[bot]', 'renovate']);
+});
+
+test('the forge prefix, authors and Enterprise base can be overridden', () => {
+  const config = loadConfig(
+    {
+      WITHE_CONFIG: NO_FILE,
+      WITHE_GITHUB_TOKEN: 'ghp_x',
+      WITHE_GITHUB_API_URL: 'https://ghe.example/api/v3',
+      WITHE_RENOVATE_BRANCH_PREFIX: 'deps/',
+      // 'renovate' repeats a default, so it must not appear twice.
+      WITHE_RENOVATE_PR_AUTHORS: 'my-app[bot], renovate',
+    },
+    HOST,
+  );
+  assert.equal(config.forge?.apiBaseUrl, 'https://ghe.example/api/v3');
+  assert.equal(config.forge?.branchPrefix, 'deps/');
+  assert.deepEqual(config.forge?.authorLogins, ['renovate[bot]', 'renovate', 'my-app[bot]']);
+});
+
 test('a compare-url template that is not http(s) is refused, with a warning', () => {
   const config = loadConfig(
     { WITHE_CONFIG: NO_FILE, WITHE_COMPARE_URL: 'javascript:alert(1)' },
