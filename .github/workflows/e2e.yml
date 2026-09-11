@@ -79,7 +79,7 @@ jobs:
         # a cold runner — so it is not free; 8 minutes leaves margin over that.
         timeout-minutes: 8
         run: | # zizmor: ignore[adhoc-packages]
-          npm i -g agent-browser@0.33.2
+          npm i -g agent-browser@0.37.1
           agent-browser install --with-deps
 
       # Playwright drives the cross-browser smoke; --with-deps installs the
