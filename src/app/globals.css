@@ -7,3 +7,14 @@
    directly; after this line `dark:` responds to the class alone, so the OS
    preference reaches the page only through that script. */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* Match the native color scheme to the theme, so a browser-drawn control (the
+   select popup, scrollbars) renders readable in dark mode instead of following
+   the operating system. Without this, a page toggled to dark keeps light option
+   text on a light list, and only the hovered row stays legible. */
+:root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}

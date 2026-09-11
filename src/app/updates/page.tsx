@@ -130,69 +130,69 @@ export default async function Updates({ searchParams }: Props) {
           No update matches this filter. <a className="underline" href="/updates">Show all {totalDeps}</a>.
         </p>
       ) : (
-        groups.map((group) => (
-          <section key={`${group.dependencyName}/${group.datasource ?? ''}`} className="mt-8">
-            <h2 className="text-sm font-semibold">
-              {group.dependencyName}{' '}
-              <span className="font-normal text-neutral-500 dark:text-neutral-400">
-                ({group.rows.length} {group.rows.length === 1 ? 'repository' : 'repositories'})
-              </span>
-            </h2>
-            <table className="mt-2 w-full text-sm">
-              <tbody>
-                {group.rows.map((row) => {
-                  const link = dependencyLink(
-                    row.datasource,
-                    row.packageName,
-                    row.currentVersion,
-                    row.targetVersion,
-                    compareUrl,
-                  );
-                  return (
-                    <tr
-                      key={`${row.repoFullName}/${row.targetVersion}`}
-                      className="border-t border-neutral-200 dark:border-neutral-800"
-                    >
-                      <td className="py-1 pr-4 font-medium">
-                        <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
-                          {row.repoFullName}
-                        </Maybe>
-                      </td>
-                      <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
+        <table className="mt-4 w-full text-sm">
+          {groups.map((group) => (
+            <tbody key={`${group.dependencyName}/${group.datasource ?? ''}`}>
+              <tr>
+                <th colSpan={4} className="pt-6 pb-1 text-left text-sm font-semibold">
+                  {group.dependencyName}{' '}
+                  <span className="font-normal text-neutral-500 dark:text-neutral-400">
+                    ({group.rows.length} {group.rows.length === 1 ? 'repository' : 'repositories'})
+                  </span>
+                </th>
+              </tr>
+              {group.rows.map((row) => {
+                const link = dependencyLink(
+                  row.datasource,
+                  row.packageName,
+                  row.currentVersion,
+                  row.targetVersion,
+                  compareUrl,
+                );
+                return (
+                  <tr
+                    key={`${row.repoFullName}/${row.targetVersion}`}
+                    className="border-t border-neutral-200 dark:border-neutral-800"
+                  >
+                    <td className="py-1 pr-4 font-medium">
+                      <Maybe href={repoUrl(info(forge, row).webBaseUrl, row.repoFullName)}>
+                        {row.repoFullName}
+                      </Maybe>
+                    </td>
+                    <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
+                      <Maybe
+                        href={link?.href ?? null}
+                        title={
+                          link?.kind === 'compare' ? 'Compare these two versions upstream' : 'Open the package page'
+                        }
+                      >
+                        {row.currentVersion} → {row.targetVersion}
+                      </Maybe>
+                      {row.packageFileCount > 1 && (
+                        <span className="ml-1 text-neutral-500 dark:text-neutral-400">×{row.packageFileCount} files</span>
+                      )}
+                    </td>
+                    <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
+                    <td className="py-1 text-neutral-500 dark:text-neutral-400">
+                      {row.prNumber !== null && (
                         <Maybe
-                          href={link?.href ?? null}
-                          title={
-                            link?.kind === 'compare' ? 'Compare these two versions upstream' : 'Open the package page'
-                          }
+                          href={pullRequestUrl(
+                            info(forge, row).webBaseUrl,
+                            info(forge, row).platform,
+                            row.repoFullName,
+                            row.prNumber,
+                          )}
                         >
-                          {row.currentVersion} → {row.targetVersion}
+                          PR #{row.prNumber}
                         </Maybe>
-                        {row.packageFileCount > 1 && (
-                          <span className="ml-1 text-neutral-500 dark:text-neutral-400">×{row.packageFileCount} files</span>
-                        )}
-                      </td>
-                      <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
-                      <td className="py-1 text-neutral-500 dark:text-neutral-400">
-                        {row.prNumber !== null && (
-                          <Maybe
-                            href={pullRequestUrl(
-                              info(forge, row).webBaseUrl,
-                              info(forge, row).platform,
-                              row.repoFullName,
-                              row.prNumber,
-                            )}
-                          >
-                            PR #{row.prNumber}
-                          </Maybe>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </section>
-        ))
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          ))}
+        </table>
       )}
 
       <p className="mt-8 text-sm">
