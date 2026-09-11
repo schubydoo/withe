@@ -20,6 +20,12 @@ Withe answers, on one page: **which repositories are broken, and since when.**
   missing and gives you a block to paste into your Compose file.
 - **Repository inventory.** Every organization and repository Renovate knows about, with its state
   and last run.
+- **Pending updates.** Every pending update across the fleet on one page, grouped by dependency, and
+  filterable by type including security.
+- **Renovate health.** Whether Withe is reaching your sources and staying current, plus the GitHub
+  rate-limit headroom for a configured token.
+- **Live pull-request state (optional).** Set `WITHE_GITHUB_TOKEN` and a merged or closed Renovate
+  pull request clears within one sync, instead of waiting for Renovate's next run.
 - **Failure triage.** The landing page — repositories with failing runs, ordered by how long they
   have been failing, with the error attached.
 - **Run history.** Every run for a repository: when it queued, when it started, how long it took,

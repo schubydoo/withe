@@ -46,8 +46,13 @@ model:
    configuration or its process environment reaches your Renovate server.
 2. **Withe stores Renovate job logs**, which can contain repository names,
    dependency versions, and whatever your runs printed.
+3. **Withe can hold a GitHub token.** Set `WITHE_GITHUB_TOKEN` to read live
+   pull-request state, and Withe holds that token. It is read-only, scoped to
+   pull requests and commit statuses, and never written to the database or a
+   log. It is lower privilege than the CE token, but reaching Withe's
+   environment still reaches it.
 
-Report anything that exposes either one — a token appearing in a log line, an
+Report anything that exposes any of these — a token appearing in a log line, an
 HTTP response, an error page, or a crash dump — as a vulnerability.
 
 ## Handling secrets in contributions

@@ -41,6 +41,10 @@ graph LR
 Withe polls Renovate CE's documented API, stores only metadata in one SQLite file, and streams log
 content from Renovate on demand. No log scraping, no writes back to Renovate.
 
+Set `WITHE_GITHUB_TOKEN` and Withe also reads live pull-request state from GitHub each sync. A merged
+or closed Renovate pull request then clears within one sync, instead of lingering until Renovate's
+next run. Withe reads only, edits no `renovate.json`, and never stores the token.
+
 ## What it shows
 
 The landing page is your whole fleet on one screen, ordered the way you act on it:
@@ -58,6 +62,8 @@ Plus, per source and per repository:
 |---|---|
 | **Preflight** | The exact env vars Renovate CE is missing, as a block to paste into your Compose file |
 | **Repository inventory** | Every org and repo Renovate knows, with enablement, install status, and last run |
+| **Pending updates** (`/updates`) | Every pending update across the fleet on one page, grouped by dependency, filterable by type including security |
+| **Renovate health** (`/health`) | Whether Withe is reaching your sources and staying current, plus the GitHub rate-limit headroom for a configured token |
 | **Run history** | Every run for a repo — queued, started, duration, outcome |
 | **Log viewer** | The full JSON-Lines log for any run, via Renovate's documented log endpoint |
 
