@@ -12,8 +12,8 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { groupByFullName } from '../core/group.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
-import { persist, recomputeStalled } from './persist.ts';
-import { forges, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, sourceSystems, triage } from './queries.ts';
+import { persist, recomputeStalled, recordForgeStatus } from './persist.ts';
+import { forgeRateLimit, forges, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, sourceSystems, triage } from './queries.ts';
 import { renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
@@ -852,6 +852,28 @@ test('runLocation reports a null instant when the run has no timestamps', () => 
   const location = runLocation(db, 1);
   assert.ok(location);
   assert.equal(location.at, null);
+  sqlite.close();
+});
+
+test('the forge rate limit is null until read, then round-trips and overwrites one row', () => {
+  const { sqlite, db } = fresh();
+  assert.equal(forgeRateLimit(db), null, 'null before the first read');
+
+  const reset = new Date('2026-09-10T12:00:00Z');
+  recordForgeStatus(db, { remaining: 4000, limit: 5000, resetAt: reset, checkedAt: new Date('2026-09-10T11:30:00Z') });
+  const first = forgeRateLimit(db);
+  assert.equal(first?.remaining, 4000);
+  assert.equal(first?.limit, 5000);
+  assert.equal(first?.resetAt?.toISOString(), reset.toISOString());
+  assert.equal(first?.checkedAt.toISOString(), '2026-09-10T11:30:00.000Z');
+
+  // A later reading overwrites the single row rather than adding one.
+  recordForgeStatus(db, { remaining: 100, limit: 5000, resetAt: null, checkedAt: new Date('2026-09-10T11:40:00Z') });
+  const second = forgeRateLimit(db);
+  assert.equal(second?.remaining, 100);
+  assert.equal(second?.resetAt, null);
+  const count = db.all<{ n: number }>(sql`select count(*) as n from forge_rate_limit`)[0]?.n;
+  assert.equal(count, 1, 'still one row');
   sqlite.close();
 });
 

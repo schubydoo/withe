@@ -174,6 +174,7 @@ test('headroom is null before the first call and reads the rate-limit headers af
   assert.equal(room?.remaining, 4990);
   assert.equal(room?.fraction, 4990 / 5000);
   assert.equal(room?.resetAt?.getTime(), 1700000000 * 1000);
+  assert.ok(room?.checkedAt instanceof Date, 'the reading carries the instant it was read');
 });
 
 test('an empty token is refused', () => {

@@ -41,6 +41,9 @@ export interface RateLimitHeadroom {
   resetAt: Date | null;
   /** remaining / limit, or 1 when the limit is unknown. */
   fraction: number;
+  /** When GitHub answered with this reading, so a caller can tell a fresh
+   * reading from one cached across cycles. */
+  checkedAt: Date;
 }
 
 export interface GithubForgeConfig {
@@ -204,6 +207,7 @@ function readHeadroom(headers: Headers): RateLimitHeadroom | null {
     remaining,
     resetAt: Number.isFinite(reset) ? new Date(reset * 1000) : null,
     fraction: remaining / limit,
+    checkedAt: new Date(),
   };
 }
 

@@ -43,7 +43,7 @@ test('the migration applies and creates the indexes the queries rely on', () => 
     .all()
     .map((r) => (r as { name: string }).name)
     .filter((n) => !n.startsWith('sqlite_') && !n.startsWith('__drizzle'));
-  assert.deepEqual(tables, ['renovate_run', 'repo', 'source', 'sync_status', 'update']);
+  assert.deepEqual(tables, ['forge_rate_limit', 'renovate_run', 'repo', 'source', 'sync_status', 'update']);
 
   const indexes = sqlite
     .prepare("select name from sqlite_master where type='index' and name is not null")
