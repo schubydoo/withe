@@ -59,11 +59,14 @@ export function GET(): Response {
       syncIntervalSeconds: config.syncIntervalSeconds,
       databaseBytes: statSync(config.dbPath).size,
       // The forge rate-limit headroom, so the banner can warn on every page
-      // without its own query. Null when no forge has reported. Only the two
-      // numbers the warning needs, no token or reset detail. Named `rateLimit`,
-      // not `forge*`: the no-leak test forbids the substring "org", which "forge"
-      // carries.
-      rateLimit: forge ? { remaining: forge.remaining, limit: forge.limit } : null,
+      // without its own query. Null when no forge has reported. `resetAt` lets
+      // the banner drop a low reading whose window has already reset, so it does
+      // not warn forever after the token is removed. No token detail. Named
+      // `rateLimit`, not `forge*`: the no-leak test forbids the substring "org",
+      // which "forge" carries.
+      rateLimit: forge
+        ? { remaining: forge.remaining, limit: forge.limit, resetAt: forge.resetAt ? forge.resetAt.toISOString() : null }
+        : null,
     },
     statusCodeFor(health.status),
   );

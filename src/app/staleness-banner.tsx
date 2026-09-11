@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { rateLimitBannerText } from '../core/rate-limit.ts';
 import { bannerText, pollIntervalMs } from './staleness.ts';
@@ -29,9 +29,10 @@ interface Snapshot {
   intervalSeconds: number;
   /** ...and the clock reading when it did, so the age can be advanced since. */
   polledAt: number;
-  /** The forge rate-limit headroom, or null when no forge has reported. Its two
-   * numbers do not age, so they need no display tick like the staleness age. */
-  forge: { remaining: number; limit: number } | null;
+  /** The forge rate-limit headroom, or null when no forge has reported. resetAt
+   * lets the warning drop once the window has passed, so a removed token does
+   * not warn forever. */
+  forge: { remaining: number; limit: number; resetAt: Date | null } | null;
 }
 
 export function StalenessBanner() {
@@ -115,7 +116,9 @@ export function StalenessBanner() {
       ? null
       : snapshot.ageSecondsAtPoll + (Date.now() - snapshot.polledAt) / 1000;
   const text = snapshot === null ? null : bannerText(snapshot.status, ageNow, snapshot.intervalSeconds);
-  const rateText = snapshot?.forge ? rateLimitBannerText(snapshot.forge.remaining, snapshot.forge.limit) : null;
+  const rateText = snapshot?.forge
+    ? rateLimitBannerText(snapshot.forge.remaining, snapshot.forge.limit, snapshot.forge.resetAt)
+    : null;
 
   // The live region is always in the DOM, even before the first poll and while
   // there is nothing to say. A `role="status"` region announces changes *inside*
@@ -123,31 +126,28 @@ export function StalenessBanner() {
   // stay silent. So the wrapper is permanent and only its content is conditional.
   return (
     <div role="status" aria-live="polite">
-      {text !== null && (
-        // Matches the exposure banner in the layout it sits under: a full-width
-        // bar whose text sits in the same centered, padded column (B-8), with the
-        // dark palette the rest of the app gained in B-3.
-        <div className="border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-200">
-          <p className="mx-auto max-w-4xl px-8 py-2 text-sm">
-            {text}{' '}
-            <a className="underline" href="/health">
-              Renovate health
-            </a>
-            .
-          </p>
-        </div>
-      )}
-      {rateText !== null && (
-        <div className="border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-200">
-          <p className="mx-auto max-w-4xl px-8 py-2 text-sm">
-            {rateText}{' '}
-            <a className="underline" href="/health">
-              Renovate health
-            </a>
-            .
-          </p>
-        </div>
-      )}
+      {text !== null && <Bar>{text}</Bar>}
+      {rateText !== null && <Bar>{rateText}</Bar>}
+    </div>
+  );
+}
+
+/**
+ * One warning bar. Matches the exposure banner in the layout it sits under: a
+ * full-width bar whose text sits in the same centered, padded column (B-8), with
+ * the dark palette the rest of the app gained in B-3. Shared by the two warnings
+ * so the palette and padding stay in step.
+ */
+function Bar({ children }: { children: ReactNode }) {
+  return (
+    <div className="border-b border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 text-amber-900 dark:text-amber-200">
+      <p className="mx-auto max-w-4xl px-8 py-2 text-sm">
+        {children}{' '}
+        <a className="underline" href="/health">
+          Renovate health
+        </a>
+        .
+      </p>
     </div>
   );
 }
@@ -162,6 +162,10 @@ function readSnapshot(body: unknown): Snapshot {
       ? {
           remaining: (forgeRaw as { remaining: number }).remaining,
           limit: (forgeRaw as { limit: number }).limit,
+          resetAt:
+            typeof (forgeRaw as Record<string, unknown>).resetAt === 'string'
+              ? new Date((forgeRaw as { resetAt: string }).resetAt)
+              : null,
         }
       : null;
   return {

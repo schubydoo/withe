@@ -14,6 +14,7 @@ import { after, test } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import { openDatabase } from '../../../db/client.ts';
+import { recordForgeStatus } from '../../../db/persist.ts';
 import { source, syncStatus } from '../../../db/schema.ts';
 import { GET } from './route.ts';
 
@@ -59,6 +60,24 @@ test('a recent sync answers 200 and says how old the data is', async () => {
   assert.equal(body.status, 'ok');
   assert.ok(body.lastSyncAgeSeconds >= 60 && body.lastSyncAgeSeconds < 120);
   assert.equal(response.headers.get('cache-control'), 'no-store');
+});
+
+test('the health body carries the forge rate-limit headroom for the banner', async () => {
+  const path = database(60);
+  const reset = new Date('2026-09-11T12:00:00Z');
+  const { sqlite, db } = openDatabase(path, { role: 'owner' });
+  recordForgeStatus(db, { remaining: 400, limit: 5000, resetAt: reset, checkedAt: new Date() });
+  sqlite.close();
+
+  const body = (await (await call(path)).json()) as {
+    rateLimit: { remaining: number; limit: number; resetAt: string };
+  };
+  assert.deepEqual(body.rateLimit, { remaining: 400, limit: 5000, resetAt: reset.toISOString() });
+});
+
+test('the health body has a null rate limit when no forge has reported', async () => {
+  const body = (await (await call(database(60))).json()) as { rateLimit: unknown };
+  assert.equal(body.rateLimit, null);
 });
 
 test('a worker that stopped syncing answers 503, which a plain HTTP check would not', async () => {
