@@ -70,11 +70,17 @@ function Filters({ filter, shownDeps, totalDeps }: { filter: UpdateFilter; shown
           id="update-type"
           name="type"
           defaultValue={filter.type ?? ''}
-          className="mt-1 rounded border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1 text-sm"
+          className="mt-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 px-2 py-1 text-sm"
         >
-          <option value="">any</option>
+          <option value="" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
+            any
+          </option>
           {UPDATE_TYPES.map((type) => (
-            <option key={type} value={type}>
+            <option
+              key={type}
+              value={type}
+              className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+            >
               {type}
             </option>
           ))}

@@ -72,11 +72,17 @@ function Filters({ filter, shown, total }: { filter: RepoFilter; shown: number; 
           id="repo-state"
           name="state"
           defaultValue={filter.state ?? ''}
-          className="mt-1 rounded border border-neutral-300 dark:border-neutral-700 bg-transparent px-2 py-1 text-sm"
+          className="mt-1 rounded border border-neutral-300 dark:border-neutral-700 bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100 px-2 py-1 text-sm"
         >
-          <option value="">any</option>
+          <option value="" className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
+            any
+          </option>
           {REPO_STATES.map((state) => (
-            <option key={state} value={state}>
+            <option
+              key={state}
+              value={state}
+              className="bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100"
+            >
               {state}
             </option>
           ))}
