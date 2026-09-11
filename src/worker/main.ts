@@ -105,12 +105,21 @@ const loop = new SyncLoop(db, toSync, {
     ? {
         enrichForge: async (result) => {
           const warnings = await enrichForgeState(result, forge, forgeRule, forgeNamedHost);
-          // Record the rate-limit headroom the forge reported this cycle, for
-          // the health page (F-10). It is install-wide, so it is written here
-          // rather than per source, and only once the forge has actually
-          // answered (headroom is null before the first read).
+          // Record the rate-limit headroom for the health page (F-10). The row
+          // is install-wide, so this runs once per source and the last read
+          // wins; the reading carries its own checkedAt, so a cycle that made no
+          // forge request re-writes the same row rather than restamping it as
+          // fresh. Wrapped on its own: this is bookkeeping for a panel, and a
+          // failed write (a busy database) must not discard the cycle's
+          // warnings, which carry the rate-limit notice.
           const headroom = forge.headroom();
-          if (headroom) recordForgeStatus(db, headroom, new Date());
+          if (headroom) {
+            try {
+              recordForgeStatus(db, headroom);
+            } catch {
+              // Left for the next cycle; the warnings this callback returns matter more.
+            }
+          }
           return warnings;
         },
       }

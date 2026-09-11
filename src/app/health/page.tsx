@@ -49,11 +49,17 @@ function read(): Report {
   }
 }
 
-/** "in 42 minutes", or "—" when there is no future reset to name. */
+/**
+ * "in 42 minutes", or a phrase for the edge cases. A reset already in the past
+ * means the reading is older than one rate-limit window, so it says so rather
+ * than vouching for a stale figure as current.
+ */
 function until(when: Date | null): string {
   if (!when) return '—';
-  const minutes = Math.round((when.getTime() - Date.now()) / 60_000);
-  if (minutes <= 0) return 'now';
+  const deltaMs = when.getTime() - Date.now();
+  if (deltaMs < 0) return 'the window has passed';
+  const minutes = Math.round(deltaMs / 60_000);
+  if (minutes === 0) return 'now';
   if (minutes < 60) return `in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`;
   const hours = Math.round(minutes / 60);
   return `in ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
@@ -239,8 +245,8 @@ export default function HealthPage() {
             <p className="mt-2 rounded border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
               Low: {forge.remaining} of {forge.limit} requests left
               {headroomPercent(forge.remaining, forge.limit) !== null && ` (${headroomPercent(forge.remaining, forge.limit)}%)`}
-              , resetting {until(forge.resetAt)}. Withe backs off before the limit runs out; while it is
-              spent, pull-request state is not refreshed.
+              , resetting {until(forge.resetAt)}. When the limit is spent, Withe stops that cycle's reads
+              on the first refusal and refreshes the rest next cycle.
             </p>
           )}
           <dl className="mt-2 grid grid-cols-[12rem_1fr] gap-y-1 text-sm">
