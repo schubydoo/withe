@@ -1,3 +1,17 @@
+## 1.4.0 (2026-09-11)
+
+### Features
+
+- Add a cross-repo pending-updates page at /updates. It lists every pending update grouped by dependency, so you see every repository waiting for the same update on one line. Filter the list by update type, including security. The dashboard's pending-updates count now links to it. ([#95](https://github.com/schubydoo/withe/pull/95))
+- Read live pull-request state from GitHub. A merged or closed Renovate pull request now leaves the dashboard within one sync. Before, Withe read pending updates only from the newest Renovate job log, which is a snapshot. A merge stayed on screen until Renovate ran again, up to about one hour on an hourly runner. To turn this on, set WITHE_GITHUB_TOKEN. Each sync, Withe reads the pull-request numbers from the log again. It confirms each pull request is Renovate's by its branch prefix and its author. It marks the merged and closed ones. Withe never edits your renovate.json. Withe never stores the token. If the forge is unreachable, Withe keeps the log's state. ([#92](https://github.com/schubydoo/withe/pull/92))
+- When the GitHub rate limit is low, Withe warns on every page. The health banner shown on each page now also carries this warning. It reads the forge headroom from the same /api/health poll, so no second poller is added. When headroom drops below 20%, an amber bar names how many requests are left and links to the health page. ([#97](https://github.com/schubydoo/withe/pull/97))
+- Show the GitHub API rate limit on the health page. When Withe reads live pull-request state, it records how much of the token's rate limit is left. A new Forge rate limit section shows that. Below 20% headroom, the page warns that a spent limit leaves merged pull requests on screen until it resets. The limit is the GitHub token's, shared with Renovate, so it is shown once for the install. ([#96](https://github.com/schubydoo/withe/pull/96))
+
+### Fixes
+
+- Fix the update-type and repository filter menus in dark mode. The select and each option now set an explicit background and text color for both themes. Every option is readable in dark mode, not only the hovered row. Before, the option list showed faint text on a dark background. ([#102](https://github.com/schubydoo/withe/pull/102))
+- Align the columns on the cross-repo pending-updates page and fix the filter in dark mode. The page now renders one table for the whole list. The version, type, and pull-request columns line up across every dependency group. The update-type filter follows the page theme, so its options stay readable in dark mode. ([#101](https://github.com/schubydoo/withe/pull/101))
+
 ## 1.3.0 (2026-08-24)
 
 ### Features
