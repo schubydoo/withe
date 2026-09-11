@@ -13,7 +13,7 @@ import { existsSync, statSync } from 'node:fs';
 import { loadConfig } from '../../../config/load.ts';
 import { assess, statusCodeFor } from '../../../core/health.ts';
 import { openDatabase } from '../../../db/client.ts';
-import { sourceHealth } from '../../../db/queries.ts';
+import { forgeRateLimit, sourceHealth, type ForgeRateLimit } from '../../../db/queries.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,9 +34,11 @@ export function GET(): Response {
   // Opening it is the check. A file that exists and cannot be read is the
   // failure a healthcheck is for.
   let sources;
+  let forge: ForgeRateLimit | null = null;
   const { sqlite, db } = openDatabase(config.dbPath);
   try {
     sources = sourceHealth(db, new Date(0));
+    forge = forgeRateLimit(db);
   } catch (cause) {
     // This is the one credential-less route, so the caller is unauthenticated:
     // the database error's internals must not go in the response body
@@ -56,6 +58,12 @@ export function GET(): Response {
       staleSources: health.stale,
       syncIntervalSeconds: config.syncIntervalSeconds,
       databaseBytes: statSync(config.dbPath).size,
+      // The forge rate-limit headroom, so the banner can warn on every page
+      // without its own query. Null when no forge has reported. Only the two
+      // numbers the warning needs, no token or reset detail. Named `rateLimit`,
+      // not `forge*`: the no-leak test forbids the substring "org", which "forge"
+      // carries.
+      rateLimit: forge ? { remaining: forge.remaining, limit: forge.limit } : null,
     },
     statusCodeFor(health.status),
   );

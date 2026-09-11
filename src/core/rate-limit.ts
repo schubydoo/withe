@@ -32,3 +32,17 @@ export function headroomPercent(remaining: number, limit: number): number | null
   const fraction = headroomFraction(remaining, limit);
   return fraction === null ? null : Math.round(fraction * 100);
 }
+
+/**
+ * The banner sentence when the forge rate limit is low, or null when it is not,
+ * so the every-page banner has one tested decision to render — the same shape
+ * `staleness.ts` uses for its own banner.
+ */
+export function rateLimitBannerText(remaining: number, limit: number): string | null {
+  if (!isLow(remaining, limit)) return null;
+  const percent = headroomPercent(remaining, limit);
+  return (
+    `The GitHub API rate limit is low: ${remaining} of ${limit} requests left` +
+    `${percent === null ? '' : ` (${percent}%)`}. Renovate and Withe share it.`
+  );
+}
