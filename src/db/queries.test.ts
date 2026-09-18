@@ -1030,6 +1030,37 @@ test('a lock-file refresh is also recorded once, though it has no versions', () 
   sqlite.close();
 });
 
+test('two version pairs under one pull request are both recorded', () => {
+  const { sqlite, db } = fresh();
+  // One branch can carry the same dependency at two current versions: a
+  // repository that pins it differently in two manifests bumps both to the
+  // same target in one pull request. `renovate-log.ts` keys an update row on
+  // the version pair inside the branch loop, so that is two rows sharing one
+  // `prNo` — and the history must not silently keep whichever it met first.
+  const closedAt = new Date('2026-09-03T10:00:00Z');
+  const base = {
+    dependencyName: 'next',
+    targetVersion: '16.0.0',
+    updateType: 'major' as const,
+    pullRequestNumber: 50,
+    state: 'pr-merged' as const,
+    closeType: 'merge' as const,
+    closedAt,
+  };
+  persist(db, SOURCE, 'ce', cycle([
+    makeUpdate('acme/widget', { ...base, currentVersion: '15.0.0' }),
+    makeUpdate('acme/widget', { ...base, currentVersion: '15.2.0' }),
+  ]), new Date('2026-09-03T11:00:00Z'));
+
+  const history = completedUpdates(db);
+  assert.deepEqual(
+    history.map((u) => u.currentVersion).sort(),
+    ['15.0.0', '15.2.0'],
+    'both version pairs, not whichever SQLite reached first',
+  );
+  sqlite.close();
+});
+
 test('only a finished update is recorded, never a pending one', () => {
   const { sqlite, db } = fresh();
   const merged = makeUpdate('acme/widget', {

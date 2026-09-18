@@ -47,8 +47,11 @@ export interface CompletedUpdateRow {
   /** Merged, or closed without merging. Two different facts, never inferred. */
   finalState: 'pr-merged' | 'pr-closed';
   prNumber: number;
-  /** When it reached that state, falling back to when Withe recorded it. */
-  closedAt: Date | null;
+  /**
+   * When it reached that state. Never null: the query falls back to the
+   * archive date, which the schema declares NOT NULL, so there is always one.
+   */
+  closedAt: Date;
 }
 
 export interface RepoHealthRow {
@@ -128,7 +131,7 @@ export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
  * long as the install runs, and a page is not the place to render all of it.
  */
 export function completedUpdates(db: Db, limit = 250, repoFullName?: string): CompletedUpdateRow[] {
-  const rows = db.all<Omit<CompletedUpdateRow, 'closedAt'> & { closedAt: number | null }>(sql`
+  const rows = db.all<Omit<CompletedUpdateRow, 'closedAt'> & { closedAt: number }>(sql`
     select c.source_adapter_id as sourceAdapterId,
            r.full_name         as repoFullName,
            c.dependency_name   as dependencyName,
@@ -148,12 +151,7 @@ export function completedUpdates(db: Db, limit = 250, repoFullName?: string): Co
      limit ${limit}
   `);
 
-  return rows.map((row) => ({
-    ...row,
-    // Never null in practice: the column falls back to the archive date, which
-    // is not nullable. Guarded anyway so a hand-edited row cannot throw here.
-    closedAt: row.closedAt === null ? null : new Date(row.closedAt * 1000),
-  }));
+  return rows.map((row) => ({ ...row, closedAt: new Date(row.closedAt * 1000) }));
 }
 
 /**

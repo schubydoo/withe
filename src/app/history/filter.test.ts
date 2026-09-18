@@ -51,14 +51,6 @@ test('two updates landing at the same instant stay in a stable order', () => {
   assert.deepEqual(rows.map((r) => r.repoFullName), ['acme/apple', 'acme/zebra']);
 });
 
-test('a row with no date sorts oldest rather than first', () => {
-  const rows = [
-    row({ repoFullName: 'acme/undated', closedAt: null }),
-    row({ repoFullName: 'acme/dated', closedAt: new Date('2026-08-01T00:00:00Z') }),
-  ].sort(byNewest);
-  assert.deepEqual(rows.map((r) => r.repoFullName), ['acme/dated', 'acme/undated']);
-});
-
 test('dependencies read by their most recent landing, not alphabetically', () => {
   // `astro` is alphabetically first but landed longest ago.
   const groups = groupByDependency(

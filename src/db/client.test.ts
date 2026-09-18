@@ -5,8 +5,10 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { getTableConfig } from 'drizzle-orm/sqlite-core';
 
 import { openDatabase } from './client.ts';
+import * as schema from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-db-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -63,6 +65,52 @@ test('the migration applies and creates the indexes the queries rely on', () => 
   // auto_vacuum must survive the migration, which is the whole point of setting
   // it before the tables exist.
   assert.equal(sqlite.pragma('auto_vacuum', { simple: true }), 2);
+  sqlite.close();
+});
+
+/**
+ * The migrations and `schema.ts` describe the same database.
+ *
+ * They are two files that must agree and nothing made them. A column added to
+ * `schema.ts` without regenerating leaves a table the queries address and the
+ * migration never creates; a column left in a migration after `schema.ts` drops
+ * it is dead in every database, and the next `db:generate` silently emits a
+ * table rebuild an unrelated change then carries. Both are quiet until someone
+ * regenerates, which is what makes them worth a test rather than a habit.
+ *
+ * This compares what the migrations actually build against what Drizzle
+ * declares, so it reads the real thing rather than the snapshot's copy of it.
+ */
+test('every migrated table has exactly the columns schema.ts declares', () => {
+  const { sqlite, db } = fresh('drift');
+  migrate(db, { migrationsFolder: './drizzle' });
+
+  for (const [exportName, table] of Object.entries(schema)) {
+    const { name, columns } = getTableConfig(table);
+    const declared = columns.map((c) => c.name).sort();
+    const built = sqlite
+      .prepare(`select name from pragma_table_xinfo(?) order by name`)
+      .all(name)
+      .map((r) => (r as { name: string }).name);
+
+    assert.deepEqual(built, declared, `${exportName} ('${name}') disagrees with its migration`);
+  }
+  sqlite.close();
+});
+
+test('the drift check can fail: a column no migration creates is caught', () => {
+  // The test above is a "nothing differs" assertion, which passes just as well
+  // when the comparison reads nothing at all. This proves it compares.
+  const { sqlite, db } = fresh('drift-control');
+  migrate(db, { migrationsFolder: './drizzle' });
+  const built = sqlite
+    .prepare(`select name from pragma_table_xinfo('completed_update') order by name`)
+    .all()
+    .map((r) => (r as { name: string }).name);
+
+  assert.ok(built.length > 0, 'the instrument reads no columns at all');
+  assert.ok(built.includes('version_key'), 'a generated column is visible to table_xinfo');
+  assert.throws(() => assert.deepEqual([...built, 'not_a_real_column'].sort(), built));
   sqlite.close();
 });
 

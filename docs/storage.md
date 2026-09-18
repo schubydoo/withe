@@ -24,8 +24,9 @@ with how often the fleet updates, not with time. A fleet that lands 10 updates a
 130 KB a year.
 
 `WITHE_RETENTION_DAYS` prunes these records on the same schedule as runs. Age is the date the pull
-request closed. A run waits for the source to drop its own copy. A completed update has no such
-copy, so retention removes it as soon as it passes the window.
+request closed. If the forge reported no close date, age is the date Withe archived the record. A
+run waits for the source to drop its own copy. A completed update has no such copy, so retention
+removes it as soon as it passes the window.
 
 ## File-backed sources: your files, your retention
 

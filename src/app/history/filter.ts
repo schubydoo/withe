@@ -28,9 +28,9 @@ export function readRepoFilter(params: { repo?: Param }): string | null {
   return raw === undefined || raw === '' ? null : raw;
 }
 
-/** When a row landed, as a number. A row with no date sorts oldest. */
+/** When a row landed, as a number. */
 function landedAt(row: CompletedUpdateRow): number {
-  return row.closedAt?.getTime() ?? 0;
+  return row.closedAt.getTime();
 }
 
 /** Newest first, then by repository so two updates landing together are stable. */
@@ -39,19 +39,20 @@ export function byNewest(a: CompletedUpdateRow, b: CompletedUpdateRow): number {
 }
 
 /**
- * Dependencies by their most recent landing, newest first. The rows are already
- * sorted when this runs, so the first row of each group is its newest.
+ * The most recent landing in one group. Reads every row rather than trusting
+ * the first, so this does not depend on the group's rows being sorted already
+ * and needs no guard for a group that has none.
  */
+function newestIn(group: DependencyGroup<CompletedUpdateRow>): number {
+  return group.rows.reduce((newest, row) => Math.max(newest, landedAt(row)), 0);
+}
+
+/** Dependencies by their most recent landing, newest first. */
 export function byLatestLanding(
   a: DependencyGroup<CompletedUpdateRow>,
   b: DependencyGroup<CompletedUpdateRow>,
 ): number {
-  const left = a.rows[0];
-  const right = b.rows[0];
-  return (
-    (right ? landedAt(right) : 0) - (left ? landedAt(left) : 0) ||
-    a.dependencyName.localeCompare(b.dependencyName)
-  );
+  return newestIn(b) - newestIn(a) || a.dependencyName.localeCompare(b.dependencyName);
 }
 
 /** How many of these updates landed, and how many Renovate closed unmerged. */

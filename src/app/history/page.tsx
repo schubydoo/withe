@@ -132,11 +132,15 @@ function Empty({ forgeConfigured, repo }: { forgeConfigured: boolean; repo: stri
       </p>
     );
   }
+  // Deliberately not "this fills as the fleet moves". A token is necessary but
+  // not sufficient: enrichment reads only a source on the GitHub the token
+  // points at, so a GitLab source, or a GitHub Enterprise one with no
+  // WITHE_GITHUB_API_URL, records nothing however long it runs.
   return (
     <p className="mt-6 text-sm text-neutral-500 dark:text-neutral-400">
-      No completed updates are recorded yet. Withe records one when Renovate&rsquo;s pull request
-      merges or closes, so this page fills as the fleet moves. What is still queued is on the{' '}
-      <a className="underline" href="/updates">pending updates page</a>.
+      No completed updates are recorded yet. Withe records one when it reads a merged or closed
+      pull request from GitHub, which it does for a source on the GitHub your token reaches. What
+      is still queued is on the <a className="underline" href="/updates">pending updates page</a>.
     </p>
   );
 }
@@ -218,9 +222,9 @@ export default async function History({ searchParams }: Props) {
                     </td>
                     <td
                       className="py-1 pr-4 tabular-nums text-neutral-500 dark:text-neutral-400"
-                      title={row.closedAt?.toISOString() ?? undefined}
+                      title={row.closedAt.toISOString()}
                     >
-                      {row.closedAt?.toISOString().slice(0, 10) ?? '—'}{' '}
+                      {row.closedAt.toISOString().slice(0, 10)}{' '}
                       <span className="text-neutral-500 dark:text-neutral-400">({ago(row.closedAt, '—')})</span>
                     </td>
                     <td className="py-1 text-neutral-500 dark:text-neutral-400">

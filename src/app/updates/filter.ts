@@ -130,9 +130,7 @@ export function groupByDependency<T extends DependencyRow>(
     a.dependencyName.localeCompare(b.dependencyName);
   const byRepoName = (a: T, b: T) => a.repoFullName.localeCompare(b.repoFullName);
 
-  // Rows first: a group comparator may read them, and the history's does — it
-  // orders dependencies by their newest row.
-  const sorted = [...groups.values()];
+  const sorted = [...groups.values()].sort(order.groups ?? byDependencyName);
   for (const group of sorted) group.rows.sort(order.rows ?? byRepoName);
-  return sorted.sort(order.groups ?? byDependencyName);
+  return sorted;
 }

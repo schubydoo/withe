@@ -2,6 +2,7 @@
  * The store. One SQLite file, seven tables, every domain row tagged with the
  * source that produced it.
  */
+import { sql, type SQL } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 export const source = sqliteTable('source', {
@@ -209,6 +210,18 @@ export const completedUpdate = sqliteTable(
     closedAt: integer('closed_at', { mode: 'timestamp' }),
     /** When Withe recorded it, so a row the forge dated vaguely still prunes. */
     archivedAt: integer('archived_at', { mode: 'timestamp' }).notNull(),
+    /**
+     * The version pair and update type as one never-null string, for the key
+     * below to span. Derived by SQLite, so it cannot disagree with the columns
+     * it reads. Unit separator (31) joins the parts: it cannot occur in a
+     * version string, so no pair can collide with another by concatenation.
+     */
+    versionKey: text('version_key')
+      .notNull()
+      .generatedAlwaysAs(
+        (): SQL =>
+          sql`coalesce(current_version, '') || char(31) || coalesce(target_version, '') || char(31) || coalesce(update_type, '')`,
+      ),
   },
   (t) => [
     // Every sync re-reads the same finished pull request until Renovate stops
@@ -218,15 +231,21 @@ export const completedUpdate = sqliteTable(
     //
     // Every column here is NOT NULL, which is the point. SQLite counts each
     // null as distinct inside a unique index, so a key spanning the nullable
-    // version columns would not dedupe a lock-file refresh at all — that shape
-    // names no version pair and is most of what a real fleet updates. The
-    // versions add nothing anyway: one pull request for one dependency in one
-    // repository carries one version pair.
+    // version columns directly would not dedupe a lock-file refresh at all —
+    // that shape names no version pair and is most of what a real fleet
+    // updates. `versionKey` carries those values with the nulls folded out.
+    //
+    // It has to carry them. One branch can hold the same dependency at two
+    // current versions, when a repository pins it differently in two manifests
+    // and both bump to the same target. One branch is one `prNo`, so those are
+    // two rows sharing a pull request, and a key without the versions would
+    // keep whichever SQLite reached first and drop the other.
     uniqueIndex('completed_natural').on(
       t.sourceAdapterId,
       t.repoId,
       t.dependencyName,
       t.prNumber,
+      t.versionKey,
     ),
     index('completed_repo_closed').on(t.repoId, t.closedAt),
   ],

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "a24a3fd6-b0d6-448a-b0b4-8480dc5c7dd8",
+  "id": "c46a9604-cd5d-4233-83d5-879826fa21a7",
   "prevId": "62a1523c-f32e-499c-984c-79a95378c40e",
   "tables": {
     "completed_update": {
@@ -77,13 +77,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "pr_url": {
-          "name": "pr_url",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
         "pr_number": {
           "name": "pr_number",
           "type": "integer",
@@ -104,6 +97,17 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "version_key": {
+          "name": "version_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "generated": {
+            "as": "(coalesce(current_version, '') || char(31) || coalesce(target_version, '') || char(31) || coalesce(update_type, ''))",
+            "type": "virtual"
+          }
         }
       },
       "indexes": {
@@ -113,7 +117,8 @@
             "source_adapter_id",
             "repo_id",
             "dependency_name",
-            "pr_number"
+            "pr_number",
+            "version_key"
           ],
           "isUnique": true
         },
