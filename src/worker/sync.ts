@@ -8,7 +8,13 @@
 import type { CollectResult, SourceAdapter } from '../adapters/types.ts';
 import { redact } from '../core/redact.ts';
 import type { Db } from '../db/client.ts';
-import { persist, pruneOldRuns, recomputeStalled, recordSyncFailure } from '../db/persist.ts';
+import {
+  persist,
+  pruneCompletedUpdates,
+  pruneOldRuns,
+  recomputeStalled,
+  recordSyncFailure,
+} from '../db/persist.ts';
 
 export interface SyncOptions {
   intervalMs: number;
@@ -51,6 +57,8 @@ export interface CycleReport {
   sources: SourceOutcome[];
   /** Runs deleted by retention at the end of this cycle. */
   pruned: number;
+  /** Completed updates deleted by retention at the end of this cycle. */
+  prunedUpdates: number;
 }
 
 /**
@@ -122,7 +130,7 @@ export class SyncLoop {
   async runCycle(): Promise<CycleReport> {
     if (this.running) {
       this.log('sync: a cycle is still running, skipping this tick');
-      return { skipped: true, sources: [], pruned: 0 };
+      return { skipped: true, sources: [], pruned: 0, prunedUpdates: 0 };
     }
 
     this.running = true;
@@ -134,22 +142,28 @@ export class SyncLoop {
       // Once per cycle, after every source is written, because pruning touches
       // the whole file rather than one source's rows.
       const pruned = this.prune();
-      return { skipped: false, sources, pruned };
+      return { skipped: false, sources, pruned: pruned.runs, prunedUpdates: pruned.updates };
     } finally {
       this.running = false;
     }
   }
 
   /**
-   * Delete runs past the retention window. A no-op when it is unset, which is
-   * the default: run history is kept indefinitely (PRD Section 6.3.1).
+   * Delete runs and completed updates past the retention window. A no-op when
+   * it is unset, which is the default: both are kept indefinitely (PRD Section
+   * 6.3.1). The two streams share one window so an operator who sets it gets
+   * one answer for everything that grows with fleet activity.
    */
-  private prune(): number {
-    if (this.options.retentionMs === undefined) return 0;
+  private prune(): { runs: number; updates: number } {
+    if (this.options.retentionMs === undefined) return { runs: 0, updates: 0 };
     const cutoff = new Date(this.now() - this.options.retentionMs);
-    const pruned = pruneOldRuns(this.db, cutoff);
-    if (pruned > 0) this.log(`sync: pruned ${pruned} runs older than the retention window`);
-    return pruned;
+    const runs = pruneOldRuns(this.db, cutoff);
+    if (runs > 0) this.log(`sync: pruned ${runs} runs older than the retention window`);
+    const updates = pruneCompletedUpdates(this.db, cutoff);
+    if (updates > 0) {
+      this.log(`sync: pruned ${updates} completed updates older than the retention window`);
+    }
+    return { runs, updates };
   }
 
   private async syncOne(adapter: SourceAdapter): Promise<SourceOutcome> {

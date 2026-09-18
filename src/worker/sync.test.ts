@@ -8,7 +8,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { sql } from 'drizzle-orm';
 
 import type { CollectResult, SourceAdapter } from '../adapters/types.ts';
-import type { RenovateRun, Repo } from '../core/model.ts';
+import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { openDatabase } from '../db/client.ts';
 import { backoffMs, SyncLoop } from './sync.ts';
 
@@ -369,6 +369,54 @@ test('with retention set, runs the source dropped are pruned; still-listed ones 
     .all()
     .map((r) => (r as { external_job_id: string }).external_job_id);
   assert.deepEqual(jobs, ['fresh'], 'only the run inside the window remains');
+  sqlite.close();
+});
+
+test('the same retention window prunes completed updates, and reports them apart', async () => {
+  const { sqlite, db } = fresh();
+  const now = Date.now();
+  // One update, merged and then dropped from the log, so the archive holds it
+  // and the pending table does not. The forge marked it closed 60 days ago.
+  const merged: Update = {
+    id: 'prune:acme/widget:tsx',
+    repoId: 'prune:acme/widget',
+    dependencyName: 'tsx',
+    currentVersion: '4.19.0',
+    targetVersion: '4.20.0',
+    updateType: 'minor',
+    datasource: 'npm',
+    packageName: 'tsx',
+    state: 'pr-merged',
+    pullRequestUrl: null,
+    pullRequestNumber: 7,
+    closedAt: new Date(now - 60 * DAY),
+    closeType: 'merge',
+    detectedAt: new Date(now - 61 * DAY),
+    packageFileCount: 1,
+    packageFiles: [],
+    sourceAdapterId: 'prune',
+  };
+  let updates = [merged];
+  const loop = new SyncLoop(
+    db,
+    [stub('prune', async () => ({
+      repos: [repoOf('prune', 'acme/widget')],
+      runs: [],
+      updates,
+      warnings: [], complete: true, authoritativeRepoList: true,
+    }))],
+    { intervalMs: 1000, stalledAfterMs: 7 * DAY, retentionMs: 30 * DAY, log: () => {}, now: () => now },
+  );
+
+  const first = await loop.runCycle();
+  assert.equal(first.prunedUpdates, 1, 'the archived record is past the window');
+  assert.equal(first.pruned, 0, 'runs and completed updates are counted apart');
+
+  // Renovate stops listing the branch. Nothing re-archives it, so there is
+  // nothing left for the next window to take.
+  updates = [];
+  const second = await loop.runCycle();
+  assert.equal(second.prunedUpdates, 0);
   sqlite.close();
 });
 

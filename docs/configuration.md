@@ -13,7 +13,7 @@ no breaking change.
 | `WITHE_CE_ORGS` | discovered | Comma-separated organizations, when discovery is not available |
 | `WITHE_SYNC_INTERVAL_SECONDS` | `300` | How often Withe re-reads from the source |
 | `WITHE_STALLED_AFTER_DAYS` | `7` | When a repository with no successful run is called stalled |
-| `WITHE_RETENTION_DAYS` | unset | Prune run history older than this; unset keeps everything |
+| `WITHE_RETENTION_DAYS` | unset | Prune run history and completed updates older than this; unset keeps everything |
 | `WITHE_COMPARE_URL` | forge compare | Send a dependency's compare link to your own template instead of the forge — see [Compare links](#compare-links) |
 | `WITHE_AUTH_USER` / `WITHE_AUTH_PASS` | unset | Enable HTTP basic authentication — see [Exposure](exposure.md) |
 | `WITHE_TLS_CERT` / `WITHE_TLS_KEY` | unset | Enable the TLS proxy — see [Exposure](exposure.md) |

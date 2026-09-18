@@ -35,6 +35,25 @@ export interface LockFileRefreshRow {
   prNumber: number | null;
 }
 
+export interface CompletedUpdateRow {
+  sourceAdapterId: string;
+  repoFullName: string;
+  dependencyName: string;
+  currentVersion: string | null;
+  targetVersion: string | null;
+  updateType: UpdateType;
+  datasource: string | null;
+  packageName: string | null;
+  /** Merged, or closed without merging. Two different facts, never inferred. */
+  finalState: 'pr-merged' | 'pr-closed';
+  prNumber: number;
+  /**
+   * When it reached that state. Never null: the query falls back to the
+   * archive date, which the schema declares NOT NULL, so there is always one.
+   */
+  closedAt: Date;
+}
+
 export interface RepoHealthRow {
   fullName: string;
   status: string | null;
@@ -94,6 +113,45 @@ export function lockFileRefreshes(db: Db): LockFileRefreshRow[] {
   // Stored as a JSON column. A malformed value must not take the page down
   // with it, so it degrades to no paths.
   return rows.map((row) => ({ ...row, packageFiles: parseList(row.packageFiles) }));
+}
+
+/**
+ * Updates Renovate finished with, newest first (B-10).
+ *
+ * The pending views answer "what is queued"; this one answers "what has
+ * Renovate actually landed here, and when". It reads `completed_update`, which
+ * persist writes as each outcome is detected, so it is not affected by the
+ * snapshot wipe that clears the pending rows.
+ *
+ * A removed repository is excluded, as it is in every other query here. Its
+ * history is still true, but Withe hides a repository the source stopped
+ * listing everywhere else, and one page disagreeing would read as a bug.
+ *
+ * `limit` caps the fleet page. With retention unset the archive grows for as
+ * long as the install runs, and a page is not the place to render all of it.
+ */
+export function completedUpdates(db: Db, limit = 250, repoFullName?: string): CompletedUpdateRow[] {
+  const rows = db.all<Omit<CompletedUpdateRow, 'closedAt'> & { closedAt: number }>(sql`
+    select c.source_adapter_id as sourceAdapterId,
+           r.full_name         as repoFullName,
+           c.dependency_name   as dependencyName,
+           c.current_version   as currentVersion,
+           c.target_version    as targetVersion,
+           c.update_type       as updateType,
+           c.datasource,
+           c.package_name      as packageName,
+           c.final_state       as finalState,
+           c.pr_number         as prNumber,
+           coalesce(c.closed_at, c.archived_at) as closedAt
+      from completed_update c
+      join repo r on r.id = c.repo_id
+     where r.removed_at is null
+       and (${repoFullName ?? null} is null or r.full_name = ${repoFullName ?? null})
+     order by closedAt desc, r.full_name, c.dependency_name
+     limit ${limit}
+  `);
+
+  return rows.map((row) => ({ ...row, closedAt: new Date(row.closedAt * 1000) }));
 }
 
 /**

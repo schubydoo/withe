@@ -15,8 +15,8 @@ import { after, test } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import { openDatabase, type Db } from './client.ts';
-import { pruneOldRuns } from './persist.ts';
-import { renovateRun, repo, source } from './schema.ts';
+import { pruneCompletedUpdates, pruneOldRuns } from './persist.ts';
+import { completedUpdate, renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-prune-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -126,5 +126,95 @@ test('nothing to prune changes nothing, and does not checkpoint for no reason', 
   const deleted = pruneOldRuns(db, new Date(Date.now() - 10_000 * DAY_MS));
   assert.equal(deleted, 0);
   assert.equal(statSync(path).size, before);
+  sqlite.close();
+});
+
+/**
+ * Completed updates share the runs' retention window (B-10). `closedAt` dates a
+ * record, and `archivedAt` dates one the forge left undated, so both are covered
+ * here: a window that only read `closedAt` would keep an undated row forever.
+ */
+function addCompleted(db: Db, rows: { pr: number; closedAt: Date | null; archivedAt: Date }[]): void {
+  for (const row of rows) {
+    db.insert(completedUpdate)
+      .values({
+        sourceAdapterId: 'default',
+        repoId: 1,
+        dependencyName: `dep-${row.pr}`,
+        currentVersion: '1.0.0',
+        targetVersion: '1.1.0',
+        updateType: 'minor',
+        datasource: 'npm',
+        packageName: `dep-${row.pr}`,
+        finalState: 'pr-merged',
+        prNumber: row.pr,
+        closedAt: row.closedAt,
+        archivedAt: row.archivedAt,
+      })
+      .run();
+  }
+}
+
+function completedCount(db: Db): number {
+  return (db.$client.prepare('select count(*) as n from completed_update').get() as { n: number }).n;
+}
+
+test('completed updates older than the window are pruned, newer ones kept', () => {
+  const { sqlite, db } = withRuns(0);
+  const now = Date.now();
+  addCompleted(db, [
+    { pr: 1, closedAt: new Date(now - 1 * DAY_MS), archivedAt: new Date(now) },
+    { pr: 2, closedAt: new Date(now - 40 * DAY_MS), archivedAt: new Date(now) },
+    { pr: 3, closedAt: new Date(now - 90 * DAY_MS), archivedAt: new Date(now) },
+  ]);
+
+  const deleted = pruneCompletedUpdates(db, new Date(now - 30 * DAY_MS));
+  assert.equal(deleted, 2, 'the two past the window');
+  assert.equal(completedCount(db), 1);
+  sqlite.close();
+});
+
+test('a record the forge left undated prunes on the date Withe archived it', () => {
+  const { sqlite, db } = withRuns(0);
+  const now = Date.now();
+  addCompleted(db, [
+    // No close date. Without the archived_at fallback this row outlives every
+    // window, because a null never compares below a cutoff.
+    { pr: 1, closedAt: null, archivedAt: new Date(now - 90 * DAY_MS) },
+    { pr: 2, closedAt: null, archivedAt: new Date(now) },
+  ]);
+
+  const deleted = pruneCompletedUpdates(db, new Date(now - 30 * DAY_MS));
+  assert.equal(deleted, 1, 'the old one, by its archive date');
+  assert.equal(completedCount(db), 1);
+  sqlite.close();
+});
+
+test('pruning completed updates returns space to the disk', () => {
+  const { path, sqlite, db } = withRuns(0);
+  const now = Date.now();
+  addCompleted(
+    db,
+    Array.from({ length: 20_000 }, (_unused, i) => ({
+      pr: i,
+      closedAt: new Date(now - (i + 60) * 60_000),
+      archivedAt: new Date(now),
+    })),
+  );
+  db.$client.pragma('wal_checkpoint(TRUNCATE)');
+  const before = statSync(path).size;
+
+  const deleted = pruneCompletedUpdates(db, new Date(now));
+  assert.equal(deleted, 20_000);
+  assert.ok(statSync(path).size < before, `file did not shrink: ${before} -> ${statSync(path).size}`);
+  sqlite.close();
+});
+
+test('with nothing past the window, the completed archive is untouched', () => {
+  const { sqlite, db } = withRuns(0);
+  const now = Date.now();
+  addCompleted(db, [{ pr: 1, closedAt: new Date(now), archivedAt: new Date(now) }]);
+  assert.equal(pruneCompletedUpdates(db, new Date(now - 10_000 * DAY_MS)), 0);
+  assert.equal(completedCount(db), 1);
   sqlite.close();
 });

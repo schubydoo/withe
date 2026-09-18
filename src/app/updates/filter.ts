@@ -71,23 +71,47 @@ export function filterByType(rows: PendingUpdateRow[], filter: UpdateFilter): Pe
   return filter.type === null ? rows : rows.filter((row) => row.updateType === filter.type);
 }
 
-/** One dependency and every repository awaiting it. */
-export interface DependencyGroup {
+/** What a row must carry to be grouped by dependency. */
+export interface DependencyRow {
+  repoFullName: string;
   dependencyName: string;
   datasource: string | null;
   packageName: string | null;
-  rows: PendingUpdateRow[];
+}
+
+/** One dependency and every repository the rows name for it. */
+export interface DependencyGroup<T extends DependencyRow = PendingUpdateRow> {
+  dependencyName: string;
+  datasource: string | null;
+  packageName: string | null;
+  rows: T[];
+}
+
+/** How a caller orders the result. Both default to the pending view's order. */
+interface GroupOrder<T extends DependencyRow> {
+  /** Rows within one dependency. Defaults to repository name. */
+  rows?: (a: T, b: T) => number;
+  /** The dependencies themselves. Defaults to dependency name. */
+  groups?: (a: DependencyGroup<T>, b: DependencyGroup<T>) => number;
 }
 
 /**
- * Group pending updates by dependency, across repositories. The key is the
- * dependency name and its datasource, so an npm `node` and a Docker `node` stay
- * apart; a JSON pair is the key so no name or datasource value can collide with
- * a separator. Groups come back sorted by dependency name, and the rows inside
- * each by repository, so the page's order is stable without sorting in the view.
+ * Group updates by dependency, across repositories. The key is the dependency
+ * name and its datasource, so an npm `node` and a Docker `node` stay apart; a
+ * JSON pair is the key so no name or datasource value can collide with a
+ * separator. Groups come back sorted, and the rows inside each sorted too, so
+ * the page's order is stable without sorting in the view.
+ *
+ * Generic over the row because the completed-update history groups the same way
+ * over different rows (B-10). Only the order differs there — a history reads
+ * newest first — so the two views share this and pass their own comparators
+ * rather than keeping two copies of the grouping.
  */
-export function groupByDependency(rows: PendingUpdateRow[]): DependencyGroup[] {
-  const groups = new Map<string, DependencyGroup>();
+export function groupByDependency<T extends DependencyRow>(
+  rows: T[],
+  order: GroupOrder<T> = {},
+): DependencyGroup<T>[] {
+  const groups = new Map<string, DependencyGroup<T>>();
   for (const row of rows) {
     const key = JSON.stringify([row.dependencyName, row.datasource]);
     const group = groups.get(key);
@@ -102,7 +126,11 @@ export function groupByDependency(rows: PendingUpdateRow[]): DependencyGroup[] {
       });
     }
   }
-  const sorted = [...groups.values()].sort((a, b) => a.dependencyName.localeCompare(b.dependencyName));
-  for (const group of sorted) group.rows.sort((a, b) => a.repoFullName.localeCompare(b.repoFullName));
+  const byDependencyName = (a: DependencyGroup<T>, b: DependencyGroup<T>) =>
+    a.dependencyName.localeCompare(b.dependencyName);
+  const byRepoName = (a: T, b: T) => a.repoFullName.localeCompare(b.repoFullName);
+
+  const sorted = [...groups.values()].sort(order.groups ?? byDependencyName);
+  for (const group of sorted) group.rows.sort(order.rows ?? byRepoName);
   return sorted;
 }

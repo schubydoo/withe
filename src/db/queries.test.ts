@@ -13,7 +13,7 @@ import { groupByFullName } from '../core/group.ts';
 import { isHeld } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist, recomputeStalled, recordForgeStatus } from './persist.ts';
-import { forgeRateLimit, forges, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, sourceSystems, triage } from './queries.ts';
+import { completedUpdates, forgeRateLimit, forges, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, sourceSystems, triage } from './queries.ts';
 import { renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
@@ -924,5 +924,165 @@ test('the close time and close type survive a round trip', () => {
   assert.equal(stored[0]?.state, 'pr-closed');
   assert.equal(stored[0]?.closeType, 'close');
   assert.equal(stored[0]?.closedAt, Math.floor(closedAt.getTime() / 1000));
+  sqlite.close();
+});
+
+/** One repository, one run, and whatever updates the log still lists. */
+function cycle(updates: Update[]): CollectResult {
+  return {
+    repos: [makeRepo('acme/widget')],
+    runs: [makeRun('acme/widget', 'j1', 'success', '2026-09-03T00:00:00Z')],
+    updates,
+    warnings: [], complete: true, authoritativeRepoList: true,
+  };
+}
+
+test('a merged update outlives the sync that stops listing it (B-10)', () => {
+  const { sqlite, db } = fresh();
+  const closedAt = new Date('2026-09-03T10:00:00Z');
+  const merged = makeUpdate('acme/widget', {
+    dependencyName: 'tsx',
+    currentVersion: '0.4.0',
+    targetVersion: '0.5.0',
+    updateType: 'minor',
+    pullRequestNumber: 43,
+    state: 'pr-merged',
+    closeType: 'merge',
+    closedAt,
+  });
+
+  // The forge has just reported the merge, so the log still lists the branch.
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T11:00:00Z'));
+  assert.equal(completedUpdates(db).length, 1, 'recorded in the sync that detected it');
+
+  // Renovate runs again and drops the merged branch. This is the pass that
+  // used to lose it: the snapshot wipe removes the pending row and nothing
+  // re-inserts it.
+  persist(db, SOURCE, 'ce', cycle([]), new Date('2026-09-03T12:00:00Z'));
+
+  assert.equal(pendingUpdates(db).length, 0, 'it is no longer pending');
+  const history = completedUpdates(db);
+  assert.equal(history.length, 1, 'but the record survives the wipe');
+  const only = history[0];
+  assert.equal(only?.repoFullName, 'acme/widget');
+  assert.equal(only?.dependencyName, 'tsx');
+  assert.equal(only?.currentVersion, '0.4.0');
+  assert.equal(only?.targetVersion, '0.5.0');
+  assert.equal(only?.updateType, 'minor');
+  assert.equal(only?.prNumber, 43);
+  assert.equal(only?.finalState, 'pr-merged');
+  assert.deepEqual(only?.closedAt, closedAt, 'the date it reached that state');
+  sqlite.close();
+});
+
+test('a closed-unmerged update is recorded as abandoned, not as landed', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', cycle([
+    makeUpdate('acme/widget', { dependencyName: 'tsx', pullRequestNumber: 43, state: 'pr-merged', closeType: 'merge', closedAt: new Date('2026-09-03T10:00:00Z') }),
+    makeUpdate('acme/widget', { dependencyName: 'next', pullRequestNumber: 44, state: 'pr-closed', closeType: 'close', closedAt: new Date('2026-09-03T09:00:00Z') }),
+  ]), new Date('2026-09-03T11:00:00Z'));
+
+  const byName = new Map(completedUpdates(db).map((u) => [u.dependencyName, u.finalState]));
+  assert.equal(byName.get('tsx'), 'pr-merged', 'this landed');
+  assert.equal(byName.get('next'), 'pr-closed', 'Renovate abandoned this');
+  sqlite.close();
+});
+
+test('re-reading the same finished pull request every sync records it once', () => {
+  const { sqlite, db } = fresh();
+  const merged = makeUpdate('acme/widget', {
+    dependencyName: 'tsx',
+    pullRequestNumber: 43,
+    state: 'pr-merged',
+    closeType: 'merge',
+    closedAt: new Date('2026-09-03T10:00:00Z'),
+  });
+  // The branch lingers, so three passes see the same merged pull request.
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T11:00:00Z'));
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T12:00:00Z'));
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T13:00:00Z'));
+
+  assert.equal(completedUpdates(db).length, 1, 'one record, not one per cycle');
+  sqlite.close();
+});
+
+test('a lock-file refresh is also recorded once, though it has no versions', () => {
+  const { sqlite, db } = fresh();
+  // A lock-file-maintenance branch names no version pair, so these columns are
+  // null. SQLite counts every null as distinct inside a unique index, so a key
+  // that spans a nullable column cannot dedupe this shape — and it is the
+  // common one: 7 of 9 pending updates on the author's own install.
+  const merged = makeUpdate('acme/widget', {
+    dependencyName: 'uv.lock',
+    currentVersion: null,
+    targetVersion: null,
+    updateType: 'lock-file-maintenance',
+    pullRequestNumber: 44,
+    state: 'pr-merged',
+    closeType: 'merge',
+    closedAt: new Date('2026-09-03T10:00:00Z'),
+  });
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T11:00:00Z'));
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T12:00:00Z'));
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T13:00:00Z'));
+
+  assert.equal(completedUpdates(db).length, 1, 'one record, not one per cycle');
+  sqlite.close();
+});
+
+test('two version pairs under one pull request are both recorded', () => {
+  const { sqlite, db } = fresh();
+  // One branch can carry the same dependency at two current versions: a
+  // repository that pins it differently in two manifests bumps both to the
+  // same target in one pull request. `renovate-log.ts` keys an update row on
+  // the version pair inside the branch loop, so that is two rows sharing one
+  // `prNo` — and the history must not silently keep whichever it met first.
+  const closedAt = new Date('2026-09-03T10:00:00Z');
+  const base = {
+    dependencyName: 'next',
+    targetVersion: '16.0.0',
+    updateType: 'major' as const,
+    pullRequestNumber: 50,
+    state: 'pr-merged' as const,
+    closeType: 'merge' as const,
+    closedAt,
+  };
+  persist(db, SOURCE, 'ce', cycle([
+    makeUpdate('acme/widget', { ...base, currentVersion: '15.0.0' }),
+    makeUpdate('acme/widget', { ...base, currentVersion: '15.2.0' }),
+  ]), new Date('2026-09-03T11:00:00Z'));
+
+  const history = completedUpdates(db);
+  assert.deepEqual(
+    history.map((u) => u.currentVersion).sort(),
+    ['15.0.0', '15.2.0'],
+    'both version pairs, not whichever SQLite reached first',
+  );
+  sqlite.close();
+});
+
+test('only a finished update is recorded, never a pending one', () => {
+  const { sqlite, db } = fresh();
+  const merged = makeUpdate('acme/widget', {
+    dependencyName: 'tsx',
+    pullRequestNumber: 43,
+    state: 'pr-merged',
+    closeType: 'merge',
+    closedAt: new Date('2026-09-03T10:00:00Z'),
+  });
+  // The rest of the fleet is `detected` and `pr-open`, which are not outcomes.
+  // One of those already carries a pull-request number, so a filter widened to
+  // any state with a number would pick it up and fail this.
+  persist(
+    db,
+    SOURCE,
+    'ce',
+    { ...FLEET, updates: [...FLEET.updates, merged] },
+    new Date('2026-09-03T11:00:00Z'),
+  );
+
+  const history = completedUpdates(db);
+  assert.deepEqual(history.map((u) => u.dependencyName), ['tsx'], 'the merged one, and only it');
+  assert.ok(pendingUpdates(db).length > 0, 'the pending rows were there to be wrongly picked');
   sqlite.close();
 });

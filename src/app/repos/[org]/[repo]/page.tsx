@@ -219,6 +219,12 @@ export default async function RunHistory({ params, searchParams }: Props) {
       )}
 
       <p className="mt-8 text-sm">
+        <a className="underline" href={`/history?repo=${encodeURIComponent(fullName)}`}>
+          Completed updates for this repository
+        </a>
+      </p>
+
+      <p className="mt-2 text-sm">
         <a className="underline" href="/repos">
           All repositories
         </a>
