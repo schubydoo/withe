@@ -14,7 +14,7 @@ import {
 } from '../../db/queries.ts';
 import { ago } from '../format.ts';
 import { groupByDependency } from '../updates/filter.ts';
-import { byLatestLanding, byNewest, readRepoFilter, tally } from './filter.ts';
+import { byLatestLanding, byNewest, readRepoFilter, rowKey, tally } from './filter.ts';
 import { Maybe } from '../maybe.tsx';
 
 export const dynamic = 'force-dynamic';
@@ -200,7 +200,7 @@ export default async function History({ searchParams }: Props) {
                 </tr>
                 {group.rows.map((row) => (
                   <tr
-                    key={`${row.sourceAdapterId}/${row.repoFullName}/${row.prNumber}`}
+                    key={rowKey(row)}
                     className="border-t border-neutral-200 dark:border-neutral-800"
                   >
                     <td className="py-1 pr-4 font-medium">

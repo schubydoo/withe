@@ -55,6 +55,33 @@ export function byLatestLanding(
   return newestIn(b) - newestIn(a) || a.dependencyName.localeCompare(b.dependencyName);
 }
 
+/**
+ * What makes one archived record distinct from another, as a string.
+ *
+ * This mirrors the store's own `completed_natural` key (`schema.ts`), field for
+ * field, including the version pair. It has to: one pull request can carry the
+ * same dependency at two current versions, the archive keeps both on purpose,
+ * and both land in one group here because the group key is the dependency. A
+ * key without the versions makes those two rows identical siblings in one
+ * array, so React reconciles them by a name they share.
+ *
+ * The unit separator joins the parts, as it does in `version_key`, because it
+ * cannot occur in any of them and so no two records collide by concatenation.
+ */
+export function rowKey(row: CompletedUpdateRow): string {
+  return [
+    row.sourceAdapterId,
+    row.repoFullName,
+    row.dependencyName,
+    row.prNumber,
+    // The versions are null for a lock-file refresh. The update type is not:
+    // `classify` always returns one, as `PendingUpdateRow` also assumes.
+    row.currentVersion ?? '',
+    row.targetVersion ?? '',
+    row.updateType,
+  ].join('');
+}
+
 /** How many of these updates landed, and how many Renovate closed unmerged. */
 export function tally(rows: CompletedUpdateRow[]): { merged: number; closed: number } {
   let merged = 0;

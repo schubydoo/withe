@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import type { CompletedUpdateRow } from '../../db/queries.ts';
 import { groupByDependency } from '../updates/filter.ts';
-import { byLatestLanding, byNewest, readRepoFilter, tally } from './filter.ts';
+import { byLatestLanding, byNewest, readRepoFilter, rowKey, tally } from './filter.ts';
 
 function row(over: Partial<CompletedUpdateRow>): CompletedUpdateRow {
   return {
@@ -88,6 +88,58 @@ test('an npm package and a Docker image of the same name stay apart', () => {
     { rows: byNewest, groups: byLatestLanding },
   );
   assert.equal(groups.length, 2);
+});
+
+test('two version pairs under one pull request get different row keys', () => {
+  // The archive keeps both of these on purpose, and they group together here
+  // because the group key is the dependency. A key without the version pair
+  // makes them identical siblings in one array.
+  const shared = { dependencyName: 'next', targetVersion: '16.0.0', updateType: 'major' as const, prNumber: 50 };
+  const a = row({ ...shared, currentVersion: '15.0.0' });
+  const b = row({ ...shared, currentVersion: '15.2.0' });
+  assert.notEqual(rowKey(a), rowKey(b));
+});
+
+test('the row key separates every field the store separates', () => {
+  const base = row({});
+  for (const change of [
+    { sourceAdapterId: 'other' },
+    { repoFullName: 'acme/other' },
+    { dependencyName: 'other' },
+    { prNumber: 999 },
+    { currentVersion: '9.9.9' },
+    { targetVersion: '9.9.9' },
+    { updateType: 'minor' as const },
+  ]) {
+    assert.notEqual(rowKey(row(change)), rowKey(base), `${Object.keys(change)[0]} does not change the key`);
+  }
+});
+
+test('two records alike in every keyed field share a key', () => {
+  // The negative half: the test above passes trivially if the key were random.
+  assert.equal(rowKey(row({})), rowKey(row({})));
+});
+
+test('a lock-file refresh, which names no versions, still gets a key', () => {
+  const lock = row({
+    dependencyName: 'uv.lock',
+    currentVersion: null,
+    targetVersion: null,
+    updateType: 'lock-file-maintenance',
+  });
+  assert.ok(rowKey(lock).length > 0);
+  // Two lock-file refreshes in one repository are told apart by their pull
+  // request, which is the only thing that differs between them.
+  assert.notEqual(rowKey(lock), rowKey({ ...lock, prNumber: lock.prNumber + 1 }));
+});
+
+test('a value cannot straddle two fields and forge a collision', () => {
+  // The separator earns its place here: without it, these two would both
+  // flatten to the same string.
+  assert.notEqual(
+    rowKey(row({ currentVersion: '1.0', targetVersion: '' })),
+    rowKey(row({ currentVersion: '1', targetVersion: '0' })),
+  );
 });
 
 test('the tally separates what landed from what Renovate abandoned', () => {
