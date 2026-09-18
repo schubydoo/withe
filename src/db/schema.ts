@@ -1,5 +1,5 @@
 /**
- * The store. One SQLite file, six tables, every domain row tagged with the
+ * The store. One SQLite file, seven tables, every domain row tagged with the
  * source that produced it.
  */
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
@@ -154,6 +154,77 @@ export const update = sqliteTable(
       t.targetVersion,
       t.updateType,
     ),
+  ],
+);
+
+/**
+ * Updates Renovate finished with — the merged and closed pull requests (B-10).
+ *
+ * `update` is a snapshot: persist clears a repository's rows and rewrites them
+ * from the latest log, so a merged update leaves the table as soon as Renovate
+ * stops listing its branch. That is correct for the pending views and it throws
+ * away the outcome. This table keeps it. Persist copies a row here at the
+ * moment it reads `pr-merged` or `pr-closed`, before the snapshot is cleared,
+ * so the record survives the wipe that removes the pending row.
+ *
+ * Metadata only, per PRD Section 6.3.1 — no pull-request body, no log content.
+ * Retention prunes these with the runs they belong to (`pruneCompletedUpdates`).
+ */
+export const completedUpdate = sqliteTable(
+  'completed_update',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sourceAdapterId: text('source_adapter_id')
+      .notNull()
+      .references(() => source.id),
+    repoId: integer('repo_id')
+      .notNull()
+      .references(() => repo.id),
+    dependencyName: text('dependency_name').notNull(),
+    currentVersion: text('current_version'),
+    targetVersion: text('target_version'),
+    updateType: text('update_type', {
+      enum: [
+        'digest',
+        'patch',
+        'minor',
+        'major',
+        'multiple-major',
+        'security',
+        'lock-file-maintenance',
+      ],
+    }),
+    datasource: text('datasource'),
+    packageName: text('package_name'),
+    /**
+     * Merged or closed-unmerged. "Renovate abandoned this" and "this landed"
+     * are different facts, so the reader never has to infer one from the other.
+     */
+    finalState: text('final_state', { enum: ['pr-merged', 'pr-closed'] }).notNull(),
+    prUrl: text('pr_url'),
+    /** Not null by construction: only a row with a pull-request number can be
+     * enriched to a final state, so there is always a number to key on. */
+    prNumber: integer('pr_number').notNull(),
+    /** When the pull request reached that state, as the forge reported it. */
+    closedAt: integer('closed_at', { mode: 'timestamp' }),
+    /** When Withe recorded it, so a row the forge dated vaguely still prunes. */
+    archivedAt: integer('archived_at', { mode: 'timestamp' }).notNull(),
+  },
+  (t) => [
+    // Every sync re-reads the same finished pull request until Renovate stops
+    // listing its branch. Without this the archive gains a duplicate per cycle.
+    // The pull-request number is part of the key, so a revert that merges the
+    // same versions again under a new number is a second record, not a loss.
+    uniqueIndex('completed_natural').on(
+      t.sourceAdapterId,
+      t.repoId,
+      t.dependencyName,
+      t.currentVersion,
+      t.targetVersion,
+      t.updateType,
+      t.prNumber,
+    ),
+    index('completed_repo_closed').on(t.repoId, t.closedAt),
   ],
 );
 

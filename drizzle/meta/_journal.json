@@ -50,6 +50,13 @@
       "when": 1789082907205,
       "tag": "0006_pink_moon_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1789744968278,
+      "tag": "0007_completed-update-history",
+      "breakpoints": true
     }
   ]
 }

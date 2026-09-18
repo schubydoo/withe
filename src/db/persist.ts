@@ -280,6 +280,31 @@ export function persist(
       updates += 1;
     }
 
+    // Keep the outcome (B-10). The delete above is where a finished update
+    // leaves the pending view: once Renovate stops listing the branch, nothing
+    // re-inserts it and the fact that it ever landed is gone. Copying here,
+    // right after the current set is written, records it in the same sync that
+    // detected it rather than one sync later.
+    //
+    // This reads the table rather than `result` so it also picks up a row in a
+    // repository this cycle did not collect, and `insert or ignore` makes the
+    // repeat harmless: the same finished pull request is re-read every sync
+    // until its branch disappears, and `completed_natural` keeps one record.
+    tx.run(sql`
+      insert or ignore into completed_update (
+        source_adapter_id, repo_id, dependency_name, current_version,
+        target_version, update_type, datasource, package_name, final_state,
+        pr_url, pr_number, closed_at, archived_at
+      )
+      select source_adapter_id, repo_id, dependency_name, current_version,
+             target_version, update_type, datasource, package_name, state,
+             pr_url, pr_number, closed_at, ${Math.floor(finishedAt.getTime() / 1000)}
+        from \`update\`
+       where source_adapter_id = ${sourceAdapterId}
+         and state in ('pr-merged', 'pr-closed')
+         and pr_number is not null
+    `);
+
     tx.insert(syncStatus)
       .values({
         sourceAdapterId,
@@ -379,6 +404,38 @@ export function pruneOldRuns(db: Db, cutoff: Date): number {
     db.run(sql`PRAGMA incremental_vacuum`);
     // The truncation lands on the main file only at checkpoint. TRUNCATE also
     // caps the WAL, which a long-lived worker would otherwise let grow.
+    db.$client.pragma('wal_checkpoint(TRUNCATE)');
+  }
+
+  return deleted;
+}
+
+/**
+ * Delete completed updates older than `cutoff`, and give the space back.
+ *
+ * The archive is a third growing stream next to run metadata, so it gets the
+ * same window rather than its own: one `WITHE_RETENTION_DAYS` answers for both,
+ * and unset still means keep everything (PRD Section 6.3.1). The caller prunes
+ * both in the same cycle.
+ *
+ * Age is the date the pull request closed, falling back to the date Withe
+ * archived it, so a forge that reported no date still prunes instead of
+ * accumulating forever.
+ *
+ * There is no `log_available` equivalent here. A completed update is already
+ * the record of something the source has stopped listing, so age is the only
+ * question. The vacuum and checkpoint are needed for the same reason they are
+ * in `pruneOldRuns`: without them the file never shrinks.
+ */
+export function pruneCompletedUpdates(db: Db, cutoff: Date): number {
+  const seconds = Math.floor(cutoff.getTime() / 1000);
+  const deleted = db.run(sql`
+    delete from completed_update
+     where coalesce(closed_at, archived_at) < ${seconds}
+  `).changes;
+
+  if (deleted > 0) {
+    db.run(sql`PRAGMA incremental_vacuum`);
     db.$client.pragma('wal_checkpoint(TRUNCATE)');
   }
 
