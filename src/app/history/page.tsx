@@ -171,9 +171,14 @@ export default async function History({ searchParams }: Props) {
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Completed updates</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        What Renovate has finished{repo === null ? ' across the fleet' : ` in ${repo}`}:{' '}
-        {counts.merged} merged and {counts.closed} closed without merging, across {repoTotal}{' '}
-        {repoTotal === 1 ? 'repository' : 'repositories'}. Grouped by dependency and newest first.
+        {rows.length > 0 && (
+          <>
+            What Renovate has finished{repo === null ? ' across the fleet' : ` in ${repo}`}:{' '}
+            {counts.merged} merged and {counts.closed} closed without merging, across {repoTotal}{' '}
+            {repoTotal === 1 ? 'repository' : 'repositories'}. Grouped by dependency and newest
+            first.{' '}
+          </>
+        )}
         What is still queued is on the <a className="underline" href="/updates">pending updates page</a>.
       </p>
 
@@ -184,6 +189,11 @@ export default async function History({ searchParams }: Props) {
       ) : (
         <>
           <table className="mt-4 w-full text-sm">
+            <caption className="sr-only">
+              Updates Renovate completed{repo === null ? '' : ` in ${repo}`}, grouped by dependency,
+              newest first. Each row gives the repository, the versions, the update type, whether
+              the pull request merged or closed, the date, and the pull request.
+            </caption>
             {groups.map((group) => (
               <tbody key={`${group.dependencyName}/${group.datasource ?? ''}`}>
                 <tr>
