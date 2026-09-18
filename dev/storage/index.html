@@ -445,6 +445,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#completed-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completed updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#file-backed-sources-your-files-your-retention" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -626,6 +637,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#completed-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Completed updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#file-backed-sources-your-files-your-retention" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -712,6 +734,16 @@ Withe then deletes older runs at the end of each sync and returns the freed spac
 Retention only touches runs the source itself no longer reports — a run the server still lists (or
 whose log file still sits in a mounted directory) would only be re-ingested on the next sync, so it
 stays until the source drops it. Repositories, pending updates, and forge links are never pruned.</p>
+<h2 id="completed-updates">Completed updates<a class="headerlink" href="#completed-updates" title="Permanent link">&para;</a></h2>
+<p>Withe also records each update Renovate finished, so the dashboard can show what landed and when.
+A completed-update record costs about <strong>254 bytes</strong>, so the database grows by roughly <strong>1 MB per
+4,100 records</strong>. One record is one Renovate pull request that merged or closed. This stream grows
+with how often the fleet updates, not with time. A fleet that lands 10 updates a week adds about
+130 KB a year.</p>
+<p><code>WITHE_RETENTION_DAYS</code> prunes these records on the same schedule as runs. Age is the date the pull
+request closed. If the forge reported no close date, age is the date Withe archived the record. A
+run waits for the source to drop its own copy. A completed update has no such copy, so retention
+removes it as soon as it passes the window.</p>
 <h2 id="file-backed-sources-your-files-your-retention">File-backed sources: your files, your retention<a class="headerlink" href="#file-backed-sources-your-files-your-retention" title="Permanent link">&para;</a></h2>
 <p>For a <code>jsonlog</code> source the log files are the source record, not a cache, so the rule is different
 and simpler:</p>
