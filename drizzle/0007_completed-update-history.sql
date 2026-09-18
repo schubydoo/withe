@@ -17,5 +17,5 @@ CREATE TABLE `completed_update` (
 	FOREIGN KEY (`repo_id`) REFERENCES `repo`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `completed_natural` ON `completed_update` (`source_adapter_id`,`repo_id`,`dependency_name`,`current_version`,`target_version`,`update_type`,`pr_number`);--> statement-breakpoint
+CREATE UNIQUE INDEX `completed_natural` ON `completed_update` (`source_adapter_id`,`repo_id`,`dependency_name`,`pr_number`);--> statement-breakpoint
 CREATE INDEX `completed_repo_closed` ON `completed_update` (`repo_id`,`closed_at`);

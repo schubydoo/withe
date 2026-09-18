@@ -19,6 +19,7 @@ import {
   type TriageRow,
 } from '../db/queries.ts';
 import { foldLock, foldUpdate, updateIdentity } from './collapse.ts';
+import { Maybe } from './maybe.tsx';
 import { soonestNextRun } from './next-run.ts';
 import { NextRun } from './next-run.tsx';
 
@@ -81,22 +82,6 @@ function age(from: Date | null): string {
 
 function link(row: { org: string; name: string }): string {
   return `/repos/${encodeURIComponent(row.org)}/${encodeURIComponent(row.name)}`;
-}
-
-/** A link, or the same text unlinked when nothing can be addressed. */
-function Maybe({ href, children, title }: { href: string | null; children: React.ReactNode; title?: string }) {
-  if (!href) return <>{children}</>;
-  return (
-    <a
-      className="underline decoration-neutral-300 dark:decoration-neutral-700 hover:decoration-neutral-600"
-      href={href}
-      title={title}
-      target="_blank"
-      rel="noreferrer noopener"
-    >
-      {children}
-    </a>
-  );
 }
 
 function Group({

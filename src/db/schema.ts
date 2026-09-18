@@ -201,9 +201,9 @@ export const completedUpdate = sqliteTable(
      * are different facts, so the reader never has to infer one from the other.
      */
     finalState: text('final_state', { enum: ['pr-merged', 'pr-closed'] }).notNull(),
-    prUrl: text('pr_url'),
     /** Not null by construction: only a row with a pull-request number can be
-     * enriched to a final state, so there is always a number to key on. */
+     * enriched to a final state, so there is always a number to key on. The
+     * pull request's address is built from this and the forge, not stored. */
     prNumber: integer('pr_number').notNull(),
     /** When the pull request reached that state, as the forge reported it. */
     closedAt: integer('closed_at', { mode: 'timestamp' }),
@@ -213,15 +213,19 @@ export const completedUpdate = sqliteTable(
   (t) => [
     // Every sync re-reads the same finished pull request until Renovate stops
     // listing its branch. Without this the archive gains a duplicate per cycle.
-    // The pull-request number is part of the key, so a revert that merges the
-    // same versions again under a new number is a second record, not a loss.
+    // The pull-request number is part of the key, so a revert that lands the
+    // same dependency again under a new number is a second record, not a loss.
+    //
+    // Every column here is NOT NULL, which is the point. SQLite counts each
+    // null as distinct inside a unique index, so a key spanning the nullable
+    // version columns would not dedupe a lock-file refresh at all — that shape
+    // names no version pair and is most of what a real fleet updates. The
+    // versions add nothing anyway: one pull request for one dependency in one
+    // repository carries one version pair.
     uniqueIndex('completed_natural').on(
       t.sourceAdapterId,
       t.repoId,
       t.dependencyName,
-      t.currentVersion,
-      t.targetVersion,
-      t.updateType,
       t.prNumber,
     ),
     index('completed_repo_closed').on(t.repoId, t.closedAt),

@@ -46,7 +46,6 @@ export interface CompletedUpdateRow {
   packageName: string | null;
   /** Merged, or closed without merging. Two different facts, never inferred. */
   finalState: 'pr-merged' | 'pr-closed';
-  prUrl: string | null;
   prNumber: number;
   /** When it reached that state, falling back to when Withe recorded it. */
   closedAt: Date | null;
@@ -139,7 +138,6 @@ export function completedUpdates(db: Db, limit = 250, repoFullName?: string): Co
            c.datasource,
            c.package_name      as packageName,
            c.final_state       as finalState,
-           c.pr_url            as prUrl,
            c.pr_number         as prNumber,
            coalesce(c.closed_at, c.archived_at) as closedAt
       from completed_update c

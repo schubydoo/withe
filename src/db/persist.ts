@@ -294,11 +294,11 @@ export function persist(
       insert or ignore into completed_update (
         source_adapter_id, repo_id, dependency_name, current_version,
         target_version, update_type, datasource, package_name, final_state,
-        pr_url, pr_number, closed_at, archived_at
+        pr_number, closed_at, archived_at
       )
       select source_adapter_id, repo_id, dependency_name, current_version,
              target_version, update_type, datasource, package_name, state,
-             pr_url, pr_number, closed_at, ${Math.floor(finishedAt.getTime() / 1000)}
+             pr_number, closed_at, ${Math.floor(finishedAt.getTime() / 1000)}
         from \`update\`
        where source_adapter_id = ${sourceAdapterId}
          and state in ('pr-merged', 'pr-closed')
@@ -422,10 +422,15 @@ export function pruneOldRuns(db: Db, cutoff: Date): number {
  * archived it, so a forge that reported no date still prunes instead of
  * accumulating forever.
  *
- * There is no `log_available` equivalent here. A completed update is already
- * the record of something the source has stopped listing, so age is the only
- * question. The vacuum and checkpoint are needed for the same reason they are
- * in `pruneOldRuns`: without them the file never shrinks.
+ * There is no `log_available` equivalent here, unlike `pruneOldRuns`. While
+ * Renovate still lists a finished branch, persist re-reads it each sync and
+ * `insert or ignore` puts a deleted record back, so such a row is pruned and
+ * restored until the branch goes. That costs a cycle rather than correctness,
+ * and it needs a branch to linger past the whole retention window to happen at
+ * all. Age stays the only question until a fleet shows otherwise.
+ *
+ * The vacuum and checkpoint are needed for the same reason they are in
+ * `pruneOldRuns`: without them the file never shrinks.
  */
 export function pruneCompletedUpdates(db: Db, cutoff: Date): number {
   const seconds = Math.floor(cutoff.getTime() / 1000);

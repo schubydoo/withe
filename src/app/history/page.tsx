@@ -15,6 +15,7 @@ import {
 import { ago } from '../format.ts';
 import { groupByDependency } from '../updates/filter.ts';
 import { byLatestLanding, byNewest, readRepoFilter, tally } from './filter.ts';
+import { Maybe } from '../maybe.tsx';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ const LIMIT = 250;
 interface PageData {
   rows: CompletedUpdateRow[];
   forge: Map<string, ForgeInfo>;
-  /** Every repository with a record, for the filter control. */
+  /** Every repository the source still lists, for the filter control. */
   repoNames: string[];
   /** False when no GitHub token is set, which is why the history can be empty. */
   forgeConfigured: boolean;
@@ -51,21 +52,6 @@ function read(repoFilter: string | null): PageData {
 
 function info(forge: Map<string, ForgeInfo>, row: { sourceAdapterId: string }): ForgeInfo {
   return forge.get(row.sourceAdapterId) ?? { platform: null, webBaseUrl: null };
-}
-
-/** A link, or the same text unlinked when nothing can be addressed. */
-function Maybe({ href, children }: { href: string | null; children: React.ReactNode }) {
-  if (!href) return <>{children}</>;
-  return (
-    <a
-      className="underline decoration-neutral-300 dark:decoration-neutral-700 hover:decoration-neutral-600"
-      href={href}
-      target="_blank"
-      rel="noreferrer noopener"
-    >
-      {children}
-    </a>
-  );
 }
 
 /**
@@ -166,6 +152,9 @@ export default async function History({ searchParams }: Props) {
   const groups = groupByDependency(rows, { rows: byNewest, groups: byLatestLanding });
   const counts = tally(rows);
   const repoTotal = new Set(rows.map((r) => r.repoFullName)).size;
+  // At the cap the counts describe this page, not the archive, so the wording
+  // below says so rather than reading as a fleet total.
+  const capped = rows.length === LIMIT;
 
   return (
     <main className="mx-auto max-w-4xl p-8">
@@ -173,8 +162,9 @@ export default async function History({ searchParams }: Props) {
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {rows.length > 0 && (
           <>
-            What Renovate has finished{repo === null ? ' across the fleet' : ` in ${repo}`}:{' '}
-            {counts.merged} merged and {counts.closed} closed without merging, across {repoTotal}{' '}
+            {capped ? `The newest ${LIMIT} updates Renovate finished` : 'What Renovate has finished'}
+            {repo === null ? ' across the fleet' : ` in ${repo}`}: {counts.merged} merged and{' '}
+            {counts.closed} closed without merging, across {repoTotal}{' '}
             {repoTotal === 1 ? 'repository' : 'repositories'}. Grouped by dependency and newest
             first.{' '}
           </>
@@ -215,7 +205,12 @@ export default async function History({ searchParams }: Props) {
                       </Maybe>
                     </td>
                     <td className="py-1 pr-4 tabular-nums text-neutral-600 dark:text-neutral-300">
-                      {row.currentVersion} → {row.targetVersion}
+                      {/* A lock-file refresh names no version pair, so the cell
+                          stays empty rather than showing a bare arrow. The
+                          pending view never meets this: it excludes them. */}
+                      {row.currentVersion === null && row.targetVersion === null
+                        ? ''
+                        : `${row.currentVersion ?? '?'} → ${row.targetVersion ?? '?'}`}
                     </td>
                     <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">{row.updateType}</td>
                     <td className="py-1 pr-4">
@@ -245,9 +240,9 @@ export default async function History({ searchParams }: Props) {
               </tbody>
             ))}
           </table>
-          {rows.length === LIMIT && (
+          {capped && (
             <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
-              The newest {LIMIT} records are shown. Filter by repository to narrow them.
+              Older records are kept but not shown here. Filter by repository to narrow the list.
             </p>
           )}
         </>

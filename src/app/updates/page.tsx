@@ -8,6 +8,7 @@ import { dependencyLink, pullRequestUrl, repoUrl } from '../../core/links.ts';
 import { openDatabase } from '../../db/client.ts';
 import { forges, pendingUpdates, type ForgeInfo, type PendingUpdateRow } from '../../db/queries.ts';
 import { foldUpdate, updateIdentity } from '../collapse.ts';
+import { Maybe } from '../maybe.tsx';
 import {
   filterByType,
   groupByDependency,
@@ -37,22 +38,6 @@ function read(): { updates: PendingUpdateRow[]; forge: Map<string, ForgeInfo>; c
 
 function info(forge: Map<string, ForgeInfo>, row: { sourceAdapterId: string }): ForgeInfo {
   return forge.get(row.sourceAdapterId) ?? { platform: null, webBaseUrl: null };
-}
-
-/** A link, or the same text unlinked when nothing can be addressed. */
-function Maybe({ href, children, title }: { href: string | null; children: React.ReactNode; title?: string }) {
-  if (!href) return <>{children}</>;
-  return (
-    <a
-      className="underline decoration-neutral-300 dark:decoration-neutral-700 hover:decoration-neutral-600"
-      href={href}
-      title={title}
-      target="_blank"
-      rel="noreferrer noopener"
-    >
-      {children}
-    </a>
-  );
 }
 
 /**

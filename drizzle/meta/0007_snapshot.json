@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "dd0f868a-fb49-408f-9e21-bbcf7a8bb17d",
+  "id": "a24a3fd6-b0d6-448a-b0b4-8480dc5c7dd8",
   "prevId": "62a1523c-f32e-499c-984c-79a95378c40e",
   "tables": {
     "completed_update": {
@@ -113,9 +113,6 @@
             "source_adapter_id",
             "repo_id",
             "dependency_name",
-            "current_version",
-            "target_version",
-            "update_type",
             "pr_number"
           ],
           "isUnique": true

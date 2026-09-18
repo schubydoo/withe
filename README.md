@@ -63,6 +63,7 @@ Plus, per source and per repository:
 | **Preflight** | The exact env vars Renovate CE is missing, as a block to paste into your Compose file |
 | **Repository inventory** | Every org and repo Renovate knows, with enablement, install status, and last run |
 | **Pending updates** (`/updates`) | Every pending update across the fleet on one page, grouped by dependency, filterable by type including security |
+| **Completed updates** (`/history`) | What Renovate landed and what it closed unmerged, per repository or across the fleet, newest first |
 | **Renovate health** (`/health`) | Whether Withe is reaching your sources and staying current, plus the GitHub rate-limit headroom for a configured token |
 | **Run history** | Every run for a repo — queued, started, duration, outcome |
 | **Log viewer** | The full JSON-Lines log for any run, via Renovate's documented log endpoint |

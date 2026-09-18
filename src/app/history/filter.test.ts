@@ -16,7 +16,6 @@ function row(over: Partial<CompletedUpdateRow>): CompletedUpdateRow {
     datasource: 'npm',
     packageName: 'left-pad',
     finalState: 'pr-merged',
-    prUrl: null,
     prNumber: 1,
     closedAt: new Date('2026-09-01T00:00:00Z'),
     ...over,

@@ -1006,6 +1006,30 @@ test('re-reading the same finished pull request every sync records it once', () 
   sqlite.close();
 });
 
+test('a lock-file refresh is also recorded once, though it has no versions', () => {
+  const { sqlite, db } = fresh();
+  // A lock-file-maintenance branch names no version pair, so these columns are
+  // null. SQLite counts every null as distinct inside a unique index, so a key
+  // that spans a nullable column cannot dedupe this shape — and it is the
+  // common one: 7 of 9 pending updates on the author's own install.
+  const merged = makeUpdate('acme/widget', {
+    dependencyName: 'uv.lock',
+    currentVersion: null,
+    targetVersion: null,
+    updateType: 'lock-file-maintenance',
+    pullRequestNumber: 44,
+    state: 'pr-merged',
+    closeType: 'merge',
+    closedAt: new Date('2026-09-03T10:00:00Z'),
+  });
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T11:00:00Z'));
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T12:00:00Z'));
+  persist(db, SOURCE, 'ce', cycle([merged]), new Date('2026-09-03T13:00:00Z'));
+
+  assert.equal(completedUpdates(db).length, 1, 'one record, not one per cycle');
+  sqlite.close();
+});
+
 test('only a finished update is recorded, never a pending one', () => {
   const { sqlite, db } = fresh();
   const merged = makeUpdate('acme/widget', {
