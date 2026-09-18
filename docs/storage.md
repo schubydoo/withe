@@ -15,6 +15,18 @@ Retention only touches runs the source itself no longer reports — a run the se
 whose log file still sits in a mounted directory) would only be re-ingested on the next sync, so it
 stays until the source drops it. Repositories, pending updates, and forge links are never pruned.
 
+## Completed updates
+
+Withe also records each update Renovate finished, so the dashboard can show what landed and when.
+A completed-update record costs about **254 bytes**, so the database grows by roughly **1 MB per
+4,100 records**. One record is one Renovate pull request that merged or closed. This stream grows
+with how often the fleet updates, not with time. A fleet that lands 10 updates a week adds about
+130 KB a year.
+
+`WITHE_RETENTION_DAYS` prunes these records on the same schedule as runs. Age is the date the pull
+request closed. A run waits for the source to drop its own copy. A completed update has no such
+copy, so retention removes it as soon as it passes the window.
+
 ## File-backed sources: your files, your retention
 
 For a `jsonlog` source the log files are the source record, not a cache, so the rule is different

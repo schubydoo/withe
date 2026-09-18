@@ -426,6 +426,10 @@ export default function Home() {
           all repositories
         </a>{' '}
         ·{' '}
+        <a className="underline" href="/history">
+          completed updates
+        </a>{' '}
+        ·{' '}
         <a className="underline" href="/health">
           Renovate health
         </a>

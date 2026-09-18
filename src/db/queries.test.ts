@@ -1006,10 +1006,28 @@ test('re-reading the same finished pull request every sync records it once', () 
   sqlite.close();
 });
 
-test('a pending update is never recorded as completed', () => {
+test('only a finished update is recorded, never a pending one', () => {
   const { sqlite, db } = fresh();
-  persist(db, SOURCE, 'ce', FLEET, new Date('2026-09-03T11:00:00Z'));
-  assert.equal(completedUpdates(db).length, 0, 'detected and pr-open are not outcomes');
-  assert.ok(pendingUpdates(db).length > 0, 'the instrument can see rows at all');
+  const merged = makeUpdate('acme/widget', {
+    dependencyName: 'tsx',
+    pullRequestNumber: 43,
+    state: 'pr-merged',
+    closeType: 'merge',
+    closedAt: new Date('2026-09-03T10:00:00Z'),
+  });
+  // The rest of the fleet is `detected` and `pr-open`, which are not outcomes.
+  // One of those already carries a pull-request number, so a filter widened to
+  // any state with a number would pick it up and fail this.
+  persist(
+    db,
+    SOURCE,
+    'ce',
+    { ...FLEET, updates: [...FLEET.updates, merged] },
+    new Date('2026-09-03T11:00:00Z'),
+  );
+
+  const history = completedUpdates(db);
+  assert.deepEqual(history.map((u) => u.dependencyName), ['tsx'], 'the merged one, and only it');
+  assert.ok(pendingUpdates(db).length > 0, 'the pending rows were there to be wrongly picked');
   sqlite.close();
 });
