@@ -86,6 +86,24 @@ export const MAX_PROBLEMS_PER_RUN = 200;
  */
 export const MAX_PROBLEM_MESSAGE = 500;
 
+/**
+ * Cut one line to the ceiling, and say that it was cut.
+ *
+ * **Redact before calling this, never after.** A credential in a URL is
+ * recognised by the `@` that follows it, so a cut that drops the `@` leaves
+ * the password unrecognised and stored whole. The worker calls `redact` and
+ * this together, in that order, which is why the parse pass stores the line as
+ * the log wrote it.
+ *
+ * The ellipsis is part of the stored text, so a reader can tell a cut line from
+ * a short one.
+ */
+export function cutMessage(message: string): string {
+  return message.length > MAX_PROBLEM_MESSAGE
+    ? `${message.slice(0, MAX_PROBLEM_MESSAGE)}…`
+    : message;
+}
+
 export interface LogExtract {
   /** Which Renovate produced the run, so a later shape change has a version. */
   runnerVersion: string | null;
@@ -200,12 +218,13 @@ function collectProblem(entry: Record<string, unknown>, into: Map<string, LogPro
 
   // The message is the searchable part. An entry without one carries nothing a
   // person can search for, so it is skipped rather than stored as an empty row.
-  const full = typeof entry.msg === 'string' ? entry.msg.trim() : '';
-  if (!full) return;
-  // Cut long, and say so, rather than storing a line of any length. The ellipsis
-  // is part of the stored text, so a reader can tell a cut line from a short one.
-  const message =
-    full.length > MAX_PROBLEM_MESSAGE ? `${full.slice(0, MAX_PROBLEM_MESSAGE)}…` : full;
+  //
+  // Kept whole here. The worker redacts it and then cuts it to
+  // `MAX_PROBLEM_MESSAGE` (`cutMessage`), in that order, because cutting first
+  // can drop the `@` that ends a credential in a URL and so disarm the
+  // redaction that recognises it.
+  const message = typeof entry.msg === 'string' ? entry.msg.trim() : '';
+  if (!message) return;
 
   const key = `${level}${message}`;
   const seen = into.get(key);

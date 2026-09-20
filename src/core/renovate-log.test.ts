@@ -4,6 +4,7 @@ import { test } from 'node:test';
 
 import {
   classify,
+  cutMessage,
   extractFromLog,
   isHeld,
   MAX_PROBLEM_MESSAGE,
@@ -300,22 +301,29 @@ test('a repeat is still counted after the cap is reached', async () => {
   assert.equal(extract.problems.find((p) => p.message === 'failure 0')?.occurrences, 2);
 });
 
-test('a line longer than the limit is cut, and says it was cut', async () => {
+test('cutMessage cuts a long line, and says it was cut', () => {
   // The row cap bounds how many lines a run contributes; this bounds one row.
   // A `msg` can carry a quoted command line or a list of URLs.
-  const long = `ExternalHostError: ${'x'.repeat(MAX_PROBLEM_MESSAGE)}`;
-  const extract = await extractFromLog(lines(JSON.stringify({ level: 50, msg: long })), CONTEXT);
+  const cut = cutMessage(`ExternalHostError: ${'x'.repeat(MAX_PROBLEM_MESSAGE)}`);
 
-  const stored = extract.problems[0]?.message ?? '';
-  assert.equal(stored.length, MAX_PROBLEM_MESSAGE + 1, 'the cut text plus one ellipsis');
-  assert.ok(stored.endsWith('…'));
-  assert.ok(stored.startsWith('ExternalHostError:'), 'the searchable front of the line is kept');
+  assert.equal(cut.length, MAX_PROBLEM_MESSAGE + 1, 'the cut text plus one ellipsis');
+  assert.ok(cut.endsWith('…'));
+  assert.ok(cut.startsWith('ExternalHostError:'), 'the searchable front of the line is kept');
 });
 
-test('a line at the limit is stored whole, with no ellipsis', async () => {
+test('cutMessage leaves a line at the limit whole, with no ellipsis', () => {
   const exact = 'y'.repeat(MAX_PROBLEM_MESSAGE);
-  const extract = await extractFromLog(lines(JSON.stringify({ level: 50, msg: exact })), CONTEXT);
-  assert.equal(extract.problems[0]?.message, exact);
+  assert.equal(cutMessage(exact), exact);
+});
+
+test('the parse pass keeps a long line whole, so redaction sees all of it', async () => {
+  // The cut happens in the worker, after redaction. Cutting here would drop
+  // the `@` that ends a credential in a URL and leave the password unredacted,
+  // so this asserts the order rather than the length.
+  const long = `${'x'.repeat(MAX_PROBLEM_MESSAGE)}@registry.example.com/path`;
+  const extract = await extractFromLog(lines(JSON.stringify({ level: 50, msg: long })), CONTEXT);
+
+  assert.equal(extract.problems[0]?.message, long);
 });
 
 test('a problem line carries its own time, and survives having none', async () => {

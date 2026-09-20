@@ -7,6 +7,7 @@
  */
 import type { CollectResult, SourceAdapter } from '../adapters/types.ts';
 import { redact } from '../core/redact.ts';
+import { cutMessage } from '../core/renovate-log.ts';
 import type { Db } from '../db/client.ts';
 import {
   persist,
@@ -76,17 +77,23 @@ export function backoffMs(failures: number, intervalMs: number): number {
 }
 
 /**
- * Redact the problem lines before they are stored (B-4, NFR-8).
+ * Redact each problem line, then cut it to length, before it is stored
+ * (B-4, NFR-8).
  *
  * These lines are kept, unlike the logs they come from, so they get the same
  * treatment as a warning that lands in `sync_status.error`. A Renovate log
  * quotes the URLs it fetched and a registry URL can carry a credential. The
  * patterns apply with no configured secret at all, so this runs on every
  * cycle rather than only on a configured one.
+ *
+ * **The order is the point, not a detail.** `redact` recognises a credential in
+ * a URL by the `@` that follows it, so a line cut first can lose that `@` and
+ * keep the password in full. Both steps live here, one after the other, so
+ * nothing can store a line that met only one of them.
  */
 function redactProblems(result: CollectResult, secrets: readonly string[]): void {
   for (const entry of result.problems ?? []) {
-    for (const line of entry.problems) line.message = redact(line.message, secrets);
+    for (const line of entry.problems) line.message = cutMessage(redact(line.message, secrets));
   }
 }
 

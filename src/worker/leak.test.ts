@@ -15,6 +15,7 @@ import { after, test } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import type { SourceAdapter } from '../adapters/types.ts';
+import { MAX_PROBLEM_MESSAGE } from '../core/renovate-log.ts';
 import { openDatabase } from '../db/client.ts';
 import { SyncLoop } from './sync.ts';
 
@@ -170,6 +171,33 @@ test('a stored problem line that quotes the token stores no token', async () => 
   assert.equal(contents.includes(TOKEN), false, 'the token reached the database file');
   assert.ok(contents.includes('ExternalHostError'), 'the rest of the line must survive');
   assert.ok(contents.includes('«redacted»'));
+});
+
+test('a credential in a long line is redacted before the line is cut', async () => {
+  // The order of the two steps, held by a test rather than by a comment.
+  //
+  // `redact` ends a credential in a URL at the `@` that follows it. A line cut
+  // to 500 characters first can drop that `@`, and then the pattern does not
+  // match and the password is stored. This password is a third-party registry
+  // credential, not a configured secret, so the exact-secret pass cannot catch
+  // it either: the pattern is the only thing standing between it and the file.
+  const password = 'p4ssw0rd-abcdefghijk-lmnopqrstuv';
+  // Padded so that `https://` starts before character 500 and the `@` lands
+  // after it.
+  const line =
+    `ExternalHostError: ${'padding '.repeat(55)}` +
+    `https://renovate:${password}@registry.example.com/npm failed`;
+  assert.ok(line.indexOf('@') > MAX_PROBLEM_MESSAGE, 'the @ must fall past the cut');
+  assert.ok(line.indexOf('https://') < MAX_PROBLEM_MESSAGE, 'the URL must start before the cut');
+
+  const contents = await syncedProblemFile('problem-long-url', line, []);
+
+  assert.equal(
+    contents.includes(password.slice(0, 20)),
+    false,
+    'the password reached the database file',
+  );
+  assert.ok(contents.includes('«redacted»'), 'the pattern must have fired');
 });
 
 test('the scan can see a problem line that is really there', async () => {

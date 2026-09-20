@@ -69,7 +69,8 @@ A change that breaks one of these is wrong even if every test passes:
    SMB mount) must stay; removing it invites the corruption it prevents.
 6. **Whole logs are never stored.** A run row holds a reference to its log; the log
    streams from the source on demand. One narrow exception, added in B-4: the `msg`
-   field of a line at warn level or worse, redacted, truncated, capped at 200 distinct
+   field of a line at warn level or worse, redacted and then truncated (that order:
+   a cut first can drop the `@` that ends a credential in a URL), capped at 200 distinct
    lines a run, and deleted with its run. A change that widens that — another log field,
    a quieter level, a longer line, a whole log body — is Important.
 7. **Node strips types.** No constructor parameter properties, no `enum`, no `namespace`
