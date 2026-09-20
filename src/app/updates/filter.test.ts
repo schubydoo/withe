@@ -9,6 +9,7 @@ import {
   isActive,
   NO_UPDATE_FILTER,
   readUpdateFilter,
+  rowKey,
 } from './filter.ts';
 
 function row(over: Partial<PendingUpdateRow>): PendingUpdateRow {
@@ -87,4 +88,61 @@ test('groupByDependency does not merge a name that contains the separator shape'
     row({ dependencyName: 'a","b', datasource: null }),
   ];
   assert.equal(groupByDependency(rows).length, 2);
+});
+
+test('two version pairs under one pull request get different row keys', () => {
+  // One repository can hold the same dependency at two current versions, in two
+  // package files, and Renovate raises one pull request for both. The store
+  // keeps both rows, and both land in one group here because the group key is
+  // the dependency. A key of the repository and the target version alone makes
+  // them identical siblings in one array, so React reconciles them by a name
+  // they share (B-15).
+  const shared = { targetVersion: '16.0.0', updateType: 'major' as const, prNumber: 50 };
+  const a = row({ ...shared, currentVersion: '15.0.0' });
+  const b = row({ ...shared, currentVersion: '15.2.0' });
+  assert.equal(a.repoFullName, b.repoFullName, 'the collision needs one repository');
+  assert.notEqual(rowKey(a), rowKey(b));
+});
+
+test('the row key separates every field the store separates', () => {
+  const base = row({});
+  for (const change of [
+    { sourceAdapterId: 'other' },
+    { repoFullName: 'acme/other' },
+    { dependencyName: 'other' },
+    { prNumber: 999 },
+    { currentVersion: '9.9.9' },
+    { targetVersion: '9.9.9' },
+    { updateType: 'minor' as const },
+  ]) {
+    assert.notEqual(rowKey(row(change)), rowKey(base), `${Object.keys(change)[0]} does not change the key`);
+  }
+});
+
+test('two rows alike in every keyed field share a key', () => {
+  // The negative half: the test above passes trivially if the key were random.
+  assert.equal(rowKey(row({})), rowKey(row({})));
+});
+
+test('a row that names no versions still gets a key', () => {
+  // A lock-file refresh reaches the history this way. It never reaches this
+  // page, and the key it shares with the history has to hold either row.
+  const lock = row({
+    dependencyName: 'uv.lock',
+    currentVersion: null,
+    targetVersion: null,
+    updateType: 'lock-file-maintenance',
+    prNumber: 7,
+  });
+  assert.ok(rowKey(lock).length > 0);
+  assert.notEqual(rowKey(lock), rowKey({ ...lock, prNumber: 8 }));
+});
+
+test('a value cannot straddle two fields and forge a collision', () => {
+  // The separator earns its place here: without it, these two would both
+  // flatten to the same string.
+  assert.notEqual(
+    rowKey(row({ currentVersion: '1.0', targetVersion: '' })),
+    rowKey(row({ currentVersion: '1', targetVersion: '0' })),
+  );
 });

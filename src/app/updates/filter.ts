@@ -134,3 +134,46 @@ export function groupByDependency<T extends DependencyRow>(
   for (const group of sorted) group.rows.sort(order.rows ?? byRepoName);
   return sorted;
 }
+
+/** What a row must carry to be told apart from the other rows of its group. */
+export interface KeyedRow {
+  sourceAdapterId: string;
+  repoFullName: string;
+  dependencyName: string;
+  currentVersion: string | null;
+  targetVersion: string | null;
+  updateType: UpdateType;
+  prNumber: number | null;
+}
+
+/**
+ * What makes one update row distinct from another, as a string.
+ *
+ * This mirrors the store's own natural keys (`schema.ts`), field for field,
+ * including the version pair. It has to: one pull request can carry the same
+ * dependency at two current versions, both views keep both rows on purpose,
+ * and both land in one group here because the group key is the dependency. A
+ * key without the versions makes those two rows identical siblings in one
+ * array, so React reconciles them by a name they share.
+ *
+ * Both views key their rows with this. `update_natural` keys a pending row and
+ * `completed_natural` keys an archived one; the archive's key adds the pull
+ * request, and a pending row has one pull request at most, so this wider key
+ * tells either row apart.
+ *
+ * The unit separator joins the parts, as it does in `version_key`, because it
+ * cannot occur in any of them and so no two records collide by concatenation.
+ */
+export function rowKey(row: KeyedRow): string {
+  return [
+    row.sourceAdapterId,
+    row.repoFullName,
+    row.dependencyName,
+    row.prNumber,
+    // The versions are null for a lock-file refresh. The update type is not:
+    // `classify` always returns one, as `PendingUpdateRow` also assumes.
+    row.currentVersion ?? '',
+    row.targetVersion ?? '',
+    row.updateType,
+  ].join('\x1f');
+}
