@@ -456,6 +456,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#log-problems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Log problems
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#file-backed-sources-your-files-your-retention" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -648,6 +659,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#log-problems" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Log problems
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#file-backed-sources-your-files-your-retention" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -723,8 +745,9 @@
 
 
 <h1 id="storage-export">Storage &amp; export<a class="headerlink" href="#storage-export" title="Permanent link">&para;</a></h1>
-<p>Withe keeps run history in one SQLite file on its volume. It never stores log content — a run row
-holds a reference to the log, and the log is streamed from Renovate on demand.</p>
+<p>Withe keeps run history in one SQLite file on its volume. It never stores a whole log — a run row
+holds a reference to the log, and the log is streamed from Renovate on demand. It does keep the
+warn-level and worse lines of each log it reads, which is what the log-problem search reads.</p>
 <h2 id="growth-and-retention">Growth and retention<a class="headerlink" href="#growth-and-retention" title="Permanent link">&para;</a></h2>
 <p>A run row costs about <strong>150 bytes</strong>, so the database grows by roughly <strong>1 MB per 7,000 runs</strong>. One
 run is one Renovate job for one repository. A fleet of 8 repositories on Renovate's hourly schedule
@@ -744,6 +767,20 @@ with how often the fleet updates, not with time. A fleet that lands 10 updates a
 request closed. If the forge reported no close date, age is the date Withe archived the record. A
 run waits for the source to drop its own copy. A completed update has no such copy, so retention
 removes it as soon as it passes the window.</p>
+<h2 id="log-problems">Log problems<a class="headerlink" href="#log-problems" title="Permanent link">&para;</a></h2>
+<p>Withe keeps the warn-level and worse lines of each run log it reads, so the <code>/problems</code> page can
+search the whole fleet at once. Whole logs are still never stored: these lines are a small part of
+one log, and they are the part a search is for.</p>
+<p>A line costs about <strong>108 bytes</strong> at Renovate's own message lengths, so the database grows by roughly
+<strong>1 MB per 9,700 lines</strong>. A line a run wrote many times is one row with a count, not a row per
+repeat, and one run contributes at most 200 distinct lines. A line longer than 500 characters is
+stored to its first 500, ending in an ellipsis, so one row has a ceiling and the whole line stays
+one click away on the run page. A fleet whose runs pass writes none at all.</p>
+<p>Withe indexes the log it reads at each sync, which is each repository's newest finished run. It does
+not fetch older logs to backfill, because that is the request cost the design avoids. So the index
+covers what Withe watched, starting from the sync after you install it.</p>
+<p><code>WITHE_RETENTION_DAYS</code> needs no separate setting here: these lines are deleted with the run they
+belong to, when that run is pruned.</p>
 <h2 id="file-backed-sources-your-files-your-retention">File-backed sources: your files, your retention<a class="headerlink" href="#file-backed-sources-your-files-your-retention" title="Permanent link">&para;</a></h2>
 <p>For a <code>jsonlog</code> source the log files are the source record, not a cache, so the rule is different
 and simpler:</p>
