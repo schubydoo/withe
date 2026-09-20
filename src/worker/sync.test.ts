@@ -530,15 +530,18 @@ test('a source dropped from the configuration is marked on the next cycle', asyn
   const both = new SyncLoop(
     db,
     [stub('kept', async () => fleet('kept')), stub('dropped', async () => fleet('dropped'))],
-    options,
+    { ...options, configuredSourceIds: ['kept', 'dropped'] },
   );
   const first = await both.runCycle();
-  assert.equal(first.removedSources, 0, 'nothing has left the configuration yet');
+  assert.deepEqual(first.removedSources, [], 'nothing has left the configuration yet');
 
-  const one = new SyncLoop(db, [stub('kept', async () => fleet('kept'))], options);
+  const one = new SyncLoop(db, [stub('kept', async () => fleet('kept'))], {
+    ...options,
+    configuredSourceIds: ['kept'],
+  });
   const second = await one.runCycle();
 
-  assert.equal(second.removedSources, 1);
+  assert.deepEqual(second.removedSources, ['dropped']);
   const rows = db.all<{ id: string; removedAt: number | null }>(
     sql`select id, removed_at as removedAt from source order by id`,
   );
@@ -554,5 +557,46 @@ test('a source dropped from the configuration is marked on the next cycle', asyn
     sql`select removed_at as removedAt from repo where source_adapter_id = 'dropped'`,
   );
   assert.ok(repos.every((r) => r.removedAt !== null), 'its repositories go with it');
+  sqlite.close();
+});
+
+test('a source that is down is not a source that left', async () => {
+  // `worker/main.ts` gives the loop the sources that passed preflight, which a
+  // source that is down did not. Reconciling against that list would mark a
+  // broken source as removed and hide it from the health page, which is the
+  // page whose job is to report it. The two lists are passed separately for
+  // exactly this case.
+  const { sqlite, db } = fresh();
+  const live: CollectResult = {
+    repos: [repoOf('down', 'acme/widget')],
+    runs: [runOf('down', 'acme/widget', 'j1', 'success', Date.now())],
+    updates: [],
+    warnings: [],
+    complete: true,
+    authoritativeRepoList: true,
+  };
+  // The source synced once, before it went down.
+  const before = new SyncLoop(db, [stub('down', async () => live)], {
+    intervalMs: 1000,
+    stalledAfterMs: 7 * DAY,
+    log: () => {},
+    configuredSourceIds: ['up', 'down'],
+  });
+  await before.runCycle();
+
+  // Now only the healthy source passes preflight, so only it reaches the loop.
+  const after = new SyncLoop(db, [stub('up', async () => EMPTY)], {
+    intervalMs: 1000,
+    stalledAfterMs: 7 * DAY,
+    log: () => {},
+    configuredSourceIds: ['up', 'down'],
+  });
+  const report = await after.runCycle();
+
+  assert.deepEqual(report.removedSources, [], 'a source that is down has not left');
+  const [row] = db.all<{ removedAt: number | null }>(
+    sql`select removed_at as removedAt from source where id = 'down'`,
+  );
+  assert.equal(row?.removedAt, null, 'so it stays on the health page, where it is loud');
   sqlite.close();
 });

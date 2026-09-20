@@ -12,7 +12,13 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { groupByFullName } from '../core/group.ts';
 import { isHeld, type LogProblem } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
-import { persist, reconcileSources, recomputeStalled, recordForgeStatus } from './persist.ts';
+import {
+  persist,
+  reconcileSources,
+  recomputeStalled,
+  recordForgeStatus,
+  recordSyncFailure,
+} from './persist.ts';
 import { completedUpdates, forgeRateLimit, forges, lockFileRefreshes, migrationState, pendingUpdates, problemIndexSize, repoHealth, repoInventory, runLocation, runsForRepo, schedules, searchProblems, sourceHealth, sourceSystems, triage } from './queries.ts';
 import { renovateRun, repo, source } from './schema.ts';
 
@@ -1275,7 +1281,7 @@ test('a source that leaves the configuration is marked, and its repositories wit
   const { sqlite, db } = twoSources();
   assert.equal(repoInventory(db).length, 6, 'three repositories under each source');
 
-  assert.equal(reconcileSources(db, [SOURCE]), 1, 'one source left the configuration');
+  assert.deepEqual(reconcileSources(db, [SOURCE]), ['other'], 'one source left the configuration');
 
   const removed = repoInventory(db).filter((r) => r.removedAt !== null);
   assert.equal(removed.length, 3);
@@ -1357,10 +1363,10 @@ test('a configured source is untouched, whatever else left', () => {
 
 test('the reconcile marks a source once, not on every cycle', () => {
   const { sqlite, db } = twoSources();
-  assert.equal(reconcileSources(db, [SOURCE]), 1);
+  assert.deepEqual(reconcileSources(db, [SOURCE]), ['other']);
   const firstMark = repoInventory(db).find((r) => r.sourceAdapterId === 'other')?.removedAt;
 
-  assert.equal(reconcileSources(db, [SOURCE]), 0, 'the second cycle finds nothing new');
+  assert.deepEqual(reconcileSources(db, [SOURCE]), [], 'the second cycle finds nothing new');
   assert.deepEqual(
     repoInventory(db).find((r) => r.sourceAdapterId === 'other')?.removedAt,
     firstMark,
@@ -1374,8 +1380,25 @@ test('an empty configuration marks nothing, rather than everything', () => {
   // caller error. Reading it as "every source has gone" would hide the fleet.
   const { sqlite, db } = twoSources();
 
-  assert.equal(reconcileSources(db, []), 0);
+  assert.deepEqual(reconcileSources(db, []), []);
   assert.ok(repoInventory(db).every((r) => r.removedAt === null));
+  sqlite.close();
+});
+
+test('a re-added source that cannot sync is still reported, not hidden', () => {
+  // `persist` never runs for a source whose cycle fails, so clearing the mark
+  // there is not enough: an operator who re-adds a source with a bad token
+  // would get no row on the one page whose job is to say what is wrong.
+  const { sqlite, db } = twoSources();
+  reconcileSources(db, [SOURCE]);
+  assert.equal(sourceHealth(db, new Date(0)).length, 1);
+
+  recordSyncFailure(db, 'other', 'ce', new Date(), 'CE responded 401');
+
+  const health = sourceHealth(db, new Date(0)).find((s) => s.sourceAdapterId === 'other');
+  assert.ok(health, 'the source is back on the health page');
+  assert.equal(health.lastOutcome, 'failed');
+  assert.equal(health.lastError, 'CE responded 401');
   sqlite.close();
 });
 

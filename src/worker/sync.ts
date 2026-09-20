@@ -30,6 +30,20 @@ export interface SyncOptions {
    */
   secrets?: readonly string[];
   /**
+   * Every source id in the configuration, for the reconcile that marks the
+   * sources that left it.
+   *
+   * **Not the adapters this loop syncs.** `worker/main.ts` hands the loop the
+   * sources that passed preflight, and a source that is down fails preflight
+   * without having left the configuration. Reconciling against that list would
+   * mark a broken source as removed and hide it from the health page, which is
+   * the page whose job is to name it.
+   *
+   * Unset means do not reconcile at all, which is what a test that says nothing
+   * about the configuration wants.
+   */
+  configuredSourceIds?: readonly string[];
+  /**
    * Delete run metadata older than this at the end of each cycle. Unset keeps
    * every run forever, which is the default (PRD Section 6.3.1).
    */
@@ -58,7 +72,7 @@ export interface CycleReport {
   skipped: boolean;
   sources: SourceOutcome[];
   /** Sources that left the configuration and were marked removed this cycle. */
-  removedSources: number;
+  removedSources: string[];
   /** Runs deleted by retention at the end of this cycle. */
   pruned: number;
   /** Completed updates deleted by retention at the end of this cycle. */
@@ -155,7 +169,7 @@ export class SyncLoop {
   async runCycle(): Promise<CycleReport> {
     if (this.running) {
       this.log('sync: a cycle is still running, skipping this tick');
-      return { skipped: true, sources: [], removedSources: 0, pruned: 0, prunedUpdates: 0 };
+      return { skipped: true, sources: [], removedSources: [], pruned: 0, prunedUpdates: 0 };
     }
 
     this.running = true;
@@ -166,14 +180,10 @@ export class SyncLoop {
       // sources against the configured ones. Running it first means a deleted
       // source stops being shown even on a cycle where every configured source
       // fails.
-      const removedSources = reconcileSources(
-        this.db,
-        this.adapters.map((adapter) => adapter.id),
-      );
-      if (removedSources > 0) {
-        this.log(
-          `sync: ${removedSources} source(s) left the configuration; their repositories are marked removed`,
-        );
+      const configured = this.options.configuredSourceIds;
+      const removedSources = configured ? reconcileSources(this.db, configured) : [];
+      for (const id of removedSources) {
+        this.log(`sync: ${id} left the configuration; its repositories are marked removed`);
       }
 
       const sources: SourceOutcome[] = [];

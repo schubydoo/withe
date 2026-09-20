@@ -404,28 +404,34 @@ export function persist(
  * than history: nothing will refresh them again, so they are deleted the way
  * a removed repository's are.
  *
- * Returns how many sources were marked, so the worker can log it.
+ * `configured` must be every source in the configuration, not the sources the
+ * worker is currently able to sync: a source that is down has not left.
+ *
+ * Returns the ids it marked, so the worker can name them in its log.
  */
-export function reconcileSources(db: Db, configured: readonly string[]): number {
+export function reconcileSources(db: Db, configured: readonly string[]): string[] {
   const now = Math.floor(Date.now() / 1000);
-  return db.transaction((tx): number => {
+  return db.transaction((tx): string[] => {
     // An empty configuration reaches here only if the worker was started with
     // no source at all, which the supervisor refuses. Marking every source on
     // an empty list would be the worst possible reading of it, so it is a
     // no-op instead.
-    if (configured.length === 0) return 0;
+    if (configured.length === 0) return [];
     const ids = sql.join(
       configured.map((id) => sql`${id}`),
       sql`, `,
     );
 
-    const marked = tx.run(sql`
-      update source
-         set removed_at = ${now}
-       where removed_at is null
-         and id not in (${ids})
-    `).changes;
-    if (marked === 0) return 0;
+    const marked = tx
+      .all<{ id: string }>(sql`
+        update source
+           set removed_at = ${now}
+         where removed_at is null
+           and id not in (${ids})
+        returning id
+      `)
+      .map((row) => row.id);
+    if (marked.length === 0) return [];
 
     tx.run(sql`
       update repo
@@ -474,8 +480,15 @@ export function recordSyncFailure(
 ): void {
   db.transaction((tx) => {
     tx.insert(source)
-      .values({ id: sourceAdapterId, kind, lastSyncOutcome: 'failed' })
-      .onConflictDoUpdate({ target: source.id, set: { lastSyncOutcome: 'failed' } })
+      // `removedAt: null` for the reason persist clears it: a source the worker
+      // is trying to sync is configured, whatever the attempt came back with.
+      // Without this a source re-added with a bad token would stay hidden
+      // exactly when the health page is the one thing that should name it.
+      .values({ id: sourceAdapterId, kind, lastSyncOutcome: 'failed', removedAt: null })
+      .onConflictDoUpdate({
+        target: source.id,
+        set: { lastSyncOutcome: 'failed', removedAt: null },
+      })
       .run();
     tx.insert(syncStatus)
       .values({
