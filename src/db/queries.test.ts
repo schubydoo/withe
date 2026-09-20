@@ -12,8 +12,14 @@ import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { groupByFullName } from '../core/group.ts';
 import { isHeld, type LogProblem } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
-import { persist, recomputeStalled, recordForgeStatus } from './persist.ts';
-import { completedUpdates, forgeRateLimit, forges, lockFileRefreshes, migrationState, pendingUpdates, problemIndexSize, repoHealth, repoInventory, runLocation, runsForRepo, searchProblems, sourceSystems, triage } from './queries.ts';
+import {
+  persist,
+  reconcileSources,
+  recomputeStalled,
+  recordForgeStatus,
+  recordSyncFailure,
+} from './persist.ts';
+import { completedUpdates, forgeRateLimit, forges, lockFileRefreshes, migrationState, pendingUpdates, problemIndexSize, repoHealth, repoInventory, runLocation, runsForRepo, schedules, searchProblems, sourceHealth, sourceSystems, triage } from './queries.ts';
 import { renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
@@ -1248,5 +1254,170 @@ test('the index size counts the lines and the runs they came from', () => {
 test('an empty index counts nothing rather than throwing', () => {
   const { sqlite, db } = fresh();
   assert.deepEqual(problemIndexSize(db), { lines: 0, runs: 0 });
+  sqlite.close();
+});
+
+/**
+ * A whole source leaving the configuration.
+ *
+ * Persist is scoped to one source and runs only for a configured one, so
+ * nothing used to visit a source the operator deleted: its repositories,
+ * updates, runs and problem lines stayed on every page forever. These cover
+ * the reconcile that closes it.
+ */
+function twoSources() {
+  const handle = fresh();
+  const withProblem = { ...FLEET, problems: [{ externalJobId: 'j3', problems: [problem({})] }] };
+  persist(handle.db, SOURCE, 'ce', withProblem, new Date());
+  persist(handle.db, 'other', 'ce', withProblem, new Date());
+  return handle;
+}
+
+function countRuns(db: ReturnType<typeof fresh>['db']): number {
+  return db.all<{ n: number }>(sql`select count(*) as n from renovate_run`)[0]?.n ?? 0;
+}
+
+test('a source that leaves the configuration is marked, and its repositories with it', () => {
+  const { sqlite, db } = twoSources();
+  assert.equal(repoInventory(db).length, 6, 'three repositories under each source');
+
+  assert.deepEqual(reconcileSources(db, [SOURCE]), ['other'], 'one source left the configuration');
+
+  const removed = repoInventory(db).filter((r) => r.removedAt !== null);
+  assert.equal(removed.length, 3);
+  assert.ok(
+    removed.every((r) => r.sourceAdapterId === 'other'),
+    'only the dropped source loses its repositories',
+  );
+  sqlite.close();
+});
+
+test('a dropped source disappears from every listing that reads a repository', () => {
+  const { sqlite, db } = twoSources();
+  const before = {
+    updates: pendingUpdates(db).length,
+    problems: searchProblems(db).length,
+    triage: triage(db).length,
+  };
+
+  reconcileSources(db, [SOURCE]);
+
+  assert.ok(before.updates > 0 && before.problems > 0 && before.triage > 0, 'there was something to hide');
+  assert.ok(
+    pendingUpdates(db).every((u) => u.sourceAdapterId === SOURCE),
+    'the dropped pending updates are gone',
+  );
+  assert.ok(
+    searchProblems(db).every((p) => p.sourceAdapterId === SOURCE),
+    'and so are its problem lines',
+  );
+  assert.ok(
+    triage(db).every((r) => r.sourceAdapterId === SOURCE),
+    'and its repositories leave the dashboard',
+  );
+  sqlite.close();
+});
+
+test('a dropped source leaves the health page, the system panel and the schedule', () => {
+  const { sqlite, db } = twoSources();
+  assert.equal(sourceSystems(db).length, 2);
+  assert.equal(sourceHealth(db, new Date(0)).length, 2);
+  assert.equal(schedules(db).length, 2);
+
+  reconcileSources(db, [SOURCE]);
+
+  // A source nobody syncs would otherwise read as one that has stopped
+  // syncing: stale forever, and the health endpoint answers 503 for it.
+  assert.deepEqual(sourceSystems(db).map((s) => s.sourceAdapterId), [SOURCE]);
+  assert.deepEqual(sourceHealth(db, new Date(0)).map((s) => s.sourceAdapterId), [SOURCE]);
+  assert.equal(schedules(db).length, 1);
+  sqlite.close();
+});
+
+test('a dropped source keeps its history, which is why it is marked and not deleted', () => {
+  const { sqlite, db } = twoSources();
+  const runs = countRuns(db);
+
+  reconcileSources(db, [SOURCE]);
+
+  assert.equal(countRuns(db), runs, 'the runs stay, as a removed repository keeps its own');
+  assert.equal(
+    db.all<{ n: number }>(sql`select count(*) as n from log_problem`)[0]?.n,
+    2,
+    'and so do the problem lines, which retention deletes with their run',
+  );
+  sqlite.close();
+});
+
+test('a configured source is untouched, whatever else left', () => {
+  const { sqlite, db } = twoSources();
+
+  reconcileSources(db, [SOURCE]);
+
+  const kept = repoInventory(db).filter((r) => r.sourceAdapterId === SOURCE);
+  assert.equal(kept.length, 3);
+  assert.ok(kept.every((r) => r.removedAt === null), 'sources must not remove each other');
+  assert.equal(pendingUpdates(db).length, 3, 'its pending updates are all still there');
+  sqlite.close();
+});
+
+test('the reconcile marks a source once, not on every cycle', () => {
+  const { sqlite, db } = twoSources();
+  assert.deepEqual(reconcileSources(db, [SOURCE]), ['other']);
+  const firstMark = repoInventory(db).find((r) => r.sourceAdapterId === 'other')?.removedAt;
+
+  assert.deepEqual(reconcileSources(db, [SOURCE]), [], 'the second cycle finds nothing new');
+  assert.deepEqual(
+    repoInventory(db).find((r) => r.sourceAdapterId === 'other')?.removedAt,
+    firstMark,
+    'and does not move the date it was removed',
+  );
+  sqlite.close();
+});
+
+test('an empty configuration marks nothing, rather than everything', () => {
+  // The worker refuses to start with no source, so an empty list here is a
+  // caller error. Reading it as "every source has gone" would hide the fleet.
+  const { sqlite, db } = twoSources();
+
+  assert.deepEqual(reconcileSources(db, []), []);
+  assert.ok(repoInventory(db).every((r) => r.removedAt === null));
+  sqlite.close();
+});
+
+test('a re-added source that cannot sync is still reported, not hidden', () => {
+  // `persist` never runs for a source whose cycle fails, so clearing the mark
+  // there is not enough: an operator who re-adds a source with a bad token
+  // would get no row on the one page whose job is to say what is wrong.
+  const { sqlite, db } = twoSources();
+  reconcileSources(db, [SOURCE]);
+  assert.equal(sourceHealth(db, new Date(0)).length, 1);
+
+  recordSyncFailure(db, 'other', 'ce', new Date(), 'CE responded 401');
+
+  const health = sourceHealth(db, new Date(0)).find((s) => s.sourceAdapterId === 'other');
+  assert.ok(health, 'the source is back on the health page');
+  assert.equal(health.lastOutcome, 'failed');
+  assert.equal(health.lastError, 'CE responded 401');
+  sqlite.close();
+});
+
+test('a source re-added under the same id comes back whole', () => {
+  // An operator who fixes a typo in a source id, or takes a server out for an
+  // afternoon, gets the fleet back rather than an archive.
+  const { sqlite, db } = twoSources();
+  reconcileSources(db, [SOURCE]);
+  assert.equal(sourceSystems(db).length, 1);
+
+  persist(db, 'other', 'ce', FLEET, new Date());
+
+  assert.equal(sourceSystems(db).length, 2, 'the source is listed again');
+  assert.ok(
+    repoInventory(db)
+      .filter((r) => r.sourceAdapterId === 'other')
+      .every((r) => r.removedAt === null),
+    'and its repositories are live again',
+  );
+  assert.equal(pendingUpdates(db).length, 6, 'and its pending updates are re-read');
   sqlite.close();
 });

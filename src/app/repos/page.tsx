@@ -148,7 +148,10 @@ export default async function Repos({ searchParams }: Props) {
       <h1 className="text-2xl font-semibold">Repositories</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {shown.length} across {orgs.length} {orgs.length === 1 ? 'organization' : 'organizations'}
-        {removed > 0 && `, ${removed} removed at the source and kept for their history`}
+        {/* Not "removed at the source": a repository is also marked when the
+            whole source leaves the configuration, and that source removed
+            nothing. This says what is true of both. */}
+        {removed > 0 && `, ${removed} no longer watched and kept for their history`}
       </p>
 
       {rows.length > 0 && <Filters filter={filter} shown={shown.length} total={grouped.length} />}

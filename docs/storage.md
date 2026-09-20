@@ -48,6 +48,14 @@ covers what Withe watched, starting from the sync after you install it.
 `WITHE_RETENTION_DAYS` needs no separate setting here: these lines are deleted with the run they
 belong to, when that run is pruned.
 
+## Removing a source
+
+A source you delete from the configuration is marked as removed on the next sync cycle, together
+with its repositories. Its pending updates are deleted, because nothing refreshes them again. Its
+runs, completed updates and problem lines stay, hidden from every page, and age out under
+`WITHE_RETENTION_DAYS` like any other run history. See
+[Configuration](configuration.md#removing-a-source).
+
 ## File-backed sources: your files, your retention
 
 For a `jsonlog` source the log files are the source record, not a cache, so the rule is different

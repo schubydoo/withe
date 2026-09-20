@@ -99,6 +99,10 @@ const loop = new SyncLoop(db, toSync, {
   intervalMs: config.syncIntervalSeconds * 1000,
   stalledAfterMs: config.stalledAfterDays * DAY_MS,
   secrets: secretsFrom(config),
+  // The configuration, not `toSync`. A source that failed preflight is down,
+  // not gone, and the reconcile must not mark it removed and so hide it from
+  // the health page that exists to report it.
+  configuredSourceIds: config.sources.map((source) => source.id),
   // Unset keeps every run forever; set, it prunes at the end of each cycle.
   ...(config.retentionDays !== null ? { retentionMs: config.retentionDays * DAY_MS } : {}),
   ...(forge && forgeRule

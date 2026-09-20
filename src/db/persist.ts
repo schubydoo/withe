@@ -148,6 +148,10 @@ export function persist(
         set: {
           lastSyncAt: finishedAt,
           lastSyncOutcome: outcome,
+          // A source that is being synced is configured, so a mark from an
+          // earlier `reconcileSources` is stale. Re-adding a source under its
+          // old id brings its history back rather than leaving it hidden.
+          removedAt: null,
           ...system,
           ...(meta
             ? {
@@ -381,6 +385,70 @@ export function persist(
 }
 
 /**
+ * Mark every source that has left the configuration, and hide what it holds.
+ *
+ * Persist is scoped to one source and runs only for a source the worker still
+ * syncs, so nothing here ever visited a source the operator deleted from the
+ * configuration. Its repositories, runs, updates, completed updates and
+ * problem lines stayed, and every page kept listing them. This closes that:
+ * the worker calls it once a cycle with the ids it is configured to sync.
+ *
+ * Marked, not deleted, for the reason a removed repository is marked: the
+ * source row owns runs and completed updates through foreign keys, and an
+ * operator who edits a configuration file — or fixes a typo in a source id —
+ * must not lose a fleet's history to it. Retention still deletes runs by age,
+ * and a source re-added under the same id comes back whole (`persist` clears
+ * the mark).
+ *
+ * The pending updates are the exception, because they are a snapshot rather
+ * than history: nothing will refresh them again, so they are deleted the way
+ * a removed repository's are.
+ *
+ * `configured` must be every source in the configuration, not the sources the
+ * worker is currently able to sync: a source that is down has not left.
+ *
+ * Returns the ids it marked, so the worker can name them in its log.
+ */
+export function reconcileSources(db: Db, configured: readonly string[]): string[] {
+  const now = Math.floor(Date.now() / 1000);
+  return db.transaction((tx): string[] => {
+    // An empty configuration reaches here only if the worker was started with
+    // no source at all, which the supervisor refuses. Marking every source on
+    // an empty list would be the worst possible reading of it, so it is a
+    // no-op instead.
+    if (configured.length === 0) return [];
+    const ids = sql.join(
+      configured.map((id) => sql`${id}`),
+      sql`, `,
+    );
+
+    const marked = tx
+      .all<{ id: string }>(sql`
+        update source
+           set removed_at = ${now}
+         where removed_at is null
+           and id not in (${ids})
+        returning id
+      `)
+      .map((row) => row.id);
+    if (marked.length === 0) return [];
+
+    tx.run(sql`
+      update repo
+         set removed_at = ${now}
+       where removed_at is null
+         and source_adapter_id not in (${ids})
+    `);
+    tx.run(sql`
+      delete from "update"
+       where source_adapter_id not in (${ids})
+    `);
+
+    return marked;
+  });
+}
+
+/**
  * Recompute the stalled flag for every repository of one source.
  *
  * Stalled means no **successful** run since the cutoff. A repository that has
@@ -412,8 +480,15 @@ export function recordSyncFailure(
 ): void {
   db.transaction((tx) => {
     tx.insert(source)
-      .values({ id: sourceAdapterId, kind, lastSyncOutcome: 'failed' })
-      .onConflictDoUpdate({ target: source.id, set: { lastSyncOutcome: 'failed' } })
+      // `removedAt: null` for the reason persist clears it: a source the worker
+      // is trying to sync is configured, whatever the attempt came back with.
+      // Without this a source re-added with a bad token would stay hidden
+      // exactly when the health page is the one thing that should name it.
+      .values({ id: sourceAdapterId, kind, lastSyncOutcome: 'failed', removedAt: null })
+      .onConflictDoUpdate({
+        target: source.id,
+        set: { lastSyncOutcome: 'failed', removedAt: null },
+      })
       .run();
     tx.insert(syncStatus)
       .values({

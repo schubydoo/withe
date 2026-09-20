@@ -87,7 +87,9 @@ export default async function RunHistory({ params, searchParams }: Props) {
       <h1 className="text-2xl font-semibold">{fullName}</h1>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         {total} {total === 1 ? 'run' : 'runs'}
-        {known.removedAt && ' · removed at the source, history kept'}
+        {/* Says nothing about who removed it: the source may have dropped the
+            repository, or the whole source may have left the configuration. */}
+        {known.removedAt && ' · no longer watched, history kept'}
         {failures > 0 && ` · ${failures} failed on this page`}
         {runs[0]?.runnerVersion && ` · Renovate ${runs[0].runnerVersion}`}
         {multiSource && ` · seen by ${contributors.join(' and ')}`}

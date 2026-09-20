@@ -13,6 +13,7 @@ import {
   persist,
   pruneCompletedUpdates,
   pruneOldRuns,
+  reconcileSources,
   recomputeStalled,
   recordSyncFailure,
 } from '../db/persist.ts';
@@ -28,6 +29,20 @@ export interface SyncOptions {
    * failure message is the one path by which a credential reaches a column.
    */
   secrets?: readonly string[];
+  /**
+   * Every source id in the configuration, for the reconcile that marks the
+   * sources that left it.
+   *
+   * **Not the adapters this loop syncs.** `worker/main.ts` hands the loop the
+   * sources that passed preflight, and a source that is down fails preflight
+   * without having left the configuration. Reconciling against that list would
+   * mark a broken source as removed and hide it from the health page, which is
+   * the page whose job is to name it.
+   *
+   * Unset means do not reconcile at all, which is what a test that says nothing
+   * about the configuration wants.
+   */
+  configuredSourceIds?: readonly string[];
   /**
    * Delete run metadata older than this at the end of each cycle. Unset keeps
    * every run forever, which is the default (PRD Section 6.3.1).
@@ -56,6 +71,8 @@ export interface SourceOutcome {
 export interface CycleReport {
   skipped: boolean;
   sources: SourceOutcome[];
+  /** Sources that left the configuration and were marked removed this cycle. */
+  removedSources: string[];
   /** Runs deleted by retention at the end of this cycle. */
   pruned: number;
   /** Completed updates deleted by retention at the end of this cycle. */
@@ -152,11 +169,23 @@ export class SyncLoop {
   async runCycle(): Promise<CycleReport> {
     if (this.running) {
       this.log('sync: a cycle is still running, skipping this tick');
-      return { skipped: true, sources: [], pruned: 0, prunedUpdates: 0 };
+      return { skipped: true, sources: [], removedSources: [], pruned: 0, prunedUpdates: 0 };
     }
 
     this.running = true;
     try {
+      // First, before any source is read. A source the operator deleted from
+      // the configuration is never synced again, so nothing else would ever
+      // notice it went: this is the only place that reconciles the stored
+      // sources against the configured ones. Running it first means a deleted
+      // source stops being shown even on a cycle where every configured source
+      // fails.
+      const configured = this.options.configuredSourceIds;
+      const removedSources = configured ? reconcileSources(this.db, configured) : [];
+      for (const id of removedSources) {
+        this.log(`sync: ${id} left the configuration; its repositories are marked removed`);
+      }
+
       const sources: SourceOutcome[] = [];
       for (const adapter of this.adapters) {
         sources.push(await this.syncOne(adapter));
@@ -164,7 +193,13 @@ export class SyncLoop {
       // Once per cycle, after every source is written, because pruning touches
       // the whole file rather than one source's rows.
       const pruned = this.prune();
-      return { skipped: false, sources, pruned: pruned.runs, prunedUpdates: pruned.updates };
+      return {
+        skipped: false,
+        sources,
+        removedSources,
+        pruned: pruned.runs,
+        prunedUpdates: pruned.updates,
+      };
     } finally {
       this.running = false;
     }
