@@ -37,8 +37,9 @@ one log, and they are the part a search is for.
 
 A line costs about **108 bytes** at Renovate's own message lengths, so the database grows by roughly
 **1 MB per 9,700 lines**. A line a run wrote many times is one row with a count, not a row per
-repeat, and one run contributes at most 200 distinct lines. A fleet whose runs pass writes none at
-all.
+repeat, and one run contributes at most 200 distinct lines. A line longer than 500 characters is
+stored to its first 500, ending in an ellipsis, so one row has a ceiling and the whole line stays
+one click away on the run page. A fleet whose runs pass writes none at all.
 
 Withe indexes the log it reads at each sync, which is each repository's newest finished run. It does
 not fetch older logs to backfill, because that is the request cost the design avoids. So the index

@@ -75,6 +75,17 @@ export interface LogProblem {
  */
 export const MAX_PROBLEMS_PER_RUN = 200;
 
+/**
+ * How much of one line is kept.
+ *
+ * The line cap alone bounds the row count and not the bytes: a `msg` carrying a
+ * quoted command line or a list of URLs is as long as the log wrote it. This
+ * puts a ceiling on a row, so the documented growth figure holds for a noisy
+ * run and not only for an average one. A search reads a substring near the
+ * front of a line, and the whole line is one click away on the run page.
+ */
+export const MAX_PROBLEM_MESSAGE = 500;
+
 export interface LogExtract {
   /** Which Renovate produced the run, so a later shape change has a version. */
   runnerVersion: string | null;
@@ -189,8 +200,12 @@ function collectProblem(entry: Record<string, unknown>, into: Map<string, LogPro
 
   // The message is the searchable part. An entry without one carries nothing a
   // person can search for, so it is skipped rather than stored as an empty row.
-  const message = typeof entry.msg === 'string' ? entry.msg.trim() : '';
-  if (!message) return;
+  const full = typeof entry.msg === 'string' ? entry.msg.trim() : '';
+  if (!full) return;
+  // Cut long, and say so, rather than storing a line of any length. The ellipsis
+  // is part of the stored text, so a reader can tell a cut line from a short one.
+  const message =
+    full.length > MAX_PROBLEM_MESSAGE ? `${full.slice(0, MAX_PROBLEM_MESSAGE)}…` : full;
 
   const key = `${level}${message}`;
   const seen = into.get(key);

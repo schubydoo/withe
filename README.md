@@ -34,7 +34,7 @@ graph LR
     R[Renovate CE<br/>HTTP API] -->|sync every 5 min| W[Withe sync worker]
     W -->|run + update metadata| DB[(SQLite<br/>one file)]
     DB --> UI[Dashboard]
-    R -.->|logs streamed on demand,<br/>never stored| UI
+    R -.->|logs streamed on demand,<br/>whole logs never stored| UI
     UI --> You
 ```
 

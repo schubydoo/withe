@@ -1,5 +1,5 @@
 /**
- * The store. One SQLite file, seven tables, every domain row tagged with the
+ * The store. One SQLite file, eight tables, every domain row tagged with the
  * source that produced it.
  */
 import { sql, type SQL } from 'drizzle-orm';

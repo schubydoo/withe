@@ -2,7 +2,13 @@ import assert from 'node:assert/strict';
 import { createReadStream, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import { classify, extractFromLog, isHeld, MAX_PROBLEMS_PER_RUN } from './renovate-log.ts';
+import {
+  classify,
+  extractFromLog,
+  isHeld,
+  MAX_PROBLEM_MESSAGE,
+  MAX_PROBLEMS_PER_RUN,
+} from './renovate-log.ts';
 
 const FIXTURE = 'test/fixtures/ce/job.ndjson';
 const CONTEXT = {
@@ -292,6 +298,24 @@ test('a repeat is still counted after the cap is reached', async () => {
   const extract = await extractFromLog(lines(log), CONTEXT);
   assert.equal(extract.problems.length, MAX_PROBLEMS_PER_RUN);
   assert.equal(extract.problems.find((p) => p.message === 'failure 0')?.occurrences, 2);
+});
+
+test('a line longer than the limit is cut, and says it was cut', async () => {
+  // The row cap bounds how many lines a run contributes; this bounds one row.
+  // A `msg` can carry a quoted command line or a list of URLs.
+  const long = `ExternalHostError: ${'x'.repeat(MAX_PROBLEM_MESSAGE)}`;
+  const extract = await extractFromLog(lines(JSON.stringify({ level: 50, msg: long })), CONTEXT);
+
+  const stored = extract.problems[0]?.message ?? '';
+  assert.equal(stored.length, MAX_PROBLEM_MESSAGE + 1, 'the cut text plus one ellipsis');
+  assert.ok(stored.endsWith('…'));
+  assert.ok(stored.startsWith('ExternalHostError:'), 'the searchable front of the line is kept');
+});
+
+test('a line at the limit is stored whole, with no ellipsis', async () => {
+  const exact = 'y'.repeat(MAX_PROBLEM_MESSAGE);
+  const extract = await extractFromLog(lines(JSON.stringify({ level: 50, msg: exact })), CONTEXT);
+  assert.equal(extract.problems[0]?.message, exact);
 });
 
 test('a problem line carries its own time, and survives having none', async () => {

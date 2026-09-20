@@ -135,7 +135,7 @@ function Filters({ filter }: { filter: ProblemFilter }) {
  * like that. The operator who runs no Dependency Dashboard has nowhere else to
  * look, so each case says what it is.
  */
-function Empty({ filter, size }: { filter: ProblemFilter; size: ProblemIndexSize }) {
+function Empty({ size }: { size: ProblemIndexSize }) {
   if (size.lines === 0) {
     return (
       <p className="mt-6 text-sm text-neutral-500 dark:text-neutral-400">
@@ -185,13 +185,13 @@ export default async function Problems({ searchParams }: Props) {
       <Filters filter={filter} />
 
       {rows.length === 0 ? (
-        <Empty filter={filter} size={size} />
+        <Empty size={size} />
       ) : (
         <>
           <p className="mt-4 text-sm text-neutral-500 dark:text-neutral-400">
             {capped ? `The newest ${LIMIT} matching lines` : `${rows.length} matching ${rows.length === 1 ? 'line' : 'lines'}`}
             {filter.query === null ? '' : ` for “${filter.query}”`}
-            {filter.level === null ? '' : `, at ${filter.level}`}.
+            {filter.level === null ? '' : `, at ${filter.level} and worse`}.
           </p>
           <table className="mt-2 w-full text-sm">
             <caption className="sr-only">
