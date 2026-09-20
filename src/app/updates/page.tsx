@@ -14,6 +14,7 @@ import {
   groupByDependency,
   isActive,
   readUpdateFilter,
+  rowKey,
   UPDATE_TYPES,
   type UpdateFilter,
 } from './filter.ts';
@@ -142,7 +143,7 @@ export default async function Updates({ searchParams }: Props) {
                 );
                 return (
                   <tr
-                    key={`${row.repoFullName}/${row.targetVersion}`}
+                    key={rowKey(row)}
                     className="border-t border-neutral-200 dark:border-neutral-800"
                   >
                     <td className="py-1 pr-4 font-medium">

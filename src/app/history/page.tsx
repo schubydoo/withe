@@ -13,8 +13,8 @@ import {
   type ForgeInfo,
 } from '../../db/queries.ts';
 import { ago } from '../format.ts';
-import { groupByDependency } from '../updates/filter.ts';
-import { byLatestLanding, byNewest, readRepoFilter, rowKey, tally } from './filter.ts';
+import { groupByDependency, rowKey } from '../updates/filter.ts';
+import { byLatestLanding, byNewest, readRepoFilter, tally } from './filter.ts';
 import { Maybe } from '../maybe.tsx';
 
 export const dynamic = 'force-dynamic';
