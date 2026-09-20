@@ -22,6 +22,7 @@ import { foldLock, foldUpdate, updateIdentity } from './collapse.ts';
 import { Maybe } from './maybe.tsx';
 import { soonestNextRun } from './next-run.ts';
 import { NextRun } from './next-run.tsx';
+import { rowKey } from './updates/filter.ts';
 
 export const dynamic = 'force-dynamic';
 
@@ -132,7 +133,7 @@ function Group({
               );
               return (
                 <tr
-                  key={`${row.repoFullName}/${row.dependencyName}/${row.targetVersion}`}
+                  key={rowKey(row)}
                   className="border-t border-neutral-200 dark:border-neutral-800"
                 >
                   <td className="py-1 pr-4 text-neutral-500 dark:text-neutral-400">

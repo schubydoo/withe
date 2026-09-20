@@ -127,7 +127,13 @@ test('two rows alike in every keyed field share a key', () => {
 test('a row that names no versions still gets a key', () => {
   // A lock-file refresh reaches the history this way. It never reaches this
   // page, and the key it shares with the history has to hold either row.
-  const lock = row({ dependencyName: 'uv.lock', currentVersion: null, targetVersion: null, prNumber: 7 });
+  const lock = row({
+    dependencyName: 'uv.lock',
+    currentVersion: null,
+    targetVersion: null,
+    updateType: 'lock-file-maintenance',
+    prNumber: 7,
+  });
   assert.ok(rowKey(lock).length > 0);
   assert.notEqual(rowKey(lock), rowKey({ ...lock, prNumber: 8 }));
 });
