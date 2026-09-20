@@ -12,6 +12,7 @@ import type {
   CollectResult,
   PreflightProblem,
   PreflightResult,
+  RunProblems,
   SourceAdapter,
   SourceConfig,
   SourceMeta,
@@ -215,22 +216,27 @@ export class CeAdapter implements SourceAdapter {
     // server's API reserves them for its paid tier while the log states them
     // outright. Only the newest run is read: an older one describes a state
     // that has already been superseded.
-    const updatesPerRepo = await mapWithLimit(runsPerRepo, CONCURRENCY, async (runs, index) => {
+    const readPerRepo = await mapWithLimit(runsPerRepo, CONCURRENCY, async (runs, index) => {
       const repo = repos[index];
       const newest = newestFinished(runs);
-      if (!repo || !newest) return [];
+      if (!repo || !newest) return null;
       try {
         return await this.collectUpdates(repo, newest);
       } catch (cause) {
         warnings.push(`Could not read updates for ${repo.fullName}: ${describe(cause)}`);
-        return [];
+        return null;
       }
     });
+    const read = readPerRepo.filter((entry) => entry !== null);
 
     return {
       repos,
       runs: runsPerRepo.flat(),
-      updates: updatesPerRepo.flat(),
+      updates: read.flatMap((entry) => entry.updates),
+      // Only the logs this cycle actually read. A repository whose log fetch
+      // failed names no run here, so persist leaves the lines it already has
+      // rather than reading the failure as "this run is clean now".
+      problems: read.map((entry) => entry.problems),
       warnings,
       complete,
       // The org repo listing is the full set of repositories, so an absent one
@@ -329,17 +335,24 @@ export class CeAdapter implements SourceAdapter {
       : null;
   }
 
-  private async collectUpdates(repo: Repo, run: RenovateRun): Promise<Update[]> {
+  private async collectUpdates(
+    repo: Repo,
+    run: RenovateRun,
+  ): Promise<{ updates: Update[]; problems: RunProblems }> {
     const stream = await this.fetchLog(run);
-    // Streamed and parsed as it arrives. A log is hundreds of kilobytes and is
-    // never stored — PRD Section 6.3.1.
+    // Streamed and parsed as it arrives. A log is hundreds of kilobytes and no
+    // whole log is stored — PRD Section 6.3.1. Its warn-level and worse lines
+    // are kept, which is what a fleet-wide search needs (B-4).
     const extract = await extractFromLog(stream, {
       repoId: repo.id,
       sourceAdapterId: this.id,
       detectedAt: run.completedAt ?? run.startedAt ?? new Date(),
     });
     if (extract.runnerVersion) run.runnerVersion = extract.runnerVersion;
-    return extract.updates;
+    return {
+      updates: extract.updates,
+      problems: { externalJobId: run.externalJobId, problems: extract.problems },
+    };
   }
 
   async fetchLog(run: Pick<RenovateRun, 'repoId' | 'externalJobId'>): Promise<ReadableStream<Uint8Array>> {

@@ -13,7 +13,7 @@
 [extend]
 useDefault = true
 
-# Both files hold credential-shaped strings on purpose.
+# All three files hold credential-shaped strings on purpose.
 #
 # redact.test.ts proves that redact() removes a GitLab PAT, a GitHub token, a
 # bearer token and a credential inside a URL, so each fixture must carry the
@@ -22,10 +22,16 @@ useDefault = true
 # redact.property.test.ts builds its generated tokens from an alphabet written
 # out as one string. Rule generic-api-key reads that alphabet as a key.
 #
-# Put no real credential in either file: nothing in them is scanned.
+# worker/leak.test.ts reads the database file back as bytes and proves no
+# credential reached it. Each fixture it plants must therefore carry a real
+# credential's shape, including a password inside a registry URL. Rule
+# generic-api-key reports that password.
+#
+# Put no real credential in any of them: nothing in these files is scanned.
 [allowlist]
-description = "Credential-shaped fixtures in the redaction tests"
+description = "Credential-shaped fixtures in the redaction and leak tests"
 paths = [
   '''^src/core/redact\.test\.ts$''',
   '''^src/core/redact\.property\.test\.ts$''',
+  '''^src/worker/leak\.test\.ts$''',
 ]

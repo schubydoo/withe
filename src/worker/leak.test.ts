@@ -15,6 +15,7 @@ import { after, test } from 'node:test';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import type { SourceAdapter } from '../adapters/types.ts';
+import { MAX_PROBLEM_MESSAGE } from '../core/renovate-log.ts';
 import { openDatabase } from '../db/client.ts';
 import { SyncLoop } from './sync.ts';
 
@@ -124,6 +125,87 @@ function collectingWithLog(id: string, logBody: string): SourceAdapter {
     preflight: () => Promise.resolve([]),
   } as unknown as SourceAdapter;
 }
+
+/** The same adapter, reporting one problem line from that run's log (B-4). */
+function collectingWithProblem(id: string, message: string): SourceAdapter {
+  const base = collectingWithLog(id, 'the body is not used here');
+  return {
+    ...base,
+    collect: async () => ({
+      ...(await base.collect()),
+      problems: [
+        { externalJobId: 'job-1', problems: [{ level: 'error', message, at: null, occurrences: 1 }] },
+      ],
+    }),
+  } as unknown as SourceAdapter;
+}
+
+/** Sync one cycle of an adapter and return the database file as bytes. */
+async function syncedProblemFile(name: string, message: string, secrets: string[]): Promise<Buffer> {
+  const path = join(dir, `${name}.db`);
+  const { sqlite, db } = openDatabase(path, { role: 'owner' });
+  migrate(db, { migrationsFolder: './drizzle' });
+
+  const loop = new SyncLoop(db, [collectingWithProblem('default', message)], {
+    intervalMs: 60_000,
+    stalledAfterMs: 60_000,
+    log: () => {},
+    secrets,
+  });
+  await loop.runCycle();
+  sqlite.close();
+
+  const wal = `${path}-wal`;
+  return Buffer.concat([readFileSync(path), existsSync(wal) ? readFileSync(wal) : Buffer.alloc(0)]);
+}
+
+test('a stored problem line that quotes the token stores no token', async () => {
+  // Problem lines are kept, unlike the logs they come from, so this is a new
+  // path by which an upstream string reaches a column (B-4, NFR-8).
+  const contents = await syncedProblemFile(
+    'problem-redacted',
+    `ExternalHostError: https://renovate.home.lan asked for Authorization: Bearer ${TOKEN}`,
+    [TOKEN],
+  );
+
+  assert.equal(contents.includes(TOKEN), false, 'the token reached the database file');
+  assert.ok(contents.includes('ExternalHostError'), 'the rest of the line must survive');
+  assert.ok(contents.includes('«redacted»'));
+});
+
+test('a credential in a long line is redacted before the line is cut', async () => {
+  // The order of the two steps, held by a test rather than by a comment.
+  //
+  // `redact` ends a credential in a URL at the `@` that follows it. A line cut
+  // to 500 characters first can drop that `@`, and then the pattern does not
+  // match and the password is stored. This password is a third-party registry
+  // credential, not a configured secret, so the exact-secret pass cannot catch
+  // it either: the pattern is the only thing standing between it and the file.
+  const password = 'p4ssw0rd-abcdefghijk-lmnopqrstuv';
+  // Padded so that `https://` starts before character 500 and the `@` lands
+  // after it.
+  const line =
+    `ExternalHostError: ${'padding '.repeat(55)}` +
+    `https://renovate:${password}@registry.example.com/npm failed`;
+  assert.ok(line.indexOf('@') > MAX_PROBLEM_MESSAGE, 'the @ must fall past the cut');
+  assert.ok(line.indexOf('https://') < MAX_PROBLEM_MESSAGE, 'the URL must start before the cut');
+
+  const contents = await syncedProblemFile('problem-long-url', line, []);
+
+  assert.equal(
+    contents.includes(password.slice(0, 20)),
+    false,
+    'the password reached the database file',
+  );
+  assert.ok(contents.includes('«redacted»'), 'the pattern must have fired');
+});
+
+test('the scan can see a problem line that is really there', async () => {
+  // The negative half of the test above: with nothing to redact, the line is
+  // stored whole, so a clean scan means redaction rather than a missed table.
+  const contents = await syncedProblemFile('problem-planted', 'ExternalHostError: a teapot', []);
+  assert.ok(contents.includes('ExternalHostError: a teapot'), 'the scan cannot see stored lines');
+});
 
 test('a run is stored without its log body ever reaching the database', async () => {
   const marker = 'LOG-BODY-a1b2c3-must-never-be-persisted';

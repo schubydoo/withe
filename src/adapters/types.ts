@@ -7,6 +7,7 @@
  * vocabulary and must not let it out.
  */
 import type { RenovateRun, Repo, SourceAdapterId, Update } from '../core/model.ts';
+import type { LogProblem } from '../core/renovate-log.ts';
 
 /** Which kind of source an adapter reads. */
 export type SourceKind = 'ce' | 'jsonlog' | 'forge';
@@ -122,11 +123,34 @@ export interface SourceMeta {
   system: SystemInfo | null;
 }
 
+/**
+ * The problem lines of one run, as the adapter read them (B-4).
+ *
+ * A run that read cleanly is still listed, with an empty array: that is how
+ * persist learns to clear lines the run no longer writes, and it is different
+ * from a run the cycle never opened.
+ */
+export interface RunProblems {
+  /** The run, named the way the source names it (`RenovateRun.externalJobId`). */
+  externalJobId: string;
+  problems: LogProblem[];
+}
+
 export interface CollectResult {
   repos: Repo[];
   runs: RenovateRun[];
   updates: Update[];
   warnings: string[];
+  /**
+   * Warn-level and worse lines, for the runs whose logs this cycle read (B-4).
+   *
+   * Absent when the source opened no log, which is not the same as a run with
+   * no problems: persist rewrites the lines of the runs named here and leaves
+   * every other run's alone. Both adapters read one log per repository per
+   * cycle — the newest finished run, the one whose word counts — so the index
+   * fills as Withe watches rather than reaching back over history.
+   */
+  problems?: RunProblems[];
   /**
    * True when the run listing was fully enumerated — every repository's runs
    * were read, whatever else degraded. This is what lets persist treat a run

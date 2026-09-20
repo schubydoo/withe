@@ -1,7 +1,8 @@
 # Storage & export
 
-Withe keeps run history in one SQLite file on its volume. It never stores log content — a run row
-holds a reference to the log, and the log is streamed from Renovate on demand.
+Withe keeps run history in one SQLite file on its volume. It never stores a whole log — a run row
+holds a reference to the log, and the log is streamed from Renovate on demand. It does keep the
+warn-level and worse lines of each log it reads, which is what the log-problem search reads.
 
 ## Growth and retention
 
@@ -27,6 +28,25 @@ with how often the fleet updates, not with time. A fleet that lands 10 updates a
 request closed. If the forge reported no close date, age is the date Withe archived the record. A
 run waits for the source to drop its own copy. A completed update has no such copy, so retention
 removes it as soon as it passes the window.
+
+## Log problems
+
+Withe keeps the warn-level and worse lines of each run log it reads, so the `/problems` page can
+search the whole fleet at once. Whole logs are still never stored: these lines are a small part of
+one log, and they are the part a search is for.
+
+A line costs about **108 bytes** at Renovate's own message lengths, so the database grows by roughly
+**1 MB per 9,700 lines**. A line a run wrote many times is one row with a count, not a row per
+repeat, and one run contributes at most 200 distinct lines. A line longer than 500 characters is
+stored to its first 500, ending in an ellipsis, so one row has a ceiling and the whole line stays
+one click away on the run page. A fleet whose runs pass writes none at all.
+
+Withe indexes the log it reads at each sync, which is each repository's newest finished run. It does
+not fetch older logs to backfill, because that is the request cost the design avoids. So the index
+covers what Withe watched, starting from the sync after you install it.
+
+`WITHE_RETENTION_DAYS` needs no separate setting here: these lines are deleted with the run they
+belong to, when that run is pruned.
 
 ## File-backed sources: your files, your retention
 

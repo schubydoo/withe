@@ -22,6 +22,7 @@ import type {
   CollectResult,
   PreflightProblem,
   PreflightResult,
+  RunProblems,
   SourceAdapter,
   SourceConfig,
 } from '../types.ts';
@@ -115,9 +116,9 @@ export class JsonLogAdapter implements SourceAdapter {
       runs.push(this.buildRun(jobId, run, file));
     }
 
-    const updates = await this.buildUpdates([...byJob.values()], warnings);
+    const { updates, problems } = await this.readNewestLogs([...byJob.values()], warnings);
 
-    return { repos, runs, updates, warnings, complete, authoritativeRepoList: false };
+    return { repos, runs, updates, problems, warnings, complete, authoritativeRepoList: false };
   }
 
   async fetchLog(run: Pick<RenovateRun, 'repoId' | 'externalJobId'>): Promise<ReadableStream<Uint8Array>> {
@@ -312,10 +313,16 @@ export class JsonLogAdapter implements SourceAdapter {
     };
   }
 
-  private async buildUpdates(found: FoundRun[], warnings: string[]): Promise<Update[]> {
+  private async readNewestLogs(
+    found: FoundRun[],
+    warnings: string[],
+  ): Promise<{ updates: Update[]; problems: RunProblems[] }> {
     // Pending updates come from each repository's newest run only — an older
     // run describes a state that has been superseded, same rule as upstream.
+    // The same pass keeps that run's warn-level and worse lines (B-4), so the
+    // index covers the same runs here as it does for a server source.
     const updates: Update[] = [];
+    const problems: RunProblems[] = [];
     for (const { run, file } of newestPerRepo(found).values()) {
       try {
         const extract = await extractFromLog(lineStream(run.lines), {
@@ -324,11 +331,12 @@ export class JsonLogAdapter implements SourceAdapter {
           detectedAt: run.completedAt ?? run.startedAt ?? new Date(),
         });
         updates.push(...extract.updates);
+        problems.push({ externalJobId: externalJobId(run, file), problems: extract.problems });
       } catch (cause) {
         warnings.push(`Could not read updates for ${run.repository} from ${file}: ${describe(cause)}`);
       }
     }
-    return updates;
+    return { updates, problems };
   }
 }
 

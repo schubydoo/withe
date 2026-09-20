@@ -46,6 +46,64 @@ export interface UpdateTotals {
   byType: Record<string, number>;
 }
 
+/** The levels a Renovate log marks a problem with, in Bunyan's numbering. */
+export type ProblemLevel = 'warn' | 'error' | 'fatal';
+
+/**
+ * One line of a run log at warn level or worse (B-4).
+ *
+ * Whole logs are not stored: one is hundreds of kilobytes, and the fleet's are
+ * hundreds of megabytes (PRD Section 6.3.1). These lines are the part a search
+ * is for, and they are a small fraction of a log, so keeping them answers
+ * "find a fatal across every repository" without keeping the rest.
+ */
+export interface LogProblem {
+  level: ProblemLevel;
+  message: string;
+  /** When the line was written, when the log says so. */
+  at: Date | null;
+  /** How many times the run wrote this same line. */
+  occurrences: number;
+}
+
+/**
+ * How many distinct problem lines one run can contribute.
+ *
+ * A run that writes more than this is broken in a way the first lines already
+ * name, and the cap is what bounds the growth this table adds per run. Repeats
+ * of one line do not count against it: they are folded into `occurrences`.
+ */
+export const MAX_PROBLEMS_PER_RUN = 200;
+
+/**
+ * How much of one line is kept.
+ *
+ * The line cap alone bounds the row count and not the bytes: a `msg` carrying a
+ * quoted command line or a list of URLs is as long as the log wrote it. This
+ * puts a ceiling on a row, so the documented growth figure holds for a noisy
+ * run and not only for an average one. A search reads a substring near the
+ * front of a line, and the whole line is one click away on the run page.
+ */
+export const MAX_PROBLEM_MESSAGE = 500;
+
+/**
+ * Cut one line to the ceiling, and say that it was cut.
+ *
+ * **Redact before calling this, never after.** A credential in a URL is
+ * recognised by the `@` that follows it, so a cut that drops the `@` leaves
+ * the password unrecognised and stored whole. The worker calls `redact` and
+ * this together, in that order, which is why the parse pass stores the line as
+ * the log wrote it.
+ *
+ * The ellipsis is part of the stored text, so a reader can tell a cut line from
+ * a short one.
+ */
+export function cutMessage(message: string): string {
+  return message.length > MAX_PROBLEM_MESSAGE
+    ? `${message.slice(0, MAX_PROBLEM_MESSAGE)}…`
+    : message;
+}
+
 export interface LogExtract {
   /** Which Renovate produced the run, so a later shape change has a version. */
   runnerVersion: string | null;
@@ -56,6 +114,8 @@ export interface LogExtract {
    * run found nothing pending, not that anything went wrong.
    */
   totals: UpdateTotals | null;
+  /** The run's warn-level and worse lines, in the order the log wrote them. */
+  problems: LogProblem[];
 }
 
 export interface ExtractContext {
@@ -128,7 +188,62 @@ function stateOf(branch: RawBranch): UpdateState {
   return typeof branch.prNo === 'number' ? 'pr-open' : 'detected';
 }
 
-/** Read an NDJSON log and return what it says about pending updates. */
+/**
+ * The level of one log entry, or null when it is not a problem.
+ *
+ * Renovate logs through Bunyan, which numbers levels: 30 is info, 40 warn, 50
+ * error, 60 fatal. The number is read rather than the name because the name is
+ * absent from the line. A level above fatal has no name of its own, so it is
+ * read as fatal rather than dropped.
+ */
+function levelOf(entry: Record<string, unknown>): ProblemLevel | null {
+  const level = entry.level;
+  if (typeof level !== 'number' || level < 40) return null;
+  if (level < 50) return 'warn';
+  if (level < 60) return 'error';
+  return 'fatal';
+}
+
+/**
+ * Fold one entry into the run's problem lines.
+ *
+ * Renovate writes the same warning once per dependency it applies to, so the
+ * same text can fill a log. Identical lines are counted rather than repeated:
+ * a search reads one row that says how often it happened, and the store holds
+ * one row rather than fifty.
+ */
+function collectProblem(entry: Record<string, unknown>, into: Map<string, LogProblem>): void {
+  const level = levelOf(entry);
+  if (level === null) return;
+
+  // The message is the searchable part. An entry without one carries nothing a
+  // person can search for, so it is skipped rather than stored as an empty row.
+  //
+  // Kept whole here. The worker redacts it and then cuts it to
+  // `MAX_PROBLEM_MESSAGE` (`cutMessage`), in that order, because cutting first
+  // can drop the `@` that ends a credential in a URL and so disarm the
+  // redaction that recognises it.
+  const message = typeof entry.msg === 'string' ? entry.msg.trim() : '';
+  if (!message) return;
+
+  const key = `${level}${message}`;
+  const seen = into.get(key);
+  if (seen) {
+    seen.occurrences += 1;
+    return;
+  }
+  if (into.size >= MAX_PROBLEMS_PER_RUN) return;
+
+  const time = entry.time;
+  into.set(key, {
+    level,
+    message,
+    at: typeof time === 'string' ? new Date(time) : null,
+    occurrences: 1,
+  });
+}
+
+/** Read an NDJSON log and return what it says about pending updates and problems. */
 export async function extractFromLog(
   source: AsyncIterable<Uint8Array | string>,
   context: ExtractContext,
@@ -141,8 +256,13 @@ export async function extractFromLog(
   // are merged here and the manifests are carried on the row.
   const byKey = new Map<string, { update: Update; files: Set<string> }>();
   const abandoned = new Map<string, Date | null>();
+  const problems = new Map<string, LogProblem>();
 
   for await (const entry of ndjson(source)) {
+    // Read from every line, whatever else the line carries: a fatal can sit on
+    // the same entry that reports a branch.
+    collectProblem(entry, problems);
+
     if (!runnerVersion && typeof entry.renovateVersion === 'string') {
       runnerVersion = entry.renovateVersion;
     }
@@ -244,6 +364,7 @@ export async function extractFromLog(
     totals,
     updates: [...byKey.values()].map((entry) => entry.update),
     abandoned: [...abandoned].map(([dependency, lastReleaseAt]) => ({ dependency, lastReleaseAt })),
+    problems: [...problems.values()],
   };
 }
 

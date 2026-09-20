@@ -1,5 +1,5 @@
 /**
- * The store. One SQLite file, seven tables, every domain row tagged with the
+ * The store. One SQLite file, eight tables, every domain row tagged with the
  * source that produced it.
  */
 import { sql, type SQL } from 'drizzle-orm';
@@ -248,6 +248,47 @@ export const completedUpdate = sqliteTable(
       t.versionKey,
     ),
     index('completed_repo_closed').on(t.repoId, t.closedAt),
+  ],
+);
+
+/**
+ * The warn-level and worse lines of a run's log, so a fatal can be found across
+ * the fleet without opening each run (B-4).
+ *
+ * Whole logs are still never stored (PRD Section 6.3.1): one is hundreds of
+ * kilobytes and the fleet's are hundreds of megabytes, while these lines are a
+ * small fraction of one log. A repeated line is one row with a count, not a row
+ * per repeat, because Renovate writes the same warning once per dependency it
+ * applies to.
+ *
+ * One row belongs to one run. `pruneOldRuns` deletes these with the run they
+ * came from, so retention needs no separate window here.
+ */
+export const logProblem = sqliteTable(
+  'log_problem',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    sourceAdapterId: text('source_adapter_id')
+      .notNull()
+      .references(() => source.id),
+    runId: integer('run_id')
+      .notNull()
+      .references(() => renovateRun.id),
+    level: text('level', { enum: ['warn', 'error', 'fatal'] }).notNull(),
+    /** The line's message, as Renovate wrote it. This is what a search reads. */
+    message: text('message').notNull(),
+    /** When the line was written, when the log says so. */
+    at: integer('at', { mode: 'timestamp' }),
+    /** How many times the run wrote this same line. */
+    occurrences: integer('occurrences').notNull().default(1),
+  },
+  (t) => [
+    // Persist rewrites one run's lines at a time, and the log viewer links from
+    // a search result back to its run.
+    index('problem_run').on(t.runId),
+    // The search filters by level before it matches text, so the worst lines
+    // can be listed without reading every row.
+    index('problem_level').on(t.level),
   ],
 );
 

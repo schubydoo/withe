@@ -11,7 +11,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import type { CollectResult } from '../adapters/types.ts';
 import type { Db } from './client.ts';
-import { forgeRateLimit, renovateRun, repo, source, syncStatus, update } from './schema.ts';
+import { forgeRateLimit, logProblem, renovateRun, repo, source, syncStatus, update } from './schema.ts';
 
 export interface PersistCounts {
   repos: number;
@@ -46,6 +46,63 @@ export function recordForgeStatus(db: Db, headroom: ForgeHeadroom): void {
     .values({ id: 1, ...set })
     .onConflictDoUpdate({ target: forgeRateLimit.id, set })
     .run();
+}
+
+/**
+ * The handle inside a transaction. Derived from `Db` rather than named from
+ * drizzle's internals, so it follows the driver rather than pinning a type this
+ * file would have to chase.
+ */
+type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
+
+/**
+ * Rewrite the problem lines of the runs whose logs this cycle read (B-4).
+ *
+ * Rewritten, not added to: a run's log is the whole truth about that run, so
+ * its lines are replaced rather than merged. A run the cycle did not open is
+ * not named in `result.problems` and keeps what it has, which is what makes a
+ * failed log fetch cost nothing.
+ *
+ * The run must already be in the table, which it is: persist writes runs above.
+ * A line naming a run this source does not have is dropped rather than
+ * inserted against a guessed id.
+ */
+function writeProblems(tx: Tx, sourceAdapterId: string, result: CollectResult): void {
+  const read = result.problems ?? [];
+  if (read.length === 0) return;
+
+  const rows = tx
+    .select({ id: renovateRun.id, externalJobId: renovateRun.externalJobId })
+    .from(renovateRun)
+    .where(
+      and(
+        eq(renovateRun.sourceAdapterId, sourceAdapterId),
+        inArray(
+          renovateRun.externalJobId,
+          read.map((entry) => entry.externalJobId),
+        ),
+      ),
+    )
+    .all();
+  const runRowId = new Map(rows.map((row) => [row.externalJobId, row.id]));
+
+  for (const entry of read) {
+    const runId = runRowId.get(entry.externalJobId);
+    if (runId === undefined) continue;
+    tx.delete(logProblem).where(eq(logProblem.runId, runId)).run();
+    for (const line of entry.problems) {
+      tx.insert(logProblem)
+        .values({
+          sourceAdapterId,
+          runId,
+          level: line.level,
+          message: line.message,
+          at: line.at,
+          occurrences: line.occurrences,
+        })
+        .run();
+    }
+  }
 }
 
 export function persist(
@@ -280,6 +337,8 @@ export function persist(
       updates += 1;
     }
 
+    writeProblems(tx, sourceAdapterId, result);
+
     // Keep the outcome (B-10). The delete above is where a finished update
     // leaves the pending view: once Renovate stops listing the branch, nothing
     // re-inserts it and the fact that it ever landed is gone. Copying here,
@@ -373,9 +432,10 @@ export function recordSyncFailure(
 /**
  * Delete run metadata older than `cutoff`, and give the space back to the disk.
  *
- * Only `renovate_run` rows are pruned. Repositories, pending updates and the
- * forge each row points at stay: they describe the present, not the past. A
- * run whose timestamps are all null is left alone rather than guessed at.
+ * Only `renovate_run` rows and the problem lines they own are pruned.
+ * Repositories, pending updates and the forge each row points at stay: they
+ * describe the present, not the past. A run whose timestamps are all null is
+ * left alone rather than guessed at.
  *
  * Only runs the source no longer lists are pruned (`log_available = 0` —
  * persist flips it for exactly this fact). Pruning a run the source still
@@ -394,11 +454,25 @@ export function recordSyncFailure(
  */
 export function pruneOldRuns(db: Db, cutoff: Date): number {
   const seconds = Math.floor(cutoff.getTime() / 1000);
-  const deleted = db.run(sql`
-    delete from renovate_run
-     where coalesce(completed_at, started_at, queued_at) < ${seconds}
-       and log_available = 0
-  `).changes;
+  const deleted = db.transaction((tx): number => {
+    // The run's problem lines go first, in the same transaction (B-4). They
+    // reference the run, foreign keys are enforced (`openDatabase`), so the
+    // delete below would fail outright with them still there. One statement
+    // rather than a row at a time: the two conditions are the run delete's own.
+    tx.run(sql`
+      delete from log_problem
+       where run_id in (
+         select id from renovate_run
+          where coalesce(completed_at, started_at, queued_at) < ${seconds}
+            and log_available = 0
+       )
+    `);
+    return tx.run(sql`
+      delete from renovate_run
+       where coalesce(completed_at, started_at, queued_at) < ${seconds}
+         and log_available = 0
+    `).changes;
+  });
 
   if (deleted > 0) {
     db.run(sql`PRAGMA incremental_vacuum`);
