@@ -602,7 +602,14 @@ export interface ForgeInfo {
   webBaseUrl: string | null;
 }
 
-/** What the sources reported about their forge, keyed by source id. */
+/**
+ * What the sources reported about their forge, keyed by source id.
+ *
+ * A removed source stays in this map, unlike everywhere else. It is a lookup,
+ * not a listing: the pages that read it have already hidden a removed source's
+ * rows, and dropping the entry would only break a link on a row that is still
+ * reachable by its own address.
+ */
 export function forges(db: Db): Map<string, ForgeInfo> {
   const rows = db.all<{ id: string; platform: string | null; webBaseUrl: string | null }>(sql`
     select id, platform, web_base_url as webBaseUrl from source
@@ -670,6 +677,7 @@ export function sourceSystems(db: Db): SourceSystem[] {
            oldest_queued_at as oldestQueuedAt, oldest_queued_repo as oldestQueuedRepo,
            runner_version as runnerVersion, booted_at as bootedAt
       from source
+     where removed_at is null
      order by id
   `);
   return rows.map((row) => ({
@@ -689,7 +697,9 @@ export interface SourceSchedule {
  * when the next Renovate run is due (B-5). */
 export function schedules(db: Db): SourceSchedule[] {
   const rows = db.all<{ cron: string | null; lastScheduling: number | null }>(sql`
-    select schedule_cron as cron, schedule_last_at as lastScheduling from source
+    select schedule_cron as cron, schedule_last_at as lastScheduling
+      from source
+     where removed_at is null
   `);
   return rows.map((r) => ({
     cron: r.cron,
@@ -753,6 +763,7 @@ export function sourceHealth(db: Db, since: Date): SourceHealth[] {
              where ss.source_adapter_id = s.id and ss.started_at >= ${cutoff}
                and ss.outcome = 'failed') as failuresInWindow
       from source s
+     where s.removed_at is null
      order by s.id
   `);
 

@@ -511,3 +511,48 @@ test('enrichForge runs before persist, so a merged update is written merged and 
   assert.equal(stored[0]?.state, 'pr-merged', 'the enriched state is what persist wrote');
   sqlite.close();
 });
+
+test('a source dropped from the configuration is marked on the next cycle', async () => {
+  // The wiring, not the statement: `reconcileSources` is the only thing that
+  // ever visits a source the worker no longer syncs, so the cycle has to call
+  // it. Two cycles, and the second is configured with one source fewer.
+  const { sqlite, db } = fresh();
+  const fleet = (source: string): CollectResult => ({
+    repos: [repoOf(source, 'acme/widget')],
+    runs: [runOf(source, 'acme/widget', `${source}-j1`, 'success', Date.now())],
+    updates: [],
+    warnings: [],
+    complete: true,
+    authoritativeRepoList: true,
+  });
+  const options = { intervalMs: 1000, stalledAfterMs: 7 * DAY, log: () => {} };
+
+  const both = new SyncLoop(
+    db,
+    [stub('kept', async () => fleet('kept')), stub('dropped', async () => fleet('dropped'))],
+    options,
+  );
+  const first = await both.runCycle();
+  assert.equal(first.removedSources, 0, 'nothing has left the configuration yet');
+
+  const one = new SyncLoop(db, [stub('kept', async () => fleet('kept'))], options);
+  const second = await one.runCycle();
+
+  assert.equal(second.removedSources, 1);
+  const rows = db.all<{ id: string; removedAt: number | null }>(
+    sql`select id, removed_at as removedAt from source order by id`,
+  );
+  assert.deepEqual(
+    rows.map((r) => [r.id, r.removedAt === null]),
+    [
+      ['dropped', false],
+      ['kept', true],
+    ],
+    'the dropped source is marked and the configured one is not',
+  );
+  const repos = db.all<{ removedAt: number | null }>(
+    sql`select removed_at as removedAt from repo where source_adapter_id = 'dropped'`,
+  );
+  assert.ok(repos.every((r) => r.removedAt !== null), 'its repositories go with it');
+  sqlite.close();
+});

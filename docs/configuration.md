@@ -71,6 +71,21 @@ sources:
 `tokenEnv` names a variable rather than holding the secret, so the file is safe to commit or paste
 into a forum post when asking for help.
 
+## Removing a source
+
+Delete a source from the configuration and restart Withe. On its next sync cycle Withe marks that
+source and its repositories as removed, and they leave the dashboard, the update pages, the log
+problem search and the health page.
+
+What it keeps: the run history, the completed updates and the problem lines of that source. They are
+not shown, and they are deleted on the schedule `WITHE_RETENTION_DAYS` sets, like any other run
+history. What it deletes now: that source's pending updates, because nothing will refresh them
+again.
+
+Add the source back under the same id and its repositories come back with their history on the next
+sync. This is why a removed source is marked rather than deleted: a typo in a source id must not
+cost you a fleet's history.
+
 ## Source kinds
 
 ### `ce` — a self-hosted Renovate server

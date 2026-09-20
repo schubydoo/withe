@@ -15,6 +15,17 @@ export const source = sqliteTable('source', {
   webBaseUrl: text('web_base_url'),
   lastSyncAt: integer('last_sync_at', { mode: 'timestamp' }),
   lastSyncOutcome: text('last_sync_outcome', { enum: ['ok', 'partial', 'failed'] }),
+  /**
+   * When the source left the configuration, or null while it is configured.
+   *
+   * The worker reconciles this table against the configured sources each cycle
+   * (`reconcileSources`). A source the operator deleted is marked here rather
+   * than deleted, for the same reason a repository is: the row owns runs and
+   * completed updates through foreign keys, and deleting it would throw that
+   * history away on a configuration edit. Every page hides a marked source, and
+   * re-adding the source under the same id clears the mark.
+   */
+  removedAt: integer('removed_at', { mode: 'timestamp' }),
   /** The runner's own cron, as it reported it, so the next run can be estimated
    * from the source rather than from a value Withe was told (B-5). */
   scheduleCron: text('schedule_cron'),

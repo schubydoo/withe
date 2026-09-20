@@ -13,6 +13,7 @@ import {
   persist,
   pruneCompletedUpdates,
   pruneOldRuns,
+  reconcileSources,
   recomputeStalled,
   recordSyncFailure,
 } from '../db/persist.ts';
@@ -56,6 +57,8 @@ export interface SourceOutcome {
 export interface CycleReport {
   skipped: boolean;
   sources: SourceOutcome[];
+  /** Sources that left the configuration and were marked removed this cycle. */
+  removedSources: number;
   /** Runs deleted by retention at the end of this cycle. */
   pruned: number;
   /** Completed updates deleted by retention at the end of this cycle. */
@@ -152,11 +155,27 @@ export class SyncLoop {
   async runCycle(): Promise<CycleReport> {
     if (this.running) {
       this.log('sync: a cycle is still running, skipping this tick');
-      return { skipped: true, sources: [], pruned: 0, prunedUpdates: 0 };
+      return { skipped: true, sources: [], removedSources: 0, pruned: 0, prunedUpdates: 0 };
     }
 
     this.running = true;
     try {
+      // First, before any source is read. A source the operator deleted from
+      // the configuration is never synced again, so nothing else would ever
+      // notice it went: this is the only place that reconciles the stored
+      // sources against the configured ones. Running it first means a deleted
+      // source stops being shown even on a cycle where every configured source
+      // fails.
+      const removedSources = reconcileSources(
+        this.db,
+        this.adapters.map((adapter) => adapter.id),
+      );
+      if (removedSources > 0) {
+        this.log(
+          `sync: ${removedSources} source(s) left the configuration; their repositories are marked removed`,
+        );
+      }
+
       const sources: SourceOutcome[] = [];
       for (const adapter of this.adapters) {
         sources.push(await this.syncOne(adapter));
@@ -164,7 +183,13 @@ export class SyncLoop {
       // Once per cycle, after every source is written, because pruning touches
       // the whole file rather than one source's rows.
       const pruned = this.prune();
-      return { skipped: false, sources, pruned: pruned.runs, prunedUpdates: pruned.updates };
+      return {
+        skipped: false,
+        sources,
+        removedSources,
+        pruned: pruned.runs,
+        prunedUpdates: pruned.updates,
+      };
     } finally {
       this.running = false;
     }

@@ -1,0 +1,1 @@
+ALTER TABLE `source` ADD `removed_at` integer;
