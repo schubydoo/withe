@@ -413,6 +413,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#removing-a-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removing a source
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#source-kinds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -654,6 +665,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#removing-a-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removing a source
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#source-kinds" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -850,6 +872,17 @@ are ignored with a startup warning.</p>
 </code></pre></div>
 <p><code>tokenEnv</code> names a variable rather than holding the secret, so the file is safe to commit or paste
 into a forum post when asking for help.</p>
+<h2 id="removing-a-source">Removing a source<a class="headerlink" href="#removing-a-source" title="Permanent link">&para;</a></h2>
+<p>Delete a source from the configuration and restart Withe. On its next sync cycle Withe marks that
+source and its repositories as removed, and they leave the dashboard, the update pages, the log
+problem search and the health page.</p>
+<p>What it keeps: the run history, the completed updates and the problem lines of that source. They are
+not shown, and they are deleted on the schedule <code>WITHE_RETENTION_DAYS</code> sets, like any other run
+history. What it deletes now: that source's pending updates, because nothing will refresh them
+again.</p>
+<p>Add the source back under the same id and its repositories come back with their history on the next
+sync. This is why a removed source is marked rather than deleted: a typo in a source id must not
+cost you a fleet's history.</p>
 <h2 id="source-kinds">Source kinds<a class="headerlink" href="#source-kinds" title="Permanent link">&para;</a></h2>
 <h3 id="ce-a-self-hosted-renovate-server"><code>ce</code> — a self-hosted Renovate server<a class="headerlink" href="#ce-a-self-hosted-renovate-server" title="Permanent link">&para;</a></h3>
 <p>Reads the server's API. Needs <code>url</code> and <code>tokenEnv</code>.</p>

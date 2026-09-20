@@ -467,6 +467,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#removing-a-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removing a source
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#file-backed-sources-your-files-your-retention" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -670,6 +681,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#removing-a-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Removing a source
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#file-backed-sources-your-files-your-retention" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -781,6 +803,12 @@ not fetch older logs to backfill, because that is the request cost the design av
 covers what Withe watched, starting from the sync after you install it.</p>
 <p><code>WITHE_RETENTION_DAYS</code> needs no separate setting here: these lines are deleted with the run they
 belong to, when that run is pruned.</p>
+<h2 id="removing-a-source">Removing a source<a class="headerlink" href="#removing-a-source" title="Permanent link">&para;</a></h2>
+<p>A source you delete from the configuration is marked as removed on the next sync cycle, together
+with its repositories. Its pending updates are deleted, because nothing refreshes them again. Its
+runs, completed updates and problem lines stay, hidden from every page, and age out under
+<code>WITHE_RETENTION_DAYS</code> like any other run history. See
+<a href="../configuration/#removing-a-source">Configuration</a>.</p>
 <h2 id="file-backed-sources-your-files-your-retention">File-backed sources: your files, your retention<a class="headerlink" href="#file-backed-sources-your-files-your-retention" title="Permanent link">&para;</a></h2>
 <p>For a <code>jsonlog</code> source the log files are the source record, not a cache, so the rule is different
 and simpler:</p>
