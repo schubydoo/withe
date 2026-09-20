@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm';
 
 import { reportsSystemFacts, type SourceKind } from '../adapters/types.ts';
 import type { UpdateType } from '../core/model.ts';
+import type { ProblemLevel } from '../core/renovate-log.ts';
 import type { Db } from './client.ts';
 
 export interface PendingUpdateRow {
@@ -52,6 +53,28 @@ export interface CompletedUpdateRow {
    * archive date, which the schema declares NOT NULL, so there is always one.
    */
   closedAt: Date;
+}
+
+export interface LogProblemRow {
+  /** The run row, which is also the address of its log page. */
+  runId: number;
+  repoFullName: string;
+  sourceAdapterId: string;
+  level: ProblemLevel;
+  message: string;
+  /** How many times that run wrote this same line. */
+  occurrences: number;
+  /**
+   * When the line was written, or when its run finished if the line carried no
+   * time of its own. Null only when the run carries no completion either.
+   */
+  at: Date | null;
+}
+
+/** How much of the fleet's problem index there is, for the search page to state. */
+export interface ProblemIndexSize {
+  lines: number;
+  runs: number;
 }
 
 export interface RepoHealthRow {
@@ -152,6 +175,101 @@ export function completedUpdates(db: Db, limit = 250, repoFullName?: string): Co
   `);
 
   return rows.map((row) => ({ ...row, closedAt: new Date(row.closedAt * 1000) }));
+}
+
+/**
+ * Escape a search term so it matches itself (B-4).
+ *
+ * `%` and `_` are LIKE's own wildcards, so a person searching for `100%` would
+ * otherwise match every line. The backslash is escaped first, because it is
+ * what the escape clause uses and escaping it last would double the others.
+ */
+function likeTerm(query: string): string {
+  return `%${query.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%`;
+}
+
+/**
+ * Every level at or worse than one level, worst first.
+ *
+ * The filter means "this and worse": an operator looking for errors wants the
+ * fatals too, and a fatal is never something they asked to hide. Written as
+ * the set rather than as a comparison so the query stays an `in` over the
+ * indexed column.
+ */
+const AT_LEAST: Record<ProblemLevel, readonly ProblemLevel[]> = {
+  warn: ['fatal', 'error', 'warn'],
+  error: ['fatal', 'error'],
+  fatal: ['fatal'],
+};
+
+/**
+ * Search the fleet's stored problem lines (B-4).
+ *
+ * The level filter means that level and worse, so "error" also lists fatals.
+ *
+ * This searches the warn-level and worse lines Withe kept at ingest, not whole
+ * logs: logs are never stored (PRD Section 6.3.1), so there is nothing else to
+ * search. The page says so, because an empty result here means "no problem
+ * line matched", not "nothing anywhere matched".
+ *
+ * An empty query lists the most recent lines, which is the useful landing
+ * state: the operator most often wants to know what is wrong right now.
+ *
+ * A removed repository is excluded, as it is in every other query here.
+ */
+export function searchProblems(
+  db: Db,
+  options: { query?: string; level?: ProblemLevel; limit?: number } = {},
+): LogProblemRow[] {
+  const query = options.query?.trim() ?? '';
+  const term = query === '' ? null : likeTerm(query);
+  const level = options.level ?? null;
+  const levels =
+    level === null
+      ? sql`1 = 1`
+      : sql`p.level in (${sql.join(
+          AT_LEAST[level].map((name) => sql`${name}`),
+          sql`, `,
+        )})`;
+  const rows = db.all<Omit<LogProblemRow, 'at'> & { at: number | null }>(sql`
+    select p.run_id            as runId,
+           r.full_name         as repoFullName,
+           p.source_adapter_id as sourceAdapterId,
+           p.level,
+           p.message,
+           p.occurrences,
+           coalesce(p.at, rr.completed_at, rr.started_at) as at
+      from log_problem p
+      join renovate_run rr on rr.id = p.run_id
+      join repo r on r.id = rr.repo_id
+     where r.removed_at is null
+       and ${levels}
+       and (${term} is null or p.message like ${term} escape '\\')
+     order by at desc, p.id desc
+     limit ${options.limit ?? 200}
+  `);
+
+  return rows.map((row) => ({ ...row, at: row.at === null ? null : new Date(row.at * 1000) }));
+}
+
+/**
+ * How many problem lines Withe holds, and how many runs they came from.
+ *
+ * The search page states this. Withe indexes the log it reads at each sync,
+ * which is each repository's newest finished run, so the index covers the runs
+ * Withe watched rather than every run in the history. Saying how much there is
+ * keeps an empty result honest.
+ */
+export function problemIndexSize(db: Db): ProblemIndexSize {
+  const row = db.get<{ lines: number | null; runs: number | null }>(sql`
+    select count(*)            as lines,
+           count(distinct p.run_id) as runs
+      from log_problem p
+      join renovate_run rr on rr.id = p.run_id
+      join repo r on r.id = rr.repo_id
+     where r.removed_at is null
+  `);
+  return { lines: row?.lines ?? 0, runs: row?.runs ?? 0 };
 }
 
 /**

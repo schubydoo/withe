@@ -416,6 +416,10 @@ export default function Home() {
           completed updates
         </a>{' '}
         ·{' '}
+        <a className="underline" href="/problems">
+          log problems
+        </a>{' '}
+        ·{' '}
         <a className="underline" href="/health">
           Renovate health
         </a>

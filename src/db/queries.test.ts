@@ -10,10 +10,10 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import type { CollectResult } from '../adapters/types.ts';
 import type { RenovateRun, Repo, Update } from '../core/model.ts';
 import { groupByFullName } from '../core/group.ts';
-import { isHeld } from '../core/renovate-log.ts';
+import { isHeld, type LogProblem } from '../core/renovate-log.ts';
 import { openDatabase } from './client.ts';
 import { persist, recomputeStalled, recordForgeStatus } from './persist.ts';
-import { completedUpdates, forgeRateLimit, forges, lockFileRefreshes, migrationState, pendingUpdates, repoHealth, repoInventory, runLocation, runsForRepo, sourceSystems, triage } from './queries.ts';
+import { completedUpdates, forgeRateLimit, forges, lockFileRefreshes, migrationState, pendingUpdates, problemIndexSize, repoHealth, repoInventory, runLocation, runsForRepo, searchProblems, sourceSystems, triage } from './queries.ts';
 import { renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-q-'));
@@ -1084,5 +1084,169 @@ test('only a finished update is recorded, never a pending one', () => {
   const history = completedUpdates(db);
   assert.deepEqual(history.map((u) => u.dependencyName), ['tsx'], 'the merged one, and only it');
   assert.ok(pendingUpdates(db).length > 0, 'the pending rows were there to be wrongly picked');
+  sqlite.close();
+});
+
+/** A cycle that read one run's log and found these lines (B-4). */
+function withProblems(externalJobId: string, problems: LogProblem[]): CollectResult {
+  return { ...FLEET, problems: [{ externalJobId, problems }] };
+}
+
+function problem(over: Partial<LogProblem>): LogProblem {
+  return { level: 'warn', message: 'Package lookup failure', at: null, occurrences: 1, ...over };
+}
+
+test('a run’s problem lines are stored against that run', () => {
+  const { sqlite, db } = fresh();
+  persist(
+    db,
+    SOURCE,
+    'ce',
+    withProblems('j3', [
+      problem({ level: 'error', message: 'ExternalHostError: registry timed out', occurrences: 3 }),
+    ]),
+    new Date(),
+  );
+
+  const [row] = searchProblems(db);
+  assert.equal(row?.repoFullName, 'acme/gadget', 'the run names the repository, not the source');
+  assert.equal(row?.level, 'error');
+  assert.equal(row?.occurrences, 3);
+  assert.equal(row?.message, 'ExternalHostError: registry timed out');
+  assert.equal(runLocation(db, row?.runId ?? 0)?.externalJobId, 'j3', 'the row links to its run');
+  sqlite.close();
+});
+
+test('a second read of one run replaces its lines rather than doubling them', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', withProblems('j3', [problem({})]), new Date());
+  // The next sync reads the same run again and the warning has cleared.
+  persist(db, SOURCE, 'ce', withProblems('j3', []), new Date());
+
+  assert.deepEqual(searchProblems(db), []);
+  sqlite.close();
+});
+
+test('a run the cycle did not read keeps the lines it already had', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', withProblems('j3', [problem({ message: 'from the gadget run' })]), new Date());
+  // A cycle that read a different run's log, because this one's fetch failed.
+  persist(db, SOURCE, 'ce', withProblems('j2', [problem({ message: 'from the widget run' })]), new Date());
+
+  assert.deepEqual(
+    searchProblems(db).map((r) => r.message).sort(),
+    ['from the gadget run', 'from the widget run'],
+  );
+  sqlite.close();
+});
+
+test('a cycle that opened no log leaves every stored line alone', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', withProblems('j3', [problem({})]), new Date());
+  persist(db, SOURCE, 'ce', FLEET, new Date());
+
+  assert.equal(searchProblems(db).length, 1);
+  sqlite.close();
+});
+
+test('the search matches part of a line, whatever its case', () => {
+  const { sqlite, db } = fresh();
+  persist(
+    db,
+    SOURCE,
+    'ce',
+    withProblems('j3', [
+      problem({ message: 'ExternalHostError: registry timed out' }),
+      problem({ message: 'Package lookup failure' }),
+    ]),
+    new Date(),
+  );
+
+  assert.equal(searchProblems(db, { query: 'externalhost' }).length, 1);
+  assert.equal(searchProblems(db, { query: '  lookup  ' }).length, 1, 'the term is trimmed');
+  assert.equal(searchProblems(db, { query: 'nothing like this' }).length, 0);
+  assert.equal(searchProblems(db, {}).length, 2, 'no query lists the lot');
+  sqlite.close();
+});
+
+test('a wildcard in the search matches itself, not everything', () => {
+  const { sqlite, db } = fresh();
+  persist(
+    db,
+    SOURCE,
+    'ce',
+    withProblems('j3', [
+      problem({ message: 'disk 100% full' }),
+      problem({ message: 'a line with no percentage' }),
+    ]),
+    new Date(),
+  );
+
+  assert.equal(searchProblems(db, { query: '100%' }).length, 1, 'a percent is a character here');
+  assert.equal(searchProblems(db, { query: '%' }).length, 1, 'a bare percent is not every line');
+  assert.equal(searchProblems(db, { query: '_' }).length, 0, 'an underscore is not any character');
+  sqlite.close();
+});
+
+test('the level filter lists that level and worse', () => {
+  const { sqlite, db } = fresh();
+  persist(
+    db,
+    SOURCE,
+    'ce',
+    withProblems('j3', [
+      problem({ level: 'warn', message: 'a warning' }),
+      problem({ level: 'error', message: 'an error' }),
+      problem({ level: 'fatal', message: 'a fatal' }),
+    ]),
+    new Date(),
+  );
+
+  assert.deepEqual(searchProblems(db, { level: 'fatal' }).map((r) => r.message), ['a fatal']);
+  assert.deepEqual(
+    searchProblems(db, { level: 'error' }).map((r) => r.message).sort(),
+    ['a fatal', 'an error'],
+    'an operator looking for errors wants the fatals too',
+  );
+  assert.equal(searchProblems(db, { level: 'warn' }).length, 3);
+  sqlite.close();
+});
+
+test('the lines of a removed repository are not searched', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', withProblems('j3', [problem({})]), new Date());
+  assert.equal(searchProblems(db).length, 1);
+
+  // The next sync no longer lists acme/gadget, which owns run j3.
+  persist(
+    db,
+    SOURCE,
+    'ce',
+    {
+      ...FLEET,
+      repos: FLEET.repos.filter((r) => r.fullName !== 'acme/gadget'),
+      runs: FLEET.runs.filter((r) => !r.repoId.endsWith('acme/gadget')),
+      updates: [],
+    },
+    new Date(),
+  );
+
+  assert.deepEqual(searchProblems(db), [], 'a removed repository is hidden here as everywhere');
+  assert.equal(problemIndexSize(db).lines, 0, 'and it is not counted either');
+  sqlite.close();
+});
+
+test('the index size counts the lines and the runs they came from', () => {
+  const { sqlite, db } = fresh();
+  persist(db, SOURCE, 'ce', withProblems('j3', [problem({ message: 'one' }), problem({ message: 'two' })]), new Date());
+  persist(db, SOURCE, 'ce', withProblems('j2', [problem({ message: 'three' })]), new Date());
+
+  assert.deepEqual(problemIndexSize(db), { lines: 3, runs: 2 });
+  sqlite.close();
+});
+
+test('an empty index counts nothing rather than throwing', () => {
+  const { sqlite, db } = fresh();
+  assert.deepEqual(problemIndexSize(db), { lines: 0, runs: 0 });
   sqlite.close();
 });

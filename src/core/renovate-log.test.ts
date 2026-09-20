@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createReadStream, readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import { classify, extractFromLog, isHeld } from './renovate-log.ts';
+import { classify, extractFromLog, isHeld, MAX_PROBLEMS_PER_RUN } from './renovate-log.ts';
 
 const FIXTURE = 'test/fixtures/ce/job.ndjson';
 const CONTEXT = {
@@ -223,4 +223,113 @@ test('an upgrade with neither a name nor a manifest is dropped', async () => {
   });
   const extract = await extractFromLog(lines(log), CONTEXT);
   assert.deepEqual(extract.updates, []);
+});
+
+test('warn-level and worse lines are kept, and quieter ones are not', async () => {
+  // Renovate logs through Bunyan: 30 is info, 40 warn, 50 error, 60 fatal.
+  const log = [
+    { level: 30, msg: 'Repository started' },
+    { level: 40, msg: 'Package lookup failure' },
+    { level: 50, msg: 'ExternalHostError' },
+    { level: 60, msg: 'Fatal error' },
+    { level: 20, msg: 'debug noise' },
+  ]
+    .map((entry) => JSON.stringify(entry))
+    .join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+
+  assert.deepEqual(
+    extract.problems.map((p) => [p.level, p.message]),
+    [
+      ['warn', 'Package lookup failure'],
+      ['error', 'ExternalHostError'],
+      ['fatal', 'Fatal error'],
+    ],
+  );
+});
+
+test('a repeated line is one row with a count, not one row per repeat', async () => {
+  // Renovate writes the same warning once per dependency it applies to, so a
+  // run can hold fifty copies of one line.
+  const log = Array.from({ length: 50 }, () =>
+    JSON.stringify({ level: 40, msg: 'Package lookup failure' }),
+  ).join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+
+  assert.equal(extract.problems.length, 1);
+  assert.equal(extract.problems[0]?.occurrences, 50);
+});
+
+test('the same message at two levels stays two rows', async () => {
+  const log = [
+    JSON.stringify({ level: 40, msg: 'lookup failed' }),
+    JSON.stringify({ level: 50, msg: 'lookup failed' }),
+  ].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+  assert.equal(extract.problems.length, 2);
+});
+
+test('one run contributes no more distinct lines than the cap', async () => {
+  const log = Array.from({ length: MAX_PROBLEMS_PER_RUN + 25 }, (_, i) =>
+    JSON.stringify({ level: 40, msg: `failure ${i}` }),
+  ).join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+  assert.equal(extract.problems.length, MAX_PROBLEMS_PER_RUN);
+});
+
+test('a repeat is still counted after the cap is reached', async () => {
+  // The cap counts distinct lines. A line already kept must keep counting, or
+  // a noisy run would under-report the one line that matters.
+  const distinct = Array.from({ length: MAX_PROBLEMS_PER_RUN }, (_, i) =>
+    JSON.stringify({ level: 40, msg: `failure ${i}` }),
+  );
+  const log = [...distinct, JSON.stringify({ level: 40, msg: 'failure 0' })].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+  assert.equal(extract.problems.length, MAX_PROBLEMS_PER_RUN);
+  assert.equal(extract.problems.find((p) => p.message === 'failure 0')?.occurrences, 2);
+});
+
+test('a problem line carries its own time, and survives having none', async () => {
+  const log = [
+    JSON.stringify({ level: 50, msg: 'timed', time: '2026-09-01T10:00:00.000Z' }),
+    JSON.stringify({ level: 50, msg: 'untimed' }),
+  ].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+  const byMessage = new Map(extract.problems.map((p) => [p.message, p]));
+  assert.equal(byMessage.get('timed')?.at?.toISOString(), '2026-09-01T10:00:00.000Z');
+  assert.equal(byMessage.get('untimed')?.at, null);
+});
+
+test('a problem line with no message is dropped rather than stored empty', async () => {
+  const log = [
+    JSON.stringify({ level: 50, err: { message: 'no msg field' } }),
+    JSON.stringify({ level: 50, msg: '   ' }),
+    JSON.stringify({ level: 'error', msg: 'a level that is not a number' }),
+  ].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+  assert.deepEqual(extract.problems, []);
+});
+
+test('a run that reports a problem still reports its updates', async () => {
+  // The two readings share one pass over the log, so one must not cost the
+  // other: a failing run is exactly when both facts matter.
+  const log = [
+    JSON.stringify({ level: 50, msg: 'ExternalHostError' }),
+    JSON.stringify({
+      branchesInformation: [
+        { prNo: 7, upgrades: [{ depName: 'next', newValue: '16.0.0', updateType: 'major' }] },
+      ],
+    }),
+  ].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+  assert.equal(extract.problems.length, 1);
+  assert.equal(extract.updates.length, 1);
 });

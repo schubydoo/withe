@@ -65,6 +65,7 @@ Plus, per source and per repository:
 | **Pending updates** (`/updates`) | Every pending update across the fleet on one page, grouped by dependency, filterable by type including security |
 | **Completed updates** (`/history`) | What Renovate landed and what it closed unmerged, per repository or across the fleet, newest first |
 | **Renovate health** (`/health`) | Whether Withe is reaching your sources and staying current, plus the GitHub rate-limit headroom for a configured token |
+| **Log problems** (`/problems`) | Search every repository's warn, error, and fatal log lines on one page, instead of opening runs one at a time |
 | **Run history** | Every run for a repo — queued, started, duration, outcome |
 | **Log viewer** | The full JSON-Lines log for any run, via Renovate's documented log endpoint |
 
@@ -183,9 +184,11 @@ Most operators running Renovate CE already run something better than basic auth.
 
 ## Storage, retention, and backup
 
-Withe keeps run history in one SQLite file on its volume and never stores log content — a run row
+Withe keeps run history in one SQLite file on its volume and never stores a whole log — a run row
 holds a reference, and the log is streamed from Renovate on demand. A run row costs about 150 bytes:
 roughly 1 MB per 7,000 runs, or about 10 MB a year for a fleet of 8 repos on Renovate's hourly schedule.
+It does keep each run's warn-level and worse lines, so you can search the fleet for a fatal on one
+page. A line costs about 108 bytes, and retention deletes them with the run they came from.
 
 <details>
 <summary><b>Retention, disk placement, backup, and export</b></summary>

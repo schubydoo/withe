@@ -125,6 +125,60 @@ function collectingWithLog(id: string, logBody: string): SourceAdapter {
   } as unknown as SourceAdapter;
 }
 
+/** The same adapter, reporting one problem line from that run's log (B-4). */
+function collectingWithProblem(id: string, message: string): SourceAdapter {
+  const base = collectingWithLog(id, 'the body is not used here');
+  return {
+    ...base,
+    collect: async () => ({
+      ...(await base.collect()),
+      problems: [
+        { externalJobId: 'job-1', problems: [{ level: 'error', message, at: null, occurrences: 1 }] },
+      ],
+    }),
+  } as unknown as SourceAdapter;
+}
+
+/** Sync one cycle of an adapter and return the database file as bytes. */
+async function syncedProblemFile(name: string, message: string, secrets: string[]): Promise<Buffer> {
+  const path = join(dir, `${name}.db`);
+  const { sqlite, db } = openDatabase(path, { role: 'owner' });
+  migrate(db, { migrationsFolder: './drizzle' });
+
+  const loop = new SyncLoop(db, [collectingWithProblem('default', message)], {
+    intervalMs: 60_000,
+    stalledAfterMs: 60_000,
+    log: () => {},
+    secrets,
+  });
+  await loop.runCycle();
+  sqlite.close();
+
+  const wal = `${path}-wal`;
+  return Buffer.concat([readFileSync(path), existsSync(wal) ? readFileSync(wal) : Buffer.alloc(0)]);
+}
+
+test('a stored problem line that quotes the token stores no token', async () => {
+  // Problem lines are kept, unlike the logs they come from, so this is a new
+  // path by which an upstream string reaches a column (B-4, NFR-8).
+  const contents = await syncedProblemFile(
+    'problem-redacted',
+    `ExternalHostError: https://renovate.home.lan asked for Authorization: Bearer ${TOKEN}`,
+    [TOKEN],
+  );
+
+  assert.equal(contents.includes(TOKEN), false, 'the token reached the database file');
+  assert.ok(contents.includes('ExternalHostError'), 'the rest of the line must survive');
+  assert.ok(contents.includes('«redacted»'));
+});
+
+test('the scan can see a problem line that is really there', async () => {
+  // The negative half of the test above: with nothing to redact, the line is
+  // stored whole, so a clean scan means redaction rather than a missed table.
+  const contents = await syncedProblemFile('problem-planted', 'ExternalHostError: a teapot', []);
+  assert.ok(contents.includes('ExternalHostError: a teapot'), 'the scan cannot see stored lines');
+});
+
 test('a run is stored without its log body ever reaching the database', async () => {
   const marker = 'LOG-BODY-a1b2c3-must-never-be-persisted';
   const path = join(dir, 'no-log-content.db');

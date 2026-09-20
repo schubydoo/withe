@@ -28,6 +28,8 @@ Withe answers, on one page: **which repositories are broken, and since when.**
   pull request clears within one sync, instead of waiting for Renovate's next run.
 - **Failure triage.** The landing page — repositories with failing runs, ordered by how long they
   have been failing, with the error attached.
+- **Log problems.** Search the warn, error, and fatal lines of every repository's runs on one page,
+  instead of opening each run to find a fatal.
 - **Run history.** Every run for a repository: when it queued, when it started, how long it took,
   and how it ended.
 - **Log viewer.** The full JSON-Lines log for any run, read through Renovate's documented endpoint —

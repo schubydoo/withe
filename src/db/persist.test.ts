@@ -16,7 +16,7 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 
 import { openDatabase, type Db } from './client.ts';
 import { pruneCompletedUpdates, pruneOldRuns } from './persist.ts';
-import { completedUpdate, renovateRun, repo, source } from './schema.ts';
+import { completedUpdate, logProblem, renovateRun, repo, source } from './schema.ts';
 
 const dir = mkdtempSync(join(tmpdir(), 'withe-prune-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
@@ -126,6 +126,45 @@ test('nothing to prune changes nothing, and does not checkpoint for no reason', 
   const deleted = pruneOldRuns(db, new Date(Date.now() - 10_000 * DAY_MS));
   assert.equal(deleted, 0);
   assert.equal(statSync(path).size, before);
+  sqlite.close();
+});
+
+/**
+ * A pruned run takes its problem lines with it (B-4).
+ *
+ * Not a tidiness point: the lines reference the run and foreign keys are
+ * enforced, so a prune that left them would throw and retention would stop
+ * working altogether the first time a run with a stored line aged out.
+ */
+test('pruning a run deletes the problem lines that belong to it', () => {
+  const { sqlite, db } = withRuns(10);
+  const runs = db
+    .select({ id: renovateRun.id, externalJobId: renovateRun.externalJobId })
+    .from(renovateRun)
+    .all();
+  for (const run of runs) {
+    db.insert(logProblem)
+      .values({
+        sourceAdapterId: 'default',
+        runId: run.id,
+        level: 'error',
+        message: `something went wrong in ${run.externalJobId}`,
+        occurrences: 1,
+      })
+      .run();
+  }
+  const count = () =>
+    (db.$client.prepare('select count(*) as n from log_problem').get() as { n: number }).n;
+  assert.equal(count(), runs.length);
+
+  const deleted = pruneOldRuns(db, new Date(Date.now() - 3 * DAY_MS));
+
+  assert.ok(deleted > 0, 'the prune must have had something to delete');
+  assert.equal(count(), runCount(db), 'one line survives for each surviving run');
+  const orphans = db.$client
+    .prepare('select count(*) as n from log_problem p left join renovate_run r on r.id = p.run_id where r.id is null')
+    .get() as { n: number };
+  assert.equal(orphans.n, 0, 'no line outlives its run');
   sqlite.close();
 });
 

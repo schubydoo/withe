@@ -57,6 +57,13 @@
       "when": 1789747535188,
       "tag": "0007_completed-update-history",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789868925737,
+      "tag": "0008_log-problem-lines",
+      "breakpoints": true
     }
   ]
 }

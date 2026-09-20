@@ -75,6 +75,21 @@ export function backoffMs(failures: number, intervalMs: number): number {
   return Math.min(grown, intervalMs);
 }
 
+/**
+ * Redact the problem lines before they are stored (B-4, NFR-8).
+ *
+ * These lines are kept, unlike the logs they come from, so they get the same
+ * treatment as a warning that lands in `sync_status.error`. A Renovate log
+ * quotes the URLs it fetched and a registry URL can carry a credential. The
+ * patterns apply with no configured secret at all, so this runs on every
+ * cycle rather than only on a configured one.
+ */
+function redactProblems(result: CollectResult, secrets: readonly string[]): void {
+  for (const entry of result.problems ?? []) {
+    for (const line of entry.problems) line.message = redact(line.message, secrets);
+  }
+}
+
 export class SyncLoop {
   private running = false;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -199,6 +214,8 @@ export class SyncLoop {
           );
         }
       }
+
+      redactProblems(result, this.options.secrets ?? []);
 
       // One transaction per source. A source that fails halfway leaves the
       // store as it was rather than half updated.
