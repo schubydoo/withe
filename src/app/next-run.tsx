@@ -12,6 +12,10 @@ import { describeCountdown } from './next-run.ts';
  * estimate and nothing once it is more stale than that. A null instant renders
  * nothing — a source that reports no usable schedule says nothing rather than
  * guessing at one.
+ *
+ * It renders the ` · ` before it too. The countdown can go blank in an open tab
+ * with no new render from the server, and a separator outside it would then end
+ * the line.
  */
 export function NextRun({ atMs, graceMs }: { atMs: number | null; graceMs: number }) {
   const [, forceRender] = useState(0);
@@ -55,5 +59,10 @@ export function NextRun({ atMs, graceMs }: { atMs: number | null; graceMs: numbe
   // text differs ("in 34" vs "in 33 minutes"), which React reports as a hydration
   // mismatch. The difference is a second of wall-clock, not a bug, so keep the
   // server's text and let the first tick correct it.
-  return <span suppressHydrationWarning>next Renovate run {text}</span>;
+  return (
+    <>
+      {' · '}
+      <span suppressHydrationWarning>next Renovate run {text}</span>
+    </>
+  );
 }

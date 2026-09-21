@@ -421,17 +421,13 @@ export default function Home() {
         </a>
       </nav>
       <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        {repos.length} repositories ·{' '}
+        {repos.length} {repos.length === 1 ? 'repository' : 'repositories'} ·{' '}
         <a className="underline" href="/updates">
-          {updates.length} pending updates
+          {updates.length} pending {updates.length === 1 ? 'update' : 'updates'}
         </a>
-        {locks.length > 0 && ` · ${locks.length} lock-file refreshes`}
-        {nextRun !== null && (
-          <>
-            {' '}
-            · <NextRun atMs={nextRun.getTime()} graceMs={graceMs} />
-          </>
-        )}
+        {locks.length > 0 &&
+          ` · ${locks.length} lock-file ${locks.length === 1 ? 'refresh' : 'refreshes'}`}
+        {nextRun !== null && <NextRun atMs={nextRun.getTime()} graceMs={graceMs} />}
       </p>
 
       <Trouble failing={failing} stalled={stalled} />
