@@ -35,10 +35,12 @@ Withe keeps the warn-level and worse lines of each run log it reads, so the `/pr
 search the whole fleet at once. Whole logs are still never stored: these lines are a small part of
 one log, and they are the part a search is for. Renovate often writes the cause of a line in a
 separate field, `errorMessage` or the `message` of a caught error. Withe stores that cause after the
-message, so a search finds the cause too.
+message, so a search finds the cause too. One message keeps at most 5 distinct causes per run.
+Withe counts later causes as repeats of the plain message.
 
 A line costs about **108 bytes** at Renovate's own message lengths, so the database grows by roughly
-**1 MB per 9,700 lines**. A line a run wrote many times is one row with a count, not a row per
+**1 MB per 9,700 lines**. Withe measured this figure on the message alone. A line with a cause costs
+more, up to the 500-character ceiling below. A line a run wrote many times is one row with a count, not a row per
 repeat, and one run contributes at most 200 distinct lines. A line longer than 500 characters is
 stored to its first 500, ending in an ellipsis, so one row has a ceiling and the whole line stays
 one click away on the run page. A fleet whose runs pass writes none at all.

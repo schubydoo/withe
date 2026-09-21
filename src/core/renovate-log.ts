@@ -77,6 +77,16 @@ export interface LogProblem {
 export const MAX_PROBLEMS_PER_RUN = 200;
 
 /**
+ * How many distinct causes one message keeps as rows of their own, per level.
+ *
+ * A cause often carries a URL or a status code, so one warning can have a
+ * different cause on every line. Without this, one noisy warning fills the
+ * per-run cap and a later fatal line is dropped. Past this many causes, a line
+ * counts as a repeat of its plain message.
+ */
+export const MAX_CAUSES_PER_MESSAGE = 5;
+
+/**
  * How much of one line is kept.
  *
  * The line cap alone bounds the row count and not the bytes: a `msg` carrying a
@@ -213,7 +223,11 @@ function levelOf(entry: Record<string, unknown>): ProblemLevel | null {
  * a search reads one row that says how often it happened, and the store holds
  * one row rather than fifty.
  */
-function collectProblem(entry: Record<string, unknown>, into: Map<string, LogProblem>): void {
+function collectProblem(
+  entry: Record<string, unknown>,
+  into: Map<string, LogProblem>,
+  causeRows: Map<string, number>,
+): void {
   const level = levelOf(entry);
   if (level === null) return;
 
@@ -227,11 +241,16 @@ function collectProblem(entry: Record<string, unknown>, into: Map<string, LogPro
   //
   // The cause joins the message, because the message alone often names only
   // the symptom (`causeOf`). A search then finds the cause too, and two causes
-  // of one warning stay two rows.
+  // of one warning stay two rows, up to `MAX_CAUSES_PER_MESSAGE`.
   const text = typeof entry.msg === 'string' ? entry.msg.trim() : '';
   if (!text) return;
   const cause = causeOf(entry);
-  const message = cause ? `${text}: ${cause}` : text;
+  const joined = cause ? `${text}: ${cause}` : null;
+  const plainKey = `${level}${text}`;
+  const withCause =
+    joined !== null &&
+    (into.has(`${level}${joined}`) || (causeRows.get(plainKey) ?? 0) < MAX_CAUSES_PER_MESSAGE);
+  const message = withCause ? joined : text;
 
   const key = `${level}${message}`;
   const seen = into.get(key);
@@ -240,6 +259,7 @@ function collectProblem(entry: Record<string, unknown>, into: Map<string, LogPro
     return;
   }
   if (into.size >= MAX_PROBLEMS_PER_RUN) return;
+  if (withCause) causeRows.set(plainKey, (causeRows.get(plainKey) ?? 0) + 1);
 
   const time = entry.time;
   into.set(key, {
@@ -264,11 +284,12 @@ export async function extractFromLog(
   const byKey = new Map<string, { update: Update; files: Set<string> }>();
   const abandoned = new Map<string, Date | null>();
   const problems = new Map<string, LogProblem>();
+  const causeRows = new Map<string, number>();
 
   for await (const entry of ndjson(source)) {
     // Read from every line, whatever else the line carries: a fatal can sit on
     // the same entry that reports a branch.
-    collectProblem(entry, problems);
+    collectProblem(entry, problems, causeRows);
 
     if (!runnerVersion && typeof entry.renovateVersion === 'string') {
       runnerVersion = entry.renovateVersion;

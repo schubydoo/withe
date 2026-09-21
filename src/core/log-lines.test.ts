@@ -22,6 +22,7 @@ test('a row carries the cause an entry gives apart from its message', () => {
     JSON.stringify({ level: 40, err: { message: 'Request failed with status code 504' }, msg: 'Unable to read' }),
     JSON.stringify({ level: 40, msg: 'Detected empty commit - aborting git push' }),
     'not json',
+    JSON.stringify({ level: 40, errorMessage: 'no msg field' }),
   ].join('\n');
 
   const parsed = parseLines(text);
@@ -32,6 +33,8 @@ test('a row carries the cause an entry gives apart from its message', () => {
       ['Unable to read', 'Request failed with status code 504'],
       ['Detected empty commit - aborting git push', null],
       ['not json', null],
+      // The row shows the raw line, which already holds the cause.
+      ['{"level":40,"errorMessage":"no msg field"}', null],
     ],
   );
 });

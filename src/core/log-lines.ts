@@ -3,6 +3,9 @@
  *
  * Kept out of the component so the parsing, the level mapping and the filtering
  * can be tested without a browser. The component's own job is scrolling.
+ *
+ * The sync worker reads `causeOf` from here too, through `renovate-log.ts`, so
+ * a stored problem line and a viewer row name the same cause.
  */
 
 /** Bunyan numeric levels, which is what Renovate writes. */
@@ -113,7 +116,8 @@ export function parseLines(text: string, startIndex = 0): ParsedLog {
       level,
       time: typeof entry.time === 'string' ? entry.time : null,
       message: typeof entry.msg === 'string' ? entry.msg : raw,
-      cause: causeOf(entry),
+      // With no `msg` the row shows the raw line, which already holds the cause.
+      cause: typeof entry.msg === 'string' ? causeOf(entry) : null,
       entry,
       raw,
     });
