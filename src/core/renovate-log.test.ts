@@ -7,6 +7,7 @@ import {
   cutMessage,
   extractFromLog,
   isHeld,
+  MAX_CAUSES_PER_MESSAGE,
   MAX_PROBLEM_MESSAGE,
   MAX_PROBLEMS_PER_RUN,
 } from './renovate-log.ts';
@@ -336,6 +337,105 @@ test('a problem line carries its own time, and survives having none', async () =
   const byMessage = new Map(extract.problems.map((p) => [p.message, p]));
   assert.equal(byMessage.get('timed')?.at?.toISOString(), '2026-09-01T10:00:00.000Z');
   assert.equal(byMessage.get('untimed')?.at, null);
+});
+
+test('a problem line keeps the cause Renovate wrote apart from its message', async () => {
+  // Shapes from real runs: the `msg` names only the symptom, and the cause is
+  // in `errorMessage` or in the caught error's `message`.
+  const log = [
+    JSON.stringify({
+      level: 40,
+      matchedFile: 'docs/requirements.txt',
+      errorMessage: 'Option -o not supported (yet)',
+      msg: 'pip-compile error',
+    }),
+    JSON.stringify({
+      level: 40,
+      err: { name: 'HTTPError', message: 'Request failed with status code 504 (Gateway Time-out)' },
+      msg: 'Unable to read vulnerability information',
+    }),
+    JSON.stringify({ level: 40, msg: 'Detected empty commit - aborting git push' }),
+  ].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+
+  assert.deepEqual(
+    extract.problems.map((p) => p.message),
+    [
+      'pip-compile error: Option -o not supported (yet)',
+      'Unable to read vulnerability information: Request failed with status code 504 (Gateway Time-out)',
+      'Detected empty commit - aborting git push',
+    ],
+  );
+});
+
+test('one warning with two causes stays two rows', async () => {
+  const log = [
+    JSON.stringify({ level: 40, errorMessage: 'Option -o not supported (yet)', msg: 'pip-compile error' }),
+    JSON.stringify({ level: 40, errorMessage: 'Option -o not supported (yet)', msg: 'pip-compile error' }),
+    JSON.stringify({ level: 40, errorMessage: 'Cannot use multiple --output-file options', msg: 'pip-compile error' }),
+  ].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+
+  assert.deepEqual(
+    extract.problems.map((p) => [p.message, p.occurrences]),
+    [
+      ['pip-compile error: Option -o not supported (yet)', 2],
+      ['pip-compile error: Cannot use multiple --output-file options', 1],
+    ],
+  );
+});
+
+test('one warning with more causes than the cap folds the rest into its plain message', async () => {
+  const log = Array.from({ length: MAX_CAUSES_PER_MESSAGE + 3 }, (_, i) =>
+    JSON.stringify({ level: 40, err: { message: `status ${500 + i}` }, msg: 'Unable to read' }),
+  ).join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+
+  assert.deepEqual(
+    extract.problems.map((p) => [p.message, p.occurrences]),
+    [
+      ...Array.from({ length: MAX_CAUSES_PER_MESSAGE }, (_, i) => [`Unable to read: status ${500 + i}`, 1]),
+      ['Unable to read', 3],
+    ],
+  );
+});
+
+test('a cause already kept still counts after its message reaches the cause cap', async () => {
+  const causes = Array.from({ length: MAX_CAUSES_PER_MESSAGE + 1 }, (_, i) =>
+    JSON.stringify({ level: 40, errorMessage: `cause ${i}`, msg: 'lookup failed' }),
+  );
+  const log = [...causes, JSON.stringify({ level: 40, errorMessage: 'cause 0', msg: 'lookup failed' })].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+  assert.equal(extract.problems.find((p) => p.message === 'lookup failed: cause 0')?.occurrences, 2);
+  assert.equal(extract.problems.find((p) => p.message === 'lookup failed')?.occurrences, 1);
+});
+
+test('a warning with more distinct causes than the run cap cannot push out a later fatal', async () => {
+  // Every line has its own cause, as a 504 with a different URL each time does.
+  const noisy = Array.from({ length: MAX_PROBLEMS_PER_RUN + 50 }, (_, i) =>
+    JSON.stringify({
+      level: 40,
+      err: { message: `Request failed: GET https://example.test/${i}` },
+      msg: 'Unable to read vulnerability information',
+    }),
+  );
+  const log = [...noisy, JSON.stringify({ level: 60, msg: 'Repository has unknown error' })].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+
+  assert.ok(
+    extract.problems.some((p) => p.level === 'fatal' && p.message === 'Repository has unknown error'),
+    'the fatal line must be stored',
+  );
+  assert.equal(extract.problems.length, MAX_CAUSES_PER_MESSAGE + 2, 'the causes, the plain warning, the fatal');
+  assert.equal(
+    extract.problems.find((p) => p.message === 'Unable to read vulnerability information')?.occurrences,
+    MAX_PROBLEMS_PER_RUN + 50 - MAX_CAUSES_PER_MESSAGE,
+  );
 });
 
 test('a problem line with no message is dropped rather than stored empty', async () => {

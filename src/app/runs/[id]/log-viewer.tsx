@@ -46,7 +46,14 @@ export function LogViewer({ runId }: { runId: number }) {
   const [open, setOpen] = useState<number | null>(null);
 
   const viewport = useRef<HTMLDivElement>(null);
+  const detail = useRef<HTMLDivElement>(null);
   const jumped = useRef(false);
+
+  // The detail opens under the log box, which can put it below the window.
+  // Bring it into view, or a click on a row seems to do nothing.
+  useEffect(() => {
+    if (open !== null) detail.current?.scrollIntoView({ block: 'nearest' });
+  }, [open]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -195,7 +202,9 @@ export function LogViewer({ runId }: { runId: number }) {
         </div>
       </div>
 
-      {open !== null && <Detail line={visible.find((l) => l.index === open) ?? null} />}
+      <div ref={detail}>
+        {open !== null && <Detail line={visible.find((l) => l.index === open) ?? null} />}
+      </div>
     </div>
   );
 }
@@ -223,7 +232,10 @@ function Row({
     >
       <span className="w-12 shrink-0 text-right text-neutral-600 dark:text-neutral-400">{line.index + 1}</span>
       <span className={`w-12 shrink-0 uppercase ${TONE[line.level]}`}>{line.level}</span>
-      <span className={TONE[line.level]}>{line.message}</span>
+      <span className={TONE[line.level]}>
+        {line.message}
+        {line.cause && `: ${line.cause}`}
+      </span>
     </button>
   );
 }

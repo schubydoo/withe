@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
-import { applyFilter, isProblem, parseLines } from './log-lines.ts';
+import { applyFilter, causeOf, isProblem, parseLines } from './log-lines.ts';
 
 const FIXTURE = readFileSync('test/fixtures/ce/job.ndjson', 'utf8');
 
@@ -14,6 +14,40 @@ test('the recorded log parses with no malformed lines', () => {
     assert.ok(line.entry, `line ${line.index} lost its entry`);
     assert.equal(typeof line.message, 'string');
   }
+});
+
+test('a row carries the cause an entry gives apart from its message', () => {
+  const text = [
+    JSON.stringify({ level: 40, errorMessage: 'Option -o not supported (yet)', msg: 'pip-compile error' }),
+    JSON.stringify({ level: 40, err: { message: 'Request failed with status code 504' }, msg: 'Unable to read' }),
+    JSON.stringify({ level: 40, msg: 'Detected empty commit - aborting git push' }),
+    'not json',
+    JSON.stringify({ level: 40, errorMessage: 'no msg field' }),
+  ].join('\n');
+
+  const parsed = parseLines(text);
+  assert.deepEqual(
+    parsed.lines.map((l) => [l.message, l.cause]),
+    [
+      ['pip-compile error', 'Option -o not supported (yet)'],
+      ['Unable to read', 'Request failed with status code 504'],
+      ['Detected empty commit - aborting git push', null],
+      ['not json', null],
+      // The row shows the raw line, which already holds the cause.
+      ['{"level":40,"errorMessage":"no msg field"}', null],
+    ],
+  );
+});
+
+test('causeOf prefers errorMessage, then err, and ignores what carries no text', () => {
+  assert.equal(causeOf({ errorMessage: ' first ', err: { message: 'second' } }), 'first');
+  assert.equal(causeOf({ errorMessage: '  ', err: { message: 'second' } }), 'second');
+  assert.equal(causeOf({ err: 'a plain string' }), 'a plain string');
+  assert.equal(causeOf({ err: { message: 42 } }), null);
+  assert.equal(causeOf({ err: { name: 'HTTPError' } }), null);
+  assert.equal(causeOf({ err: null }), null);
+  assert.equal(causeOf({ errorMessage: 7 }), null);
+  assert.equal(causeOf({}), null);
 });
 
 test('a line that is not JSON renders raw and is counted, without failing', () => {

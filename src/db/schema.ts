@@ -286,7 +286,11 @@ export const logProblem = sqliteTable(
       .notNull()
       .references(() => renovateRun.id),
     level: text('level', { enum: ['warn', 'error', 'fatal'] }).notNull(),
-    /** The line's message, as Renovate wrote it. This is what a search reads. */
+    /**
+     * The line's `msg`, then `: ` and its cause when the entry gives one
+     * (`causeOf`). This is what a search reads. It is not one string Renovate
+     * wrote, and it is redacted and cut to `MAX_PROBLEM_MESSAGE`.
+     */
     message: text('message').notNull(),
     /** When the line was written, when the log says so. */
     at: integer('at', { mode: 'timestamp' }),
