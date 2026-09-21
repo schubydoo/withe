@@ -23,6 +23,8 @@ export interface LogLine {
   level: LevelName;
   time: string | null;
   message: string;
+  /** Why the line was written, when the entry says so apart from its message. */
+  cause: string | null;
   /** The whole entry, for the detail expander. Null for a line that would not parse. */
   entry: Record<string, unknown> | null;
   /** The original text, kept for raw lines and for search. */
@@ -50,6 +52,25 @@ const PROBLEM: readonly LevelName[] = ['warn', 'error', 'fatal'];
 
 export function isProblem(level: LevelName): boolean {
   return PROBLEM.includes(level);
+}
+
+/**
+ * The reason a Renovate entry gives apart from its message, or null.
+ *
+ * Renovate often writes a short `msg` and puts the cause in another field: a
+ * warning reads `pip-compile error`, and `errorMessage` says which option it
+ * rejected. A caught exception goes in `err`, which is an object with a
+ * `message`. Without this a row shows the symptom and hides the cause.
+ */
+export function causeOf(entry: Record<string, unknown>): string | null {
+  const { errorMessage, err } = entry;
+  if (typeof errorMessage === 'string' && errorMessage.trim()) return errorMessage.trim();
+  if (typeof err === 'string' && err.trim()) return err.trim();
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = (err as { message: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message.trim();
+  }
+  return null;
 }
 
 /**
@@ -81,7 +102,7 @@ export function parseLines(text: string, startIndex = 0): ParsedLog {
 
     if (!entry) {
       malformed += 1;
-      lines.push({ index, level: 'raw', time: null, message: raw, entry: null, raw });
+      lines.push({ index, level: 'raw', time: null, message: raw, cause: null, entry: null, raw });
       continue;
     }
 
@@ -92,6 +113,7 @@ export function parseLines(text: string, startIndex = 0): ParsedLog {
       level,
       time: typeof entry.time === 'string' ? entry.time : null,
       message: typeof entry.msg === 'string' ? entry.msg : raw,
+      cause: causeOf(entry),
       entry,
       raw,
     });

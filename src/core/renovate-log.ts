@@ -10,6 +10,7 @@
  * Message wording belongs to Renovate and changes without notice; the field
  * shapes are what the log is for.
  */
+import { causeOf } from './log-lines.ts';
 import type { Update, UpdateState, UpdateType } from './model.ts';
 
 /** One entry inside `branchesInformation[].upgrades`. */
@@ -223,8 +224,14 @@ function collectProblem(entry: Record<string, unknown>, into: Map<string, LogPro
   // `MAX_PROBLEM_MESSAGE` (`cutMessage`), in that order, because cutting first
   // can drop the `@` that ends a credential in a URL and so disarm the
   // redaction that recognises it.
-  const message = typeof entry.msg === 'string' ? entry.msg.trim() : '';
-  if (!message) return;
+  //
+  // The cause joins the message, because the message alone often names only
+  // the symptom (`causeOf`). A search then finds the cause too, and two causes
+  // of one warning stay two rows.
+  const text = typeof entry.msg === 'string' ? entry.msg.trim() : '';
+  if (!text) return;
+  const cause = causeOf(entry);
+  const message = cause ? `${text}: ${cause}` : text;
 
   const key = `${level}${message}`;
   const seen = into.get(key);

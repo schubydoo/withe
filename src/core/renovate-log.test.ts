@@ -338,6 +338,54 @@ test('a problem line carries its own time, and survives having none', async () =
   assert.equal(byMessage.get('untimed')?.at, null);
 });
 
+test('a problem line keeps the cause Renovate wrote apart from its message', async () => {
+  // Shapes from real runs: the `msg` names only the symptom, and the cause is
+  // in `errorMessage` or in the caught error's `message`.
+  const log = [
+    JSON.stringify({
+      level: 40,
+      matchedFile: 'docs/requirements.txt',
+      errorMessage: 'Option -o not supported (yet)',
+      msg: 'pip-compile error',
+    }),
+    JSON.stringify({
+      level: 40,
+      err: { name: 'HTTPError', message: 'Request failed with status code 504 (Gateway Time-out)' },
+      msg: 'Unable to read vulnerability information',
+    }),
+    JSON.stringify({ level: 40, msg: 'Detected empty commit - aborting git push' }),
+  ].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+
+  assert.deepEqual(
+    extract.problems.map((p) => p.message),
+    [
+      'pip-compile error: Option -o not supported (yet)',
+      'Unable to read vulnerability information: Request failed with status code 504 (Gateway Time-out)',
+      'Detected empty commit - aborting git push',
+    ],
+  );
+});
+
+test('one warning with two causes stays two rows', async () => {
+  const log = [
+    JSON.stringify({ level: 40, errorMessage: 'Option -o not supported (yet)', msg: 'pip-compile error' }),
+    JSON.stringify({ level: 40, errorMessage: 'Option -o not supported (yet)', msg: 'pip-compile error' }),
+    JSON.stringify({ level: 40, errorMessage: 'Cannot use multiple --output-file options', msg: 'pip-compile error' }),
+  ].join('\n');
+
+  const extract = await extractFromLog(lines(log), CONTEXT);
+
+  assert.deepEqual(
+    extract.problems.map((p) => [p.message, p.occurrences]),
+    [
+      ['pip-compile error: Option -o not supported (yet)', 2],
+      ['pip-compile error: Cannot use multiple --output-file options', 1],
+    ],
+  );
+});
+
 test('a problem line with no message is dropped rather than stored empty', async () => {
   const log = [
     JSON.stringify({ level: 50, err: { message: 'no msg field' } }),

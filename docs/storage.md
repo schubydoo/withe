@@ -33,7 +33,9 @@ removes it as soon as it passes the window.
 
 Withe keeps the warn-level and worse lines of each run log it reads, so the `/problems` page can
 search the whole fleet at once. Whole logs are still never stored: these lines are a small part of
-one log, and they are the part a search is for.
+one log, and they are the part a search is for. Renovate often writes the cause of a line in a
+separate field, `errorMessage` or the `message` of a caught error. Withe stores that cause after the
+message, so a search finds the cause too.
 
 A line costs about **108 bytes** at Renovate's own message lengths, so the database grows by roughly
 **1 MB per 9,700 lines**. A line a run wrote many times is one row with a count, not a row per
