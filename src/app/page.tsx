@@ -401,13 +401,9 @@ export default function Home() {
   return (
     <main className="mx-auto max-w-4xl p-8">
       <h1 className="text-2xl font-semibold">Withe</h1>
-      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-        {repos.length} repositories ·{' '}
-        <a className="underline" href="/updates">
-          {updates.length} pending updates
-        </a>
-        {locks.length > 0 && ` · ${locks.length} lock-file refreshes`}
-        {' · '}
+      {/* Pages on one line, and the fleet's numbers on the next, so a count
+          never reads as the start of a link list. */}
+      <nav aria-label="Pages" className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
         <a className="underline" href="/repos">
           all repositories
         </a>{' '}
@@ -423,6 +419,13 @@ export default function Home() {
         <a className="underline" href="/health">
           Renovate health
         </a>
+      </nav>
+      <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+        {repos.length} repositories ·{' '}
+        <a className="underline" href="/updates">
+          {updates.length} pending updates
+        </a>
+        {locks.length > 0 && ` · ${locks.length} lock-file refreshes`}
         {nextRun !== null && (
           <>
             {' '}
