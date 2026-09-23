@@ -53,7 +53,7 @@
     "@types/react-dom": "19.3.0",
     "drizzle-kit": "0.31.10",
     "esbuild": "0.28.2",
-    "fast-check": "4.10.1",
+    "fast-check": "4.10.2",
     "tailwindcss": "4.3.3",
     "typescript": "7.0.2"
   },
