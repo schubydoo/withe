@@ -1,5 +1,0 @@
----
-default: patch
----
-
-A log line now shows why Renovate wrote it, on the run page and on the problems page. Renovate often writes a short message, such as `pip-compile error`. It puts the cause in another field, such as `errorMessage` or the `message` of a caught error. Until now both pages showed only the message. You saw the cause only in the downloaded log or in the detail panel under a row. Each row now shows the cause after the message, for example `pip-compile error: Option -o not supported (yet)`. A problems search matches the cause too, so two causes of one warning stay two rows. One message keeps at most 5 causes per run, and Withe counts later causes on the plain message row. This way one noisy warning cannot fill a run's 200 rows and push out a later fatal line. Problem lines that Withe stored before this change keep their message only. When you click a row, the detail panel now scrolls into view. Before, it opened below the window on most screens, so the click seemed to do nothing.
