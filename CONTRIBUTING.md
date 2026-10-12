@@ -49,6 +49,15 @@ npm run lint          # import-boundary checks (scripts/check-boundaries.ts)
 npx tsc --noEmit
 ```
 
+`npm run e2e` needs the `agent-browser` command on your `PATH`. To install the version that CI
+uses, run these commands from the repository root:
+
+```bash
+npm ci --prefix tools/agent-browser --include=dev
+export PATH="$PWD/tools/agent-browser/node_modules/.bin:$PATH"
+agent-browser install    # downloads Chromium
+```
+
 `npm test` must pass with no network access. If a test needs a live server, it is in the wrong
 place.
 

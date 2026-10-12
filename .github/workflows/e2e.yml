@@ -79,7 +79,7 @@ jobs:
         # a cold runner — so it is not free; 8 minutes leaves margin over that.
         timeout-minutes: 8
         run: |
-          npm ci --prefix tools/agent-browser
+          npm ci --prefix tools/agent-browser --include=dev
           echo "$PWD/tools/agent-browser/node_modules/.bin" >> "$GITHUB_PATH"
           tools/agent-browser/node_modules/.bin/agent-browser install --with-deps
 

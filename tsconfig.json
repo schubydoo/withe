@@ -39,6 +39,6 @@
   ],
   "exclude": [
     "node_modules",
-    "tools"
+    "tools/*/node_modules"
   ]
 }
