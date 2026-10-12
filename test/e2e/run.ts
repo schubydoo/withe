@@ -14,7 +14,7 @@
  */
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -33,15 +33,28 @@ function check(name: string, ok: boolean, detail = ''): void {
   if (!ok) failures += 1;
 }
 
+// CI installs agent-browser from the lockfile in tools/agent-browser. Use that
+// binary when it is there, so a contributor runs the version CI runs; otherwise
+// fall back to an `agent-browser` on PATH.
+const LOCAL_AB = join(import.meta.dirname, '../../tools/agent-browser/node_modules/.bin/agent-browser');
+const AB = existsSync(LOCAL_AB) ? LOCAL_AB : 'agent-browser';
+
 function ab(args: string[]): string {
   try {
-    return execFileSync('agent-browser', args, {
+    return execFileSync(AB, args, {
       encoding: 'utf8',
       env: { ...process.env, AGENT_BROWSER_SESSION: SESSION },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch (cause) {
-    const e = cause as { stdout?: string; stderr?: string };
+    const e = cause as { code?: string; stdout?: string; stderr?: string };
+    // A missing binary has no output, so every flow would print a bare FAIL.
+    if (e.code === 'ENOENT') {
+      throw new Error(
+        'agent-browser is not installed; run `npm ci --prefix tools/agent-browser --include=dev`',
+        { cause },
+      );
+    }
     return `${e.stdout ?? ''}${e.stderr ?? ''}`;
   }
 }

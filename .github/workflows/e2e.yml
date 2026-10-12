@@ -72,6 +72,7 @@ jobs:
       # It has its own lockfile in tools/agent-browser, so `npm ci` installs the
       # exact tarball the lockfile hashes (Scorecard: Pinned-Dependencies) and
       # the root `npm ci` that every other CI job runs does not install it.
+      # test/e2e/run.ts finds the binary at this path, so nothing goes on PATH.
       - name: Install agent-browser and its browser
         # Bound the two steps that have demonstrably hung, so a stall fails this
         # named step in minutes rather than burning the whole job timeout. This
@@ -80,7 +81,6 @@ jobs:
         timeout-minutes: 8
         run: |
           npm ci --prefix tools/agent-browser --include=dev
-          echo "$PWD/tools/agent-browser/node_modules/.bin" >> "$GITHUB_PATH"
           tools/agent-browser/node_modules/.bin/agent-browser install --with-deps
 
       # Playwright drives the cross-browser smoke; --with-deps installs the
