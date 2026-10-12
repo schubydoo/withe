@@ -1,0 +1,8 @@
+{
+  "name": "withe-tool-openapi-typescript",
+  "private": true,
+  "description": "Lockfile for the openapi-typescript CLI that npm run build:client uses. Kept apart from the root package.json because openapi-typescript 7 needs a typescript 5 peer and the root uses typescript 7.",
+  "devDependencies": {
+    "openapi-typescript": "7.13.0"
+  }
+}

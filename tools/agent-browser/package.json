@@ -1,0 +1,8 @@
+{
+  "name": "withe-e2e-agent-browser",
+  "private": true,
+  "description": "Lockfile for the agent-browser CLI that the e2e workflow installs with npm ci. Kept apart from the root package.json so that npm ci at the root does not install it.",
+  "devDependencies": {
+    "agent-browser": "0.38.2"
+  }
+}
