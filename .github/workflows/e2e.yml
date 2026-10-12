@@ -69,18 +69,19 @@ jobs:
             | sudo tee /etc/apt/apt.conf.d/99-fail-fast >/dev/null
 
       # agent-browser drives the functional flows and the a11y audit (Chromium).
-      # It bundles Chromium, so lockfile-pinning it would pull the browser into
-      # every CI job that runs `npm ci`; accept the version-pinned ad-hoc global
-      # install here rather than bloat the whole matrix (zizmor: adhoc-packages).
+      # It has its own lockfile in tools/agent-browser, so `npm ci` installs the
+      # exact tarball the lockfile hashes (Scorecard: Pinned-Dependencies) and
+      # the root `npm ci` that every other CI job runs does not install it.
+      # test/e2e/run.ts finds the binary at this path, so nothing goes on PATH.
       - name: Install agent-browser and its browser
         # Bound the two steps that have demonstrably hung, so a stall fails this
         # named step in minutes rather than burning the whole job timeout. This
         # step downloads Chromium and its deps too — measured 66.9 MB in 2m52s on
         # a cold runner — so it is not free; 8 minutes leaves margin over that.
         timeout-minutes: 8
-        run: | # zizmor: ignore[adhoc-packages]
-          npm i -g agent-browser@0.38.2
-          agent-browser install --with-deps
+        run: |
+          npm ci --prefix tools/agent-browser --include=dev
+          tools/agent-browser/node_modules/.bin/agent-browser install --with-deps
 
       # Playwright drives the cross-browser smoke; --with-deps installs the
       # system libraries WebKit and Firefox need, which a bare runner lacks.
