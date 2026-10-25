@@ -19,6 +19,8 @@ failing, what is waiting to merge, and what is queued next. It observes. It chan
 
 [**Install →**](#install) · [What it shows](#what-it-shows) · [What it is not](#what-it-is-not)
 
+Pass `--pilot-retry-limit <n>` to retry a failed step up to `n` times before the run exits.
+
 ## The problem
 
 Renovate works across every repository, but you see what it did one repository at a time — in each
