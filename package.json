@@ -6,7 +6,7 @@
   "description": "A dashboard for the Renovate you already run.",
   "license": "MIT",
   "engines": {
-    "node": ">=24 <25"
+    "node": ">=24 <27"
   },
   "scripts": {
     "build": "NEXT_TELEMETRY_DISABLED=1 next build && npm run build:static",
@@ -48,7 +48,7 @@
     "@playwright/test": "1.64.1",
     "@tailwindcss/postcss": "4.3.3",
     "@types/better-sqlite3": "9.6.0",
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "drizzle-kit": "0.31.11",
