@@ -9,7 +9,7 @@
 # The digest is the multi-architecture index, so it resolves on amd64 and
 # arm64 alike. Renovate keeps it current once it runs against this repository
 # (tad.md SEC-16) — it reads the tag beside the digest to know what to bump.
-FROM node:26-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS deps
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # --ignore-scripts is what keeps a compiler out of this image. npm runs
@@ -19,7 +19,7 @@ COPY package.json package-lock.json ./
 # runs during the build.
 RUN npm ci --ignore-scripts
 
-FROM node:26-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS builder
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -30,7 +30,7 @@ RUN npm run build
 # the whole node_modules would cost about 200 MB.
 RUN npm run bundle:server
 
-FROM node:26-alpine@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS runner
+FROM node:26-alpine@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 # tini reaps the zombies a supervisor with children would otherwise leave.
