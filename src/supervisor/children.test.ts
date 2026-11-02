@@ -6,6 +6,16 @@ import { after, test } from 'node:test';
 
 import { restartDelayMs, Supervisor } from './children.ts';
 
+// Under `npm run test:coverage`, Node passes NODE_V8_COVERAGE to every child
+// process, so each throwaway script below writes a coverage file at exit. These
+// tests send SIGTERM to children that are exiting. If the signal lands after the
+// child opens its coverage file and before it writes it, the file stays empty.
+// The test runner then fails the whole run with "coverage file is empty", with
+// every test passing. The scripts live in a temporary directory and are never
+// part of the report, so this file stops passing the variable on. This process
+// read the variable at startup and still writes its own coverage.
+delete process.env.NODE_V8_COVERAGE;
+
 const dir = mkdtempSync(join(tmpdir(), 'withe-sup-'));
 after(() => rmSync(dir, { recursive: true, force: true }));
 
