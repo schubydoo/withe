@@ -46,7 +46,7 @@
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",
-    "@tailwindcss/postcss": "4.3.3",
+    "@tailwindcss/postcss": "4.3.4",
     "@types/better-sqlite3": "9.6.0",
     "@types/node": "26.6.6",
     "@types/react": "19.3.0",
@@ -54,7 +54,7 @@
     "drizzle-kit": "0.31.11",
     "esbuild": "0.28.2",
     "fast-check": "4.10.2",
-    "tailwindcss": "4.3.3",
+    "tailwindcss": "4.3.4",
     "typescript": "7.0.2"
   },
   "overrides": {
