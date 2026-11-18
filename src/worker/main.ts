@@ -130,13 +130,8 @@ const loop = new SyncLoop(db, toSync, {
     : {}),
 });
 
-const first = await loop.runCycle();
-for (const outcome of first.sources) {
-  console.log(
-    `synced ${outcome.sourceAdapterId}: ${outcome.outcome} — ` +
-      `${outcome.repos} repositories, ${outcome.runs} runs, ${outcome.updates} updates`,
-  );
-}
+// SyncLoop logs each source's outcome, on this cycle and every later one.
+await loop.runCycle();
 
 if (once) {
   sqlite.close();
