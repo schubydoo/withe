@@ -465,7 +465,7 @@ export interface components {
             sync: components["schemas"]["CronMeta"];
         };
         /** @enum {string} */
-        JobReason: "automerge" | "manual-pr-merge" | "rebase-request" | "dependency-dashboard" | "onboarding-update" | "main-commit" | "renovate-config-commit" | "pr-update" | "manual-pr-close" | "closed-pr-rename" | "hourly" | "schedule-all" | "schedule-capped" | "schedule-cold" | "schedule-hot" | "installed" | "unsuspend" | "repositories-added" | "repositories-added-sync" | "remediate" | "api-request" | "web-ui";
+        JobReason: "automerge" | "manual-pr-merge" | "rebase-request" | "dependency-dashboard" | "onboarding-update" | "main-commit" | "renovate-config-commit" | "pr-update" | "manual-pr-close" | "closed-pr-rename" | "hourly" | "schedule-all" | "schedule-capped" | "schedule-cold" | "schedule-hot" | "installed" | "unsuspend" | "repositories-added" | "repositories-added-sync" | "remediate" | "api-request" | "web-ui" | "package-api-request";
         JobInfo: {
             repository: string;
             priority: number;
