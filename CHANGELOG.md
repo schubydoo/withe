@@ -1,3 +1,15 @@
+## 1.5.2 (2026-11-18)
+
+### Fixes
+
+- The sync worker now logs a `synced` line for each source on every cycle. It logged only the first cycle after start. The container log did not show the time of the last sync. ([#273](https://github.com/schubydoo/withe/pull/273))
+- The container image now runs on Node.js 26 instead of Node.js 24. Other runtime updates are `better-sqlite3` 13.2.0, React 19.3.1, and `drizzle-orm` 0.45.4. A source install still accepts Node.js 24 to 26. ([#277](https://github.com/schubydoo/withe/pull/277))
+- A Renovate security update now shows as `security`, and the security filter on `/updates` finds it. Renovate's branch summary does not carry the vulnerability flag. Withe now reads the `[SECURITY]` suffix that Renovate adds to each vulnerability fix title. Before this change, a security fix showed as a plain `patch` or `minor` update. ([#276](https://github.com/schubydoo/withe/pull/276))
+
+### Security
+
+- Next.js goes from 16.3.5 to 16.4.6. Release 16.4.5 fixes seven moderate Next.js security advisories. One lets a `use cache` result leak to another user. Another bypasses the SVG block in image optimization. ([#277](https://github.com/schubydoo/withe/pull/277))
+
 ## 1.5.1 (2026-09-24)
 
 ### Fixes
