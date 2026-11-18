@@ -139,6 +139,29 @@ test('classification follows the order the PRD fixes', () => {
   assert.equal(classify({ updateType: 'patch' }), 'patch');
 });
 
+test('a branch titled with the security suffix classifies its upgrades as security', () => {
+  const patch = { updateType: 'patch' };
+  assert.equal(classify(patch, 'chore(deps): update dependency certifi to v2026.10.19 [security]'), 'security');
+  assert.equal(classify(patch, 'Update dependency certifi to v2026.10.19 [SECURITY]'), 'security');
+  assert.equal(classify(patch, 'Update dependency certifi to v2026.10.19 [SECURITY] '), 'security');
+  assert.equal(classify(patch, 'chore(deps): update dependency security-tools to v2'), 'patch');
+  assert.equal(classify(patch, '[security] in the middle is not the suffix'), 'patch');
+  assert.equal(classify(patch, undefined), 'patch');
+});
+
+test('the recorded security log yields a security row and leaves the others alone', async () => {
+  const extract = await extractFromLog(createReadStream('test/fixtures/ce/job-security.ndjson'), CONTEXT);
+
+  assert.equal(extract.totals?.vulnerabilityAlerts, 1);
+  const certifi = extract.updates.filter((u) => u.dependencyName === 'certifi');
+  assert.equal(certifi.length, 1);
+  assert.equal(certifi[0]?.updateType, 'security');
+  assert.equal(certifi[0]?.pullRequestNumber, 1723);
+  const others = extract.updates.filter((u) => u.dependencyName !== 'certifi');
+  assert.ok(others.length > 0, 'the fixture keeps a normal branch for contrast');
+  assert.ok(others.every((u) => u.updateType === 'patch'));
+});
+
 test('an unlabelled upgrade is classified from its versions', () => {
   assert.equal(classify({ currentValue: '1.0.0', newValue: '2.0.0' }), 'major');
   assert.equal(classify({ currentValue: '1.0.0', newValue: '4.0.0' }), 'multiple-major');
