@@ -136,15 +136,26 @@ export interface ExtractContext {
   detectedAt: Date;
 }
 
+/** Renovate's default `[SECURITY]` title suffix, in any case. */
+const SECURITY_SUFFIX = /\[security\]\s*$/i;
+
 /**
  * Classify one upgrade.
  *
  * PRD Section 6.3 fixes the order: a security label wins over everything, then
  * a major difference, then `multiple-major` when the major delta exceeds one,
  * then minor, then patch, with digests matched by /^[a-f0-9]{7,40}$/.
+ *
+ * `branchesInformation` drops `isVulnerabilityAlert` from each upgrade, so the
+ * security label comes from the branch title instead. Renovate ends the commit
+ * message, and with it the title, of every vulnerability fix with
+ * `vulnerabilityAlerts.commitMessageSuffix`, `[SECURITY]` by default. That
+ * covers GitHub and OSV alerts, every branch with or without a pull request,
+ * and a grouped security branch, whose name loses the `-vulnerability` topic.
  */
-export function classify(upgrade: RawUpgrade): UpdateType {
+export function classify(upgrade: RawUpgrade, branchTitle?: string): UpdateType {
   if (upgrade.isVulnerabilityAlert) return 'security';
+  if (branchTitle && SECURITY_SUFFIX.test(branchTitle)) return 'security';
 
   const raw = upgrade.updateType;
   if (raw === 'lockFileMaintenance') return 'lock-file-maintenance';
@@ -309,7 +320,7 @@ export async function extractFromLog(
     if (Array.isArray(branches)) {
       for (const branch of branches as RawBranch[]) {
         for (const upgrade of branch.upgrades ?? []) {
-          const updateType = classify(upgrade);
+          const updateType = classify(upgrade, branch.prTitle);
           // A lock-file refresh names no dependency, because it updates every
           // transitive pin at once. One branch refreshes every manifest it
           // covers, so the branch names the row and the manifests are counted
