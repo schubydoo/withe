@@ -47,20 +47,29 @@ jobs:
       - name: Steer apt off the slow mirror and cap retries
         run: |
           # The two `--with-deps` installs below run `apt-get update`. The runner's
-          # priority:1 mirror, azure.archive.ubuntu.com, has unreliable throughput:
-          # a reachable-but-throttled azure (measured ~145 kB/s — a 61 MB font
-          # package took 7 minutes) timed the browser installs out at their step
-          # caps. A cheap probe cannot see throughput, so drop azure unconditionally
-          # and let apt use archive.ubuntu.com, the mirror the healthy runs finished
-          # on. Steady beats fast-but-flaky.
-          if grep -qs azure.archive.ubuntu.com /etc/apt/apt-mirrors.txt; then
-            sudo sed -i '\#azure.archive.ubuntu.com#d' /etc/apt/apt-mirrors.txt
-            echo "dropped the azure mirror"
+          # priority:1 mirror is the cloud's own Ubuntu mirror, and its throughput
+          # is unreliable: azure.archive.ubuntu.com on Azure runners (measured
+          # ~145 kB/s, a 61 MB font package took 7 minutes), and
+          # <region>.ec2.archive.ubuntu.com on AWS runners (the same font stalled
+          # for 8 minutes on 2026-11-18). A cheap probe cannot see throughput, so
+          # keep only the official hosts, archive.ubuntu.com and
+          # security.ubuntu.com, the mirrors the healthy runs finished on. This
+          # matches what to keep, not what to drop, so a new cloud mirror name
+          # is covered too. Steady beats fast-but-flaky.
+          mirrors=/etc/apt/apt-mirrors.txt
+          official='://(archive|security)\.ubuntu\.com/'
+          if [ ! -s "$mirrors" ]; then
+            # Warn rather than claim a mitigation that did not run: a silent
+            # no-op returns as the 8-minute install timeout.
+            echo "::warning::$mirrors is missing or empty — mirror hardening skipped"
+          elif ! grep -qE "$official" "$mirrors"; then
+            # Keeping nothing would leave apt with no mirror at all.
+            echo "::warning::$mirrors lists no archive.ubuntu.com or security.ubuntu.com entry — mirror hardening skipped"
           else
-            # No azure entry to drop: the image renamed the mirror or moved to
-            # deb822. Warn rather than claim a mitigation that did not run — a
-            # silent no-op would return as the 8-minute install timeout.
-            echo "::warning::no azure entry in /etc/apt/apt-mirrors.txt — mirror hardening skipped"
+            dropped=$(grep -vE "$official" "$mirrors" | cut -f1 | tr '\n' ' ')
+            grep -E "$official" "$mirrors" | sudo tee "$mirrors.new" >/dev/null
+            sudo mv "$mirrors.new" "$mirrors"
+            echo "apt mirrors: kept the official hosts, dropped: ${dropped:-none}"
           fi
           # Retries 2 (down from apt's default 3) with short timeouts: a dead mirror
           # fails over in well under a minute, while a spare attempt still covers a
