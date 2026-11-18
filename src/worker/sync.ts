@@ -268,11 +268,14 @@ export class SyncLoop {
       this.retryAt.delete(id);
       for (const warning of result.warnings) this.log(`sync ${id}: ${warning}`);
 
-      return {
-        sourceAdapterId: id,
-        outcome: result.warnings.length > 0 ? 'partial' : 'ok',
-        ...counts,
-      };
+      const outcome = result.warnings.length > 0 ? 'partial' : 'ok';
+      // Every cycle, so the log shows when the last sync ran. A failed sync
+      // logs its own line in the catch below.
+      this.log(
+        `synced ${id}: ${outcome} — ${counts.repos} repositories, ${counts.runs} runs, ${counts.updates} updates`,
+      );
+
+      return { sourceAdapterId: id, outcome, ...counts };
     } catch (cause) {
       // A failing source must not stop the others, so this is caught per source
       // rather than around the cycle.

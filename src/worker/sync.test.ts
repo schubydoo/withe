@@ -97,6 +97,31 @@ test('a cycle already running causes the next tick to be skipped', async () => {
   sqlite.close();
 });
 
+test('every cycle logs a synced line per source, not only the first', async () => {
+  const { sqlite, db } = fresh();
+  const logged: string[] = [];
+  const loop = new SyncLoop(
+    db,
+    [
+      stub('default', async () => ({
+        repos: [repoOf('default', 'acme/widget')],
+        runs: [runOf('default', 'acme/widget', 'j1', 'success', Date.now())],
+        updates: [],
+        warnings: [], complete: true, authoritativeRepoList: true,
+      })),
+    ],
+    { intervalMs: 1000, stalledAfterMs: 7 * DAY, log: (m) => logged.push(m) },
+  );
+
+  await loop.runCycle();
+  await loop.runCycle();
+
+  const synced = logged.filter((m) => m.startsWith('synced default: ok — '));
+  assert.equal(synced.length, 2, `expected one synced line per cycle, got: ${JSON.stringify(logged)}`);
+  assert.equal(synced[1], 'synced default: ok — 1 repositories, 1 runs, 0 updates');
+  sqlite.close();
+});
+
 test('a failing source does not stop the others and lands in sync_status', async () => {
   const { sqlite, db } = fresh();
   const loop = new SyncLoop(
