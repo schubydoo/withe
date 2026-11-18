@@ -70,7 +70,14 @@ jobs:
 
             Review the diff for a breaking change to a field Withe reads before
             merging — a new or renamed enum value has bitten this project before.
-          labels: dependencies
+
+            The generated client is types only, so this PR carries the
+            `no-changelog` label. If the spec change needs a code change, add
+            that change with a changeset and remove the label.
+          # ce.d.ts holds types only: a regeneration changes no runtime behavior.
+          labels: |
+            dependencies
+            no-changelog
           add-paths: |
             spec/openapi-community.yaml
             src/adapters/ce/generated
