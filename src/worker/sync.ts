@@ -226,7 +226,12 @@ export class SyncLoop {
   private async syncOne(adapter: SourceAdapter): Promise<SourceOutcome> {
     const id = adapter.id;
     const waitUntil = this.retryAt.get(id) ?? 0;
-    if (this.now() < waitUntil) {
+    // backoffMs caps every wait at the interval, so a retry time further ahead
+    // than that means the clock was set back after it was taken (NTP fixing a
+    // fast clock at boot). Waiting it out would skip this source for as long
+    // as the clock jumped.
+    const remaining = waitUntil - this.now();
+    if (remaining > 0 && remaining <= this.options.intervalMs) {
       return { sourceAdapterId: id, outcome: 'backoff', repos: 0, runs: 0, updates: 0, retryAt: waitUntil };
     }
 
