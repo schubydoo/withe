@@ -256,6 +256,34 @@ test('a recovered source clears its backoff', async () => {
   sqlite.close();
 });
 
+test('a clock set back after a failure does not stretch the backoff', async () => {
+  // Seen on a real host (2026-11-25): the clock booted 56 minutes fast, the
+  // first sync failed because the network was not up, and NTP then set the
+  // clock back. The retry time, read from the fast clock, stayed 56 minutes
+  // ahead, and every cycle in between skipped the source.
+  const { sqlite, db } = fresh();
+  let clock = 1_000_000 + 56 * 60 * 1000;
+  let healthy = false;
+
+  const loop = new SyncLoop(
+    db,
+    [stub('src', async () => {
+      if (!healthy) throw new Error('fetch failed');
+      return EMPTY;
+    })],
+    { intervalMs: 300_000, stalledAfterMs: 7 * DAY, now: () => clock, log: () => {} },
+  );
+
+  await loop.runCycle();
+  healthy = true;
+  clock -= 56 * 60 * 1000;
+
+  // The next tick, one interval later, must sync rather than wait out the jump.
+  clock += 300_000;
+  assert.equal((await loop.runCycle()).sources[0]?.outcome, 'ok');
+  sqlite.close();
+});
+
 test('stalled is set for a repository with no recent successful run, and cleared when one arrives', async () => {
   const { sqlite, db } = fresh();
   const now = Date.parse('2026-08-06T12:00:00Z');
