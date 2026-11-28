@@ -44,6 +44,11 @@ jobs:
   # tailwindcss, esbuild) are devDependencies. This workflow file also builds, so
   # a change to it is proved on the next night.
   #
+  # One exception to "cannot change": Tailwind scans the whole build context for
+  # class names, so a word in docs/, test/ or .github/ can add or remove a CSS
+  # rule. No page uses such a rule, because every class the app uses is in src/,
+  # and src/ builds. A skip can leave unused CSS in the nightly, nothing more.
+  #
   # A skipped run is a successful run, so the next night compares against the
   # skipped commit. That is correct: nothing between the last build and the
   # skipped commit touched the image.
@@ -99,7 +104,10 @@ jobs:
             exit 0
           fi
           # A failed diff (the old commit is gone after a history rewrite) builds.
-          if ! files=$(git diff --name-only "$last" "$HEAD_SHA"); then
+          # --no-renames lists both paths of a move, so a file moved out of the
+          # image into a skipped path still builds. It also keeps the diff to
+          # trees, which the blob:none clone has.
+          if ! files=$(git diff --no-renames --name-only "$last" "$HEAD_SHA"); then
             echo "build=true" >> "$GITHUB_OUTPUT"
             echo "::warning::cannot diff $last..$HEAD_SHA — building."
             exit 0
@@ -156,7 +164,7 @@ jobs:
           # Never `latest` — that is the stable release's tag, not a build off
           # unreleased main. The dated tag records the commit through the OCI
           # `revision` label, so a separate `sha-` tag would only duplicate it.
-          # The `changed` gate builds only when main actually moves, so dated tags
+          # The `changed` gate builds only when a change on main touches the image, so dated tags
           # accrue at the rate of change, not one a night; set a retention policy
           # on the GHCR package (keep the most recent N `nightly-*`) if they pile up.
           tags: |
