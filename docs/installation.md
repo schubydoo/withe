@@ -10,7 +10,8 @@ To build from source instead, run `docker build -t withe .` and use `withe` in p
 name below.
 
 **Nightly builds.** To dogfood unreleased changes, pull `ghcr.io/schubydoo/withe:nightly` — a signed
-multi-arch image rebuilt from `main` each night. Pin a specific night with the dated
+multi-arch image rebuilt from `main` on each night that a change on `main` affects the image. A night
+with only CI, docs, or test changes builds nothing and adds no tag. Pin a specific build with the dated
 `nightly-YYYYMMDD` tag. Nightlies are for testing; `latest` and the `v*` tags stay reserved for
 stable releases.
 
