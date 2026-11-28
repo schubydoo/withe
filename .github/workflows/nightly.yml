@@ -7,9 +7,11 @@ name: Nightly
 # provenance and SBOM attestations — but publishes NO GitHub Release and never
 # touches `latest`: those belong to the stable `v*` flow (release.yml).
 #
-# A scheduled run is a no-op when main has not moved in the last day, so an
-# unchanged tree is not rebuilt and re-tagged for nothing. A manual dispatch
-# always builds. Disable the schedule by disabling this workflow in Actions.
+# A scheduled run is a no-op when main has not moved since the last nightly, or
+# when every file that changed is outside the image (CI, docs, tests, release
+# notes). Then an unchanged image is not rebuilt and re-tagged for nothing. A
+# manual dispatch always builds. Disable the schedule by disabling this workflow
+# in Actions.
 #
 # Action refs are pinned to full commit SHAs (Actions policy + Scorecard
 # Pinned-Dependencies); Renovate keeps them current, alongside release.yml.
@@ -33,6 +35,18 @@ jobs:
   # commit the last successful nightly published. Comparing commits rather than a
   # wall-clock window means a scheduled run delayed behind GitHub's queue cannot
   # silently drop a night. A manual dispatch always builds (but still main only).
+  #
+  # When main moved, the files changed since that commit decide. NOT_IMAGE lists
+  # the paths that cannot change the image; any other path builds. The list is a
+  # denylist on purpose: a new file that nobody classified builds, so the error
+  # case is one extra build, never a stale nightly. package.json and
+  # package-lock.json always build, because the build tools (next, typescript,
+  # tailwindcss, esbuild) are devDependencies. This workflow file also builds, so
+  # a change to it is proved on the next night.
+  #
+  # A skipped run is a successful run, so the next night compares against the
+  # skipped commit. That is correct: nothing between the last build and the
+  # skipped commit touched the image.
   changed:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -42,6 +56,14 @@ jobs:
     outputs:
       build: ${{ steps.check.outputs.build }}
     steps:
+      # Full history for `git diff` against the last nightly's commit. Trees only:
+      # a file list needs no file contents.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+
       - id: check
         env:
           EVENT: ${{ github.event_name }}
@@ -49,6 +71,8 @@ jobs:
           HEAD_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          NOT_IMAGE: >-
+            ^(\.github/|docs/|test/|tools/|\.changeset/|assets/)|^src/.*\.test\.tsx?$|^[^/]+\.md$|^(mkdocs\.yml|renovate\.json|codecov\.yml|\.gitleaks\.toml|\.pre-commit-config\.yaml|playwright\.config\.ts|knope\.toml|\.bestpractices\.json|\.worktreeinclude|LICENSE)$
         run: |
           set -euo pipefail
           # workflow_dispatch can select any branch; building it would push that
@@ -65,11 +89,32 @@ jobs:
           # The last successful nightly's commit; empty on the first ever run.
           last=$(gh run list --workflow=nightly.yml --branch main --status success \
                    --limit 1 --json headSha --jq '.[0].headSha // ""')
+          if [ -z "$last" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if [ "$last" = "$HEAD_SHA" ]; then
             echo "build=false" >> "$GITHUB_OUTPUT"
             echo "::notice::main is at $HEAD_SHA, already the last nightly — skipping."
-          else
+            exit 0
+          fi
+          # A failed diff (the old commit is gone after a history rewrite) builds.
+          if ! files=$(git diff --name-only "$last" "$HEAD_SHA"); then
             echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::cannot diff $last..$HEAD_SHA — building."
+            exit 0
+          fi
+          image=$(printf '%s\n' "$files" | grep -Ev "$NOT_IMAGE" | grep -v '^$' || true)
+          # NOT_IMAGE skips all of .github/, but a change to this file builds.
+          if printf '%s\n' "$files" | grep -qx '\.github/workflows/nightly\.yml'; then
+            image=$(printf '%s\n%s' "$image" ".github/workflows/nightly.yml" | grep -v '^$')
+          fi
+          if [ -n "$image" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::image files changed since $last: $(printf '%s' "$image" | head -n 10 | paste -sd ' ' -)"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::only non-image files changed since $last — skipping."
           fi
 
   image:
